@@ -318,30 +318,21 @@ error_reporting(0);
 <script src="assets/js/analogclock.js"></script>
 <script type="text/javascript">
 	document.addEventListener('DOMContentLoaded', function () {
-                const input = document.getElementById('usn');
-                if (input) {
-                        input.focus();
-                        input.addEventListener('blur', function () {
-                                setTimeout(function () { input.focus(); }, 0);
-                        });
-                }
+		const input = document.getElementById('usn');
+		if (input) {
+			input.focus();
+			input.addEventListener('blur', function () {
+				setTimeout(function () { input.focus(); }, 0);
+			});
+		}
 
-                if (document.getElementById('tts-audio')) {
-                        attachAudioRedirect();
-                }
-		setTimeout(function () {
-			if (!document.getElementById('tts-audio')) {
-				// Fallback animación si no hay audio TTS
-				$('span.animated').one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function() {
-					setTimeout(function(){
-						window.location.replace('dash.php');
-					}, 5200);
-				});
-				setTimeout(function(){
-					// window.location.replace("dash.php");
-				}, 9800);
-			}
-		}, 1000);
+		// Auto-redirect: si la URL trae ?id= hay resultado de escaneo → volver al idle
+		const urlParams = new URLSearchParams(window.location.search);
+		if (urlParams.has('id') && urlParams.get('id') !== '') {
+			setTimeout(function () {
+				window.location.replace('dash.php');
+			}, 5000);
+		}
 	});
 </script>
 <!-- MAIN CONTENT ENDS -->
