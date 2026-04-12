@@ -2,7 +2,7 @@
 include './functions/dbconn.php';
 
 // Set timezone
-date_default_timezone_set("Asia/Kolkata");
+date_default_timezone_set("America/Lima");
 
 // Sanitize GET parameters
 $msg = $_GET['msg'] ?? null;

@@ -1,16 +1,3 @@
 <?php
-	function getsl($conn, $id, $table){
-		$query = "SELECT MAX($id) FROM `$table`";
-		$result = mysqli_query($conn, $query);
-		$row = mysqli_fetch_array($result);
-		$id = $row[0];
-		if(!$id){
-			$id = 1;
-			return $id;
-		}else{
-			$id = $id + 1;
-			return $id;
-		}
-	}
-
-?>
+// getsl() eliminado: la tabla `inout` usa AUTO_INCREMENT en `sl`.
+// Los INSERT ya no deben especificar el campo `sl`.
