@@ -21,7 +21,7 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
 
     // Consulta de usuario en Koha — prepared statement, fetch_assoc
     $stmt = mysqli_prepare($koha,
-        "SELECT CONCAT(title,' ',firstname,' ',surname) AS fullname,
+        "SELECT firstname, surname, CONCAT(title,' ',firstname,' ',surname) AS fullname,
                 borrowernumber, sex, categorycode, branchcode,
                 sort1, sort2, mobile, email, title,
                 dateofbirth, dateexpiry, borrowernotes
