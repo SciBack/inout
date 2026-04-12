@@ -258,9 +258,9 @@ class MessageHandler {
 
     private function replacePlaceholders(string $template, array $data): string {
         $placeholders = [
-            '{name}'      => htmlspecialchars($data['firstname'] ?? '', ENT_QUOTES, 'UTF-8'),
-            '{firstname}' => htmlspecialchars($data['firstname'] ?? '', ENT_QUOTES, 'UTF-8'),
-            '{nombre}'    => htmlspecialchars($data['firstname'] ?? '', ENT_QUOTES, 'UTF-8'),
+            '{name}'      => htmlspecialchars(explode(' ', trim($data['firstname'] ?? ''))[0], ENT_QUOTES, 'UTF-8'),
+            '{firstname}' => htmlspecialchars(explode(' ', trim($data['firstname'] ?? ''))[0], ENT_QUOTES, 'UTF-8'),
+            '{nombre}'    => htmlspecialchars(explode(' ', trim($data['firstname'] ?? ''))[0], ENT_QUOTES, 'UTF-8'),
             '{surname}'   => htmlspecialchars($data['surname'] ?? '', ENT_QUOTES, 'UTF-8'),
             '{apellido}'  => htmlspecialchars($data['surname'] ?? '', ENT_QUOTES, 'UTF-8'),
             '{title}'     => htmlspecialchars($data['title'] ?? '', ENT_QUOTES, 'UTF-8'),
