@@ -237,13 +237,14 @@ error_reporting(0);
 					<div class="text-danger" style="font-size:2em;">Usuario no encontrado en la base de datos</div>
 				<?php } ?>
 
-				<!-- AUDIO TTS deshabilitado -->
-				<?php
-                                // if ($ttsMessage !== '') {
-                                //     echo $tts->synthesizeVoice($ttsMessage, $userData['gender'] ?? 'M');
-                                //     echo "<div id=\"tts-text\">" . htmlspecialchars($ttsMessage) . "</div>";
-                                // }
-				?>
+				<!-- TTS via Web Speech API (navegador, sin costo) -->
+				<?php if ($ttsMessage !== ''): ?>
+				<div id="tts-data"
+					data-text="<?= htmlspecialchars($ttsMessage, ENT_QUOTES, 'UTF-8') ?>"
+					data-gender="<?= htmlspecialchars($userData['gender'] ?? 'M', ENT_QUOTES, 'UTF-8') ?>"
+					style="display:none">
+				</div>
+				<?php endif; ?>
 
 				<?php if (empty($userData) && $eventType != 'not_found') { ?>
 					<div class="idle">
@@ -326,12 +327,50 @@ error_reporting(0);
 			});
 		}
 
-		// Auto-redirect: si la URL trae ?id= hay resultado de escaneo → volver al idle
 		const urlParams = new URLSearchParams(window.location.search);
-		if (urlParams.has('id') && urlParams.get('id') !== '') {
-			setTimeout(function () {
-				window.location.replace('dash.php');
-			}, 5000);
+		if (!urlParams.has('id') || urlParams.get('id') === '') return;
+
+		// Hay resultado de escaneo — hablar y luego redirigir
+		const ttsData  = document.getElementById('tts-data');
+		const text     = ttsData ? ttsData.dataset.text  : '';
+		const gender   = ttsData ? ttsData.dataset.gender : 'M';
+		const REDIRECT = function () { window.location.replace('dash.php'); };
+
+		if (text && 'speechSynthesis' in window) {
+			// Cancela cualquier voz en curso
+			window.speechSynthesis.cancel();
+
+			const utter  = new SpeechSynthesisUtterance(text);
+			utter.lang   = 'es-PE';
+			utter.rate   = 1.05;
+			utter.pitch  = gender === 'F' ? 1.2 : 0.95;
+
+			// Seleccionar voz en español si el navegador la tiene
+			const pickVoice = function () {
+				const voices = window.speechSynthesis.getVoices();
+				const pref   = gender === 'F'
+					? voices.find(v => v.lang.startsWith('es') && /female|mujer|femenin/i.test(v.name))
+					: voices.find(v => v.lang.startsWith('es') && /male|hombre|masculin/i.test(v.name));
+				utter.voice = pref || voices.find(v => v.lang.startsWith('es')) || null;
+			};
+
+			// voiceschanged puede disparar de forma asíncrona en algunos navegadores
+			if (window.speechSynthesis.getVoices().length > 0) {
+				pickVoice();
+			} else {
+				window.speechSynthesis.addEventListener('voiceschanged', pickVoice, { once: true });
+			}
+
+			utter.onend   = REDIRECT;
+			utter.onerror = REDIRECT;
+			// Fallback por si el evento onend no dispara (bug conocido en Chrome)
+			var fallback = setTimeout(REDIRECT, 12000);
+			utter.onend = function () { clearTimeout(fallback); REDIRECT(); };
+
+			window.speechSynthesis.speak(utter);
+		} else {
+			// Navegador sin soporte o sin mensaje: redirect silencioso
+			setTimeout(REDIRECT, 5000);
 		}
 	});
 </script>
