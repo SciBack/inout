@@ -20,14 +20,15 @@ error_reporting(0);
 	require_once "functions/MessageHandler.php";
         $messageHandler = new MessageHandler();
 
-        $provider = strtolower(getenv('TTS_PROVIDER') ?: 'google');
-        if ($provider === 'azure') {
-                require_once './functions/AzureSpeech.php';
-                $tts = new AzureSpeech();
-        } else {
-                require_once './functions/PersonalizedGreeting.php';
-                $tts = new PersonalizedGreeting();
-        }
+        // TTS deshabilitado — las llamadas a las APIs de voz están comentadas
+        // $provider = strtolower(getenv('TTS_PROVIDER') ?: 'google');
+        // if ($provider === 'azure') {
+        //     require_once './functions/AzureSpeech.php';
+        //     $tts = new AzureSpeech();
+        // } else {
+        //     require_once './functions/PersonalizedGreeting.php';
+        //     $tts = new PersonalizedGreeting();
+        // }
 
 	function getEventType($msg)
 	{
@@ -42,20 +43,19 @@ error_reporting(0);
 		};
 	}
 
-	// --- Recopila datos de usuario si están disponibles
+	// --- Recopila datos de usuario si están disponibles (data1 es fetch_assoc desde main.php)
 	$userData = [];
 	if (isset($data1)) {
-		$nameParts = preg_split('/\s+/', $data1[0], 3);
 		$userData = [
-			'firstname'     => $nameParts[1] ?? '',
-			'surname'       => $nameParts[2] ?? '',
-			'name'          => trim($nameParts[1] ?? ''),
-			'title'         => $data1[9] ?? ($nameParts[0] ?? ''),
-			'dateofbirth'   => $data1[10] ?? '',
-			'dateexpiry'    => $data1[11] ?? '',
-                        'categorycode'  => strtoupper(trim($data1[3] ?? '')),
-			'gender'        => $data1[2] ?? '',
-			'borrowernotes' => $data1[12] ?? '',
+			'firstname'     => $data1['firstname']     ?? '',
+			'surname'       => $data1['surname']       ?? '',
+			'name'          => trim($data1['firstname'] ?? ''),
+			'title'         => $data1['title']         ?? '',
+			'dateofbirth'   => $data1['dateofbirth']   ?? '',
+			'dateexpiry'    => $data1['dateexpiry']    ?? '',
+			'categorycode'  => strtoupper(trim($data1['categorycode'] ?? '')),
+			'gender'        => $data1['sex']           ?? '',
+			'borrowernotes' => $data1['borrowernotes'] ?? '',
 		];
 	}
 
@@ -237,12 +237,12 @@ error_reporting(0);
 					<div class="text-danger" style="font-size:2em;">Usuario no encontrado en la base de datos</div>
 				<?php } ?>
 
-				<!-- AUDIO SOLO POR TTS, SEGÚN GÉNERO -->
+				<!-- AUDIO TTS deshabilitado -->
 				<?php
-                                if ($ttsMessage !== '') {
-                                        echo $tts->synthesizeVoice($ttsMessage, $userData['gender'] ?? 'M');
-                                        echo "<div id=\"tts-text\">" . htmlspecialchars($ttsMessage) . "</div>";
-                                }
+                                // if ($ttsMessage !== '') {
+                                //     echo $tts->synthesizeVoice($ttsMessage, $userData['gender'] ?? 'M');
+                                //     echo "<div id=\"tts-text\">" . htmlspecialchars($ttsMessage) . "</div>";
+                                // }
 				?>
 
 				<?php if (empty($userData) && $eventType != 'not_found') { ?>
