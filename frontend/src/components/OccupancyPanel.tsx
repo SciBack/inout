@@ -160,7 +160,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
 interface StatCardProps {
   label: string
   value: number | string
-  valueRef?: React.RefObject<HTMLSpanElement | null>
+  valueRef?: React.Ref<HTMLSpanElement>
   color: string
   sub?: string
   subColor?: string
