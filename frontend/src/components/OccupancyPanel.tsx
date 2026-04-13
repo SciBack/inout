@@ -651,24 +651,6 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                       ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                   }}
                 >
-                  {isFirst && (
-                    <span style={{
-                      position: 'absolute',
-                      top: 'clamp(4px,0.6vh,8px)',
-                      right: 'clamp(6px,0.8vh,10px)',
-                      fontSize: 'clamp(8px,0.85vh,10px)',
-                      fontWeight: 800,
-                      letterSpacing: '0.12em',
-                      color: 'oklch(10% 0.015 140)',
-                      background: 'oklch(87% 0.28 135)',
-                      borderRadius: 999,
-                      padding: '2px 7px',
-                      lineHeight: 1.5,
-                      fontFamily: FONT_BODY,
-                      boxShadow: '0 0 10px oklch(87% 0.28 135 / 0.55)',
-                      pointerEvents: 'none',
-                    }}>NEW</span>
-                  )}
                   <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
                   {isEntry ? ICON_ENTRY : ICON_EXIT}
                   <span style={{
@@ -678,6 +660,36 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                   }}>
                     {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
                   </span>
+                  {isFirst && (
+                    <span style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0,
+                      flexShrink: 0,
+                      animation: 'badgeFloat 2s ease-in-out infinite',
+                    }}>
+                      {/* flecha izquierda apuntando al nombre */}
+                      <span style={{
+                        width: 0,
+                        height: 0,
+                        borderTop: '4px solid transparent',
+                        borderBottom: '4px solid transparent',
+                        borderRight: '6px solid oklch(87% 0.28 135)',
+                      }} />
+                      <span style={{
+                        fontSize: 'clamp(8px,0.85vh,10px)',
+                        fontWeight: 800,
+                        letterSpacing: '0.12em',
+                        color: 'oklch(10% 0.015 140)',
+                        background: 'oklch(87% 0.28 135)',
+                        borderRadius: '0 999px 999px 0',
+                        padding: '2px 8px 2px 5px',
+                        lineHeight: 1.5,
+                        fontFamily: FONT_BODY,
+                        boxShadow: '0 0 10px oklch(87% 0.28 135 / 0.5)',
+                      }}>NEW</span>
+                    </span>
+                  )}
                   {cat && (
                     <span style={{
                       fontSize: 'clamp(10px,1.3vh,16px)',

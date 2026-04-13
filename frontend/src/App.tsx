@@ -87,6 +87,10 @@ body { overflow: hidden; background: #0f172a; }
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.55; }
 }
+@keyframes badgeFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-3px); }
+}
 @media (max-width: 767px) {
   .kiosk-root { flex-direction: column !important; }
   .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e293b !important; }
