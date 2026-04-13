@@ -1,23 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-interface HourlyEntry {
-  hour: number
-  count: number
-}
-
-interface FacultyTimeline {
-  faculty: string
-  label: string
-  data: HourlyEntry[]
-}
-
-interface FacultyEventData {
-  faculty: string
-  label: string
-  event_type: string
-  ts: string
-}
-
 interface DashboardData {
   space_name: string
   capacity: number
@@ -31,9 +13,6 @@ interface DashboardData {
   current_male: number
   current_female: number
   faculty_breakdown: { faculty: string; label: string; count: number }[]
-  hourly_entries: HourlyEntry[]
-  faculty_timelines: FacultyTimeline[]
-  faculty_events: FacultyEventData[]
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -46,68 +25,7 @@ interface DashboardData {
   entries_yesterday: number
 }
 
-const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
-
-const tsToMinute = (ts: string): number => {
-  const d = new Date(ts)
-  return d.getHours() * 60 + d.getMinutes()
-}
-
-function buildOccupancyCurve(
-  events: FacultyEventData[],
-  faculty: string,
-  startMinute: number,
-  nowMinute: number
-): [number, number][] {
-  const evts = events
-    .filter(e => e.faculty === faculty)
-    .map(e => ({ ...e, minute: tsToMinute(e.ts) }))
-    .sort((a, b) => a.minute - b.minute)
-
-  if (evts.length === 0) return []
-
-  const pts: [number, number][] = [[startMinute, 0]]
-  let count = 0
-
-  for (const ev of evts) {
-    const m = ev.minute
-    if (pts[pts.length - 1][0] < m) pts.push([m, count])
-    count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))
-    pts.push([m, count])
-  }
-
-  pts.push([nowMinute, count])
-  return pts
-}
-
-function minuteLabel(m: number): string {
-  const h = Math.floor(m / 60)
-  const min = m % 60
-  return min === 0 ? `${h}h` : `${h}:${String(min).padStart(2, '0')}`
-}
-
-function smoothStepPath(pts: [number, number][], r: number = 5): string {
-  if (pts.length < 2) return ''
-  let d = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
-
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [px, py] = pts[i - 1]
-    const [cx, cy] = pts[i]
-    const [nx, ny] = pts[i + 1]
-    const dx1 = cx - px, dy1 = cy - py
-    const dx2 = nx - cx, dy2 = ny - cy
-    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
-    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
-    if (len1 < 0.1 || len2 < 0.1) { d += ` L ${cx.toFixed(1)},${cy.toFixed(1)}`; continue }
-    const rr = Math.min(r, len1 / 2, len2 / 2)
-    const t1x = cx - (dx1 / len1) * rr, t1y = cy - (dy1 / len1) * rr
-    const t2x = cx + (dx2 / len2) * rr, t2y = cy + (dy2 / len2) * rr
-    d += ` L ${t1x.toFixed(1)},${t1y.toFixed(1)}`
-    d += ` Q ${cx.toFixed(1)},${cy.toFixed(1)} ${t2x.toFixed(1)},${t2y.toFixed(1)}`
-  }
-  d += ` L ${pts[pts.length - 1][0].toFixed(1)},${pts[pts.length - 1][1].toFixed(1)}`
-  return d
-}
+const FAC_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
 
 // Gauge circular tipo velocímetro
 // Arco de 252° (70% del círculo), hueco centrado abajo
@@ -153,12 +71,9 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   )
 }
 
-// Gráfico de líneas por facultad — compacto, para la zona inferior
-function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
-  const now = new Date()
-  const nowMinute = now.getHours() * 60 + now.getMinutes()
-
-  if (events.length === 0) {
+// Barras horizontales por facultad — visitantes únicos hoy
+function FacultyBarChart({ rows }: { rows: { faculty: string; label: string; count: number }[] }) {
+  if (rows.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 'clamp(10px,1.1vh,12px)', color: '#334155' }}>
@@ -168,84 +83,49 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
     )
   }
 
-  const faculties = [...new Map(events.map(e => [e.faculty, e.label])).entries()]
-    .map(([faculty, label]) => ({ faculty, label }))
-
-  // Eje X: siempre desde las 7:00 AM hasta el momento actual
-  // Así el eje crece visualmente conforme avanza el día
-  const startMinute = 7 * 60  // 7:00 AM fijo
-  const endMinute = Math.max(nowMinute, startMinute + 30)
-
-  const W = 300, H = 52
-  const PAD_TOP = 4, PAD_BOT = 13
-  const chartH = H - PAD_TOP - PAD_BOT
-  const timeRange = endMinute - startMinute
-
-  const xOf = (m: number) => ((m - startMinute) / timeRange) * W
-  const xClamped = (m: number) => Math.max(0, Math.min(W, xOf(m)))
-
-  const allCurves = faculties.map(f =>
-    buildOccupancyCurve(events, f.faculty, startMinute, nowMinute)
-  )
-  const maxOcc = Math.max(...allCurves.flatMap(c => c.map(([, v]) => v)), 1)
-  const yOf = (v: number) => PAD_TOP + chartH * (1 - v / maxOcc)
-
-  const interval = timeRange <= 90 ? 30 : timeRange <= 240 ? 60 : 120
-  const firstLabel = Math.ceil(startMinute / interval) * interval
-  const axisLabels: number[] = []
-  for (let m = firstLabel; m <= endMinute; m += interval) axisLabels.push(m)
+  const sorted = [...rows].sort((a, b) => b.count - a.count)
+  const max = Math.max(...sorted.map(r => r.count), 1)
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px', minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <svg viewBox={`0 0 ${W} ${H}`}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-          preserveAspectRatio="none">
-          <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="#1a2a3f" strokeWidth="0.6" />
-          {axisLabels.map(m => (
-            <g key={m}>
-              <line x1={xClamped(m)} y1={PAD_TOP} x2={xClamped(m)} y2={H - PAD_BOT}
-                stroke="#1a2a3f" strokeWidth="0.5" />
-              <text x={xClamped(m)} y={H - 2} fontSize="6" fill="#334155" textAnchor="middle">
-                {minuteLabel(m)}
-              </text>
-            </g>
-          ))}
-          <line x1={W} y1={PAD_TOP} x2={W} y2={H - PAD_BOT}
-            stroke="#64748b" strokeWidth="1" strokeDasharray="3,2" />
-          {faculties.map(({ faculty }, idx) => {
-            const curve = allCurves[idx]
-            if (curve.length < 2) return null
-            const color = LINE_COLORS[idx % LINE_COLORS.length]
-            const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
-            const base = H - PAD_BOT
-            const linePath = smoothStepPath(svgPts, 5)
-            const areaD = `${linePath} L ${svgPts[svgPts.length-1][0].toFixed(1)},${base} L ${svgPts[0][0].toFixed(1)},${base} Z`
-            return <path key={`a-${faculty}`} d={areaD} fill={color} fillOpacity="0.07" stroke="none" />
-          })}
-          {faculties.map(({ faculty }, idx) => {
-            const curve = allCurves[idx]
-            if (curve.length < 2) return null
-            const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
-            return (
-              <path key={faculty} d={smoothStepPath(svgPts, 5)}
-                fill="none" stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                strokeWidth="1.2" strokeLinecap="round" />
-            )
-          })}
-        </svg>
-      </div>
-      {/* Leyenda compacta */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', flexShrink: 0 }}>
-        {faculties.map(({ faculty, label }, idx) => (
-          <div key={faculty} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <div style={{ width: 12, height: 2, background: LINE_COLORS[idx % LINE_COLORS.length], borderRadius: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 'clamp(7px,0.75vh,9px)', color: '#475569', whiteSpace: 'nowrap' }}>
-              {label}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minHeight: 0 }}>
+      {sorted.map((row, idx) => {
+        const pct = (row.count / max) * 100
+        const color = FAC_COLORS[idx % FAC_COLORS.length]
+        return (
+          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px,0.6vh,8px)' }}>
+            <span style={{
+              width: 'clamp(60px,8vw,95px)', textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(9px,1vh,12px)', color: '#64748b', whiteSpace: 'nowrap',
+              overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {row.label}
+            </span>
+            <div style={{
+              flex: 1, height: 'clamp(14px,1.8vh,22px)',
+              background: '#132235', borderRadius: 4, overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', width: `${pct}%`, borderRadius: 4,
+                background: color, transition: 'width 0.6s ease',
+                display: 'flex', alignItems: 'center', paddingLeft: 6,
+              }}>
+                {row.count > 3 && (
+                  <span style={{ fontSize: 'clamp(8px,0.9vh,11px)', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+                    {row.count}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span style={{
+              width: 'clamp(18px,2.5vw,30px)', textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(9px,1vh,12px)', fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums', color: '#64748b',
+            }}>
+              {row.count}
             </span>
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }
@@ -421,10 +301,10 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         </div>
       </div>
 
-      {/* ── SECCIÓN INFERIOR — Gráfico facultades ── */}
+      {/* ── SECCIÓN INFERIOR — Barras por facultad ── */}
       <div style={s.chartSection}>
-        <span style={s.cardLabel}>Actividad por facultad — hoy</span>
-        <FacultyLineChart events={data.faculty_events} />
+        <span style={s.cardLabel}>Visitantes hoy por facultad</span>
+        <FacultyBarChart rows={data.faculty_breakdown} />
       </div>
 
     </div>
