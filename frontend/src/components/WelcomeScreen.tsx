@@ -1,12 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface ScanResult {
   event_type: string
   patron: {
     name: string
     firstname: string
+    first_name: string
     gender: string
     category: string
+    patron_id: number | null
   }
   message: string
   timestamp: string
@@ -36,15 +38,15 @@ function speak(text: string) {
 export function WelcomeScreen({ result }: Props) {
   const { event_type, patron, message } = result
   const isEntry = event_type === 'entry'
-  const hour = new Date().getHours()
-  const timeGreet = hour < 12 ? 'buenos días' : hour < 19 ? 'buenas tardes' : 'buenas noches'
-  const fullMessage = isEntry
-    ? `${message}, ${timeGreet}`
-    : message
+  const [photoError, setPhotoError] = useState(false)
+
+  const firstName = patron.first_name || patron.firstname.split(' ')[0]
+  const photoUrl = patron.patron_id ? `/api/patron-photo/${patron.patron_id}` : null
 
   useEffect(() => {
-    speak(fullMessage)
-  }, [fullMessage])
+    speak(message)
+    setPhotoError(false)
+  }, [message])
 
   const categoryLabel = CATEGORY_LABELS[patron.category] || patron.category
 
@@ -54,17 +56,28 @@ export function WelcomeScreen({ result }: Props) {
         {isEntry ? '✓ INGRESO' : '← SALIDA'}
       </div>
 
-      <div style={styles.avatar}>
-        {patron.gender === 'F' ? '👩' : '👨'}
+      <div style={styles.avatarWrap}>
+        {photoUrl && !photoError ? (
+          <img
+            src={photoUrl}
+            alt={firstName}
+            style={styles.photo}
+            onError={() => setPhotoError(true)}
+          />
+        ) : (
+          <span style={styles.avatarEmoji}>
+            {patron.gender === 'F' ? '👩' : '👨'}
+          </span>
+        )}
       </div>
 
-      <h1 style={styles.name}>{patron.name}</h1>
+      <h1 style={styles.name}>{firstName}</h1>
 
       {categoryLabel && (
         <span style={styles.category}>{categoryLabel}</span>
       )}
 
-      <p style={styles.message}>{fullMessage}</p>
+      <p style={styles.message}>{message}</p>
 
       <div style={styles.time}>
         {new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
@@ -94,8 +107,24 @@ const styles: Record<string, any> = {
     color: isEntry ? '#22c55e' : '#a855f7',
     border: `1px solid ${isEntry ? '#22c55e' : '#a855f7'}`,
   }),
-  avatar: {
-    fontSize: '5rem',
+  avatarWrap: {
+    width: '120px',
+    height: '120px',
+    borderRadius: '50%',
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#1e293b',
+    border: '3px solid #334155',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  avatarEmoji: {
+    fontSize: '4rem',
     lineHeight: 1,
   },
   name: {
@@ -103,6 +132,7 @@ const styles: Record<string, any> = {
     fontWeight: 700,
     color: '#f1f5f9',
     textAlign: 'center',
+    textTransform: 'capitalize',
   },
   category: {
     fontSize: '1rem',

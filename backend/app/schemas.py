@@ -12,9 +12,11 @@ class PatronInfo(BaseModel):
     cardnumber: str
     name: str
     firstname: str
+    first_name: str = ""
     surname: str
     gender: str  # 'M' | 'F' | ''
     category: str
+    patron_id: Optional[int] = None
 
 
 class ScanResponse(BaseModel):

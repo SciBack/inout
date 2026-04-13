@@ -51,11 +51,12 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     db.refresh(log)
 
     gender = patron_data.get("gender", "")
+    first_name = patron_data.get("first_name") or patron_data["firstname"].split()[0].capitalize()
     if event_type == "entry":
         greeting = "Bienvenida" if gender == "F" else "Bienvenido"
-        message = f"{greeting}, {patron_data['firstname']}"
+        message = f"{greeting}, {first_name}"
     else:
-        message = f"Hasta luego, {patron_data['firstname']}"
+        message = f"Hasta luego, {first_name}"
 
     return ScanResponse(
         event_type=event_type,

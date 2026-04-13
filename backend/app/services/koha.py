@@ -60,14 +60,18 @@ async def get_patron(cardnumber: str) -> dict | None:
 def _normalize(raw: dict) -> dict:
     firstname = raw.get("firstname") or ""
     surname = raw.get("surname") or ""
+    # Primer nombre: primera palabra del firstname en title case
+    first_name = firstname.split()[0].capitalize() if firstname else ""
     return {
         "cardnumber": raw.get("cardnumber", ""),
         "name": f"{firstname} {surname}".strip(),
         "firstname": firstname,
+        "first_name": first_name,
         "surname": surname,
         "gender": raw.get("gender") or "",
         "category": raw.get("category_id") or raw.get("categorycode") or "",
         "expiry_date": raw.get("expiry_date") or "",
+        "patron_id": raw.get("patron_id"),
     }
 
 
@@ -77,8 +81,10 @@ def _demo_patron(cardnumber: str) -> dict:
         "cardnumber": cardnumber,
         "name": "Usuario Demo",
         "firstname": "Usuario",
+        "first_name": "Usuario",
         "surname": "Demo",
         "gender": "M",
         "category": "ESTUDI",
         "expiry_date": "2099-12-31",
+        "patron_id": None,
     }
