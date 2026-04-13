@@ -110,7 +110,7 @@ def _seed_admin_user():
 
 app = FastAPI(
     title="InOut — Gestión de Aforo",
-    version="2.0.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -129,4 +129,4 @@ app.include_router(admin.router, prefix="/api")
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "1.0.0"}
