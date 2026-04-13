@@ -107,20 +107,20 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         .scalar() or 0
     )
 
-    # Hora pico: hora con más entradas hoy
+    # Hora pico: hora (en hora Lima) con más entradas hoy
     peak_hour_row = (
         db.query(
-            func.extract("hour", PresenceLog.timestamp).label("hour"),
+            func.extract("hour", func.timezone("America/Lima", PresenceLog.timestamp)).label("hour"),
             func.count(PresenceLog.id).label("cnt"),
         )
         .filter(
             and_(
                 PresenceLog.event_type == "entry",
-                func.date(PresenceLog.timestamp) == today,
+                func.date(func.timezone("America/Lima", PresenceLog.timestamp)) == today,
                 PresenceLog.space_id == sid,
             )
         )
-        .group_by(func.extract("hour", PresenceLog.timestamp))
+        .group_by(func.extract("hour", func.timezone("America/Lima", PresenceLog.timestamp)))
         .order_by(func.count(PresenceLog.id).desc())
         .first()
     )
@@ -150,6 +150,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
                     PresenceLog.cardnumber == exit_ev.cardnumber,
                     PresenceLog.space_id == sid,
                     PresenceLog.timestamp < exit_ev.timestamp,
+                    func.date(func.timezone("America/Lima", PresenceLog.timestamp)) == today,
                 )
             )
             .order_by(PresenceLog.timestamp.desc())

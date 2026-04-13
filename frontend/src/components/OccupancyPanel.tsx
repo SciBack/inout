@@ -584,7 +584,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
 
             {/* Permanencia media */}
             <StatCard
-              label="Permanencia"
+              label="Prom. permanencia"
               value={avgStayStr}
               color={C.text1}
               numSize="clamp(34px,4.8vh,64px)"
