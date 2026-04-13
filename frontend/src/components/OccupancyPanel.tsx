@@ -369,24 +369,13 @@ export function OccupancyPanel() {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* SECCIÓN 2 — Card de aforo */}
-      <div style={s.occupancyCard}>
-        <span style={s.occupancyLabel}>AFORO ACTUAL</span>
-        <div style={s.occupancyRow}>
-          <span style={{ ...s.occupancyNum, color: barColor }}>
-            {data.current_occupancy}
-          </span>
-          <span style={s.occupancyOf}>/ {data.capacity}</span>
-        </div>
-        <div style={s.barBg}>
-          <div style={{ ...s.barFillAnim, width: `${pct}%`, background: barColor }} />
-        </div>
-        <span style={{ ...s.occupancyPct, color: barColor }}>
-          {pct.toFixed(0)}% del aforo
-        </span>
+      {/* SECCIÓN 2 — Gráfico de líneas por facultad (ocupa el lugar del aforo) */}
+      <div style={s.histogramSection}>
+        <span style={s.sectionTitle}>Actividad por facultad — hoy</span>
+        <FacultyLineChart events={data.faculty_events} />
       </div>
 
-      {/* SECCIÓN 3 — Métricas */}
+      {/* SECCIÓN 3 — Métricas: AFORO ACTUAL integrado en su card */}
       <div style={s.metricsGrid}>
         <div style={s.metricCard}>
           <span style={s.metricLabel}>Visitantes hoy</span>
@@ -394,12 +383,26 @@ export function OccupancyPanel() {
             {data.unique_visitors_today}
           </span>
         </div>
+
+        {/* AFORO ACTUAL — card enriquecido con barra */}
         <div style={s.metricCard}>
-          <span style={s.metricLabel}>En edificio</span>
-          <span ref={refOccupancy} style={{ ...s.metricNum, color: barColor }}>
-            {data.current_occupancy}
+          <span style={s.metricLabel}>Aforo actual</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+            <span ref={refOccupancy} style={{ ...s.metricNum, color: barColor }}>
+              {data.current_occupancy}
+            </span>
+            <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>
+              / {data.capacity}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: 4, background: '#1e293b', borderRadius: 999, overflow: 'hidden', marginTop: 2 }}>
+            <div style={{ height: '100%', borderRadius: 999, background: barColor, width: `${pct}%`, transition: 'width 0.7s ease' }} />
+          </div>
+          <span style={{ fontSize: 'clamp(8px,0.9vh,11px)', color: barColor, fontWeight: 600 }}>
+            {pct.toFixed(0)}% del aforo
           </span>
         </div>
+
         <div style={s.metricCard}>
           <span style={s.metricLabel}>Hombres</span>
           <span ref={refMale} style={{ ...s.metricNum, color: '#3b82f6' }}>
@@ -412,12 +415,6 @@ export function OccupancyPanel() {
             {data.current_female}
           </span>
         </div>
-      </div>
-
-      {/* SECCIÓN 4 — Gráfico de líneas por facultad */}
-      <div style={s.histogramSection}>
-        <span style={s.sectionTitle}>Actividad por facultad — hoy</span>
-        <FacultyLineChart events={data.faculty_events} />
       </div>
 
       {/* SECCIÓN 5 — Feed actividad */}
@@ -498,62 +495,9 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'capitalize',
   },
 
-  // Aforo
-  occupancyCard: {
-    flex: '2.2 0 0',
-    minHeight: 0,
-    background: '#0d1f35',
-    border: '1px solid #1e293b',
-    borderRadius: '12px',
-    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,22px)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    gap: 'clamp(6px,0.8vh,10px)',
-  },
-  occupancyLabel: {
-    fontSize: 'clamp(10px,1vh,12px)',
-    color: '#475569',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-  },
-  occupancyRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: '0.4rem',
-  },
-  occupancyNum: {
-    fontSize: 'clamp(48px,7.5vh,88px)',
-    fontWeight: 800,
-    lineHeight: 1,
-    fontVariantNumeric: 'tabular-nums',
-  },
-  occupancyOf: {
-    fontSize: 'clamp(24px,3.5vh,44px)',
-    color: '#475569',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  barBg: {
-    width: '100%',
-    height: 'clamp(10px,1.3vh,16px)',
-    background: '#1e293b',
-    borderRadius: '999px',
-    overflow: 'hidden',
-  },
-  barFillAnim: {
-    height: '100%',
-    borderRadius: '999px',
-    transition: 'width 0.7s ease, background-color 0.7s ease',
-  },
-  occupancyPct: {
-    fontSize: 'clamp(12px,1.3vh,15px)',
-    fontWeight: 600,
-    alignSelf: 'flex-end',
-  },
-
   // Métricas
   metricsGrid: {
-    flex: '0.9 0 0',
+    flex: '1.1 0 0',
     minHeight: 0,
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
@@ -583,9 +527,9 @@ const s: Record<string, React.CSSProperties> = {
     lineHeight: 1,
   },
 
-  // Histograma
+  // Gráfico facultades (ocupa posición hero, arriba)
   histogramSection: {
-    flex: '1.6 0 0',
+    flex: '3.0 0 0',
     minHeight: 0,
     background: '#0d1f35',
     border: '1px solid #1e293b',
