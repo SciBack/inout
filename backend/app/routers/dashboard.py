@@ -5,7 +5,8 @@ from datetime import datetime, date, timedelta, timezone
 
 from ..database import get_db
 from ..models import PresenceLog, Space
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount
+from collections import defaultdict
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline
 from ..config import settings
 
 router = APIRouter()
@@ -286,6 +287,40 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     )
     hourly_entries = [HourlyCount(hour=int(r.hour), count=r.cnt) for r in hourly_rows]
 
+    # Entradas por facultad × hora (para gráfico de líneas)
+    faculty_hourly_rows = (
+        db.query(
+            PresenceLog.patron_faculty,
+            func.extract("hour", PresenceLog.timestamp).label("hour"),
+            func.count(PresenceLog.id).label("cnt"),
+        )
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_faculty.isnot(None),
+                PresenceLog.patron_faculty != "",
+            )
+        )
+        .group_by(PresenceLog.patron_faculty, func.extract("hour", PresenceLog.timestamp))
+        .order_by(PresenceLog.patron_faculty, func.extract("hour", PresenceLog.timestamp))
+        .all()
+    )
+
+    fac_hours: dict[str, list] = defaultdict(list)
+    for row in faculty_hourly_rows:
+        fac_hours[row.patron_faculty].append(HourlyCount(hour=int(row.hour), count=row.cnt))
+
+    faculty_timelines = [
+        FacultyTimeline(
+            faculty=fac,
+            label=FACULTY_LABELS.get(fac, fac),
+            data=hours,
+        )
+        for fac, hours in fac_hours.items()
+    ]
+
     return DashboardStats(
         space_name=space_name,
         capacity=capacity,
@@ -303,4 +338,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         current_female=current_female,
         faculty_breakdown=faculty_breakdown,
         hourly_entries=hourly_entries,
+        faculty_timelines=faculty_timelines,
     )

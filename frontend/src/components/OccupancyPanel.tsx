@@ -5,6 +5,12 @@ interface HourlyEntry {
   count: number
 }
 
+interface FacultyTimeline {
+  faculty: string
+  label: string
+  data: HourlyEntry[]
+}
+
 interface DashboardData {
   space_name: string
   capacity: number
@@ -19,6 +25,7 @@ interface DashboardData {
   current_female: number
   faculty_breakdown: { faculty: string; label: string; count: number }[]
   hourly_entries: HourlyEntry[]
+  faculty_timelines: FacultyTimeline[]
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -33,6 +40,122 @@ interface DashboardData {
 
 // Horas de operación de la biblioteca
 const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
+const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
+
+// SVG line chart — una línea por facultad
+function FacultyLineChart({ timelines }: { timelines: FacultyTimeline[] }) {
+  const currentHour = new Date().getHours()
+  const W = 300
+  const H = 72
+  const PAD_TOP = 6
+  const PAD_BOT = 16
+  const chartH = H - PAD_TOP - PAD_BOT
+
+  const xOf = (h: number) => ((h - 7) / 14) * W
+  const allCounts = timelines.flatMap(t => t.data.map(d => d.count))
+  const maxCount = Math.max(...allCounts, 1)
+  const yOf = (count: number) => PAD_TOP + chartH * (1 - count / maxCount)
+
+  const getPoints = (tl: FacultyTimeline) => {
+    const map: Record<number, number> = {}
+    for (const d of tl.data) map[d.hour] = d.count
+    const end = Math.min(Math.max(currentHour, 7), 21)
+    return CHART_HOURS
+      .filter(h => h <= end)
+      .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
+      .join(' ')
+  }
+
+  if (timelines.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>Sin datos del día</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,7px)', minHeight: 0 }}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{ display: 'block', flex: 1, minHeight: 0 }}
+        preserveAspectRatio="none"
+      >
+        {/* Líneas de hora */}
+        {CHART_HOURS.filter(h => h % 2 === 1).map(h => (
+          <g key={h}>
+            <line x1={xOf(h)} y1={PAD_TOP} x2={xOf(h)} y2={H - PAD_BOT}
+              stroke="#1a2a3f" strokeWidth="0.5" />
+            <text x={xOf(h)} y={H - 1} fontSize="6" fill="#334155" textAnchor="middle">{h}h</text>
+          </g>
+        ))}
+        {/* Línea baseline */}
+        <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="#1e293b" strokeWidth="0.5" />
+        {/* Indicador hora actual */}
+        {currentHour >= 7 && currentHour <= 21 && (
+          <line
+            x1={xOf(currentHour)} y1={PAD_TOP}
+            x2={xOf(currentHour)} y2={H - PAD_BOT}
+            stroke="#475569" strokeWidth="1" strokeDasharray="3,2"
+          />
+        )}
+        {/* Línea por facultad */}
+        {timelines.map((tl, idx) => {
+          const color = LINE_COLORS[idx % LINE_COLORS.length]
+          const pts = getPoints(tl)
+          return (
+            <polyline
+              key={tl.faculty}
+              points={pts}
+              fill="none"
+              stroke={color}
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          )
+        })}
+        {/* Puntos en datos reales */}
+        {timelines.map((tl, idx) => {
+          const color = LINE_COLORS[idx % LINE_COLORS.length]
+          return tl.data
+            .filter(d => d.hour >= 7 && d.hour <= Math.min(currentHour, 21))
+            .map(d => (
+              <circle
+                key={`${tl.faculty}-${d.hour}`}
+                cx={xOf(d.hour)}
+                cy={yOf(d.count)}
+                r="2.4"
+                fill={color}
+                stroke="#0d1f35"
+                strokeWidth="0.8"
+              />
+            ))
+        })}
+      </svg>
+      {/* Leyenda */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'clamp(4px,0.5vh,8px) clamp(8px,1vh,14px)', flexShrink: 0 }}>
+        {timelines.map((tl, idx) => (
+          <div key={tl.faculty} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{
+              width: 'clamp(12px,1.4vh,18px)',
+              height: '2px',
+              background: LINE_COLORS[idx % LINE_COLORS.length],
+              borderRadius: '1px',
+              flexShrink: 0,
+            }} />
+            <span style={{
+              fontSize: 'clamp(8px,0.85vh,11px)',
+              color: '#64748b',
+              whiteSpace: 'nowrap',
+            }}>{tl.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function firstNameCapitalized(fullName: string): string {
   if (!fullName) return ''
@@ -121,10 +244,6 @@ export function OccupancyPanel() {
   const isNewEvent = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
 
-  // Histograma
-  const hourlyMap: Record<number, number> = {}
-  for (const h of data.hourly_entries) hourlyMap[h.hour] = h.count
-  const maxHourlyCount = Math.max(...data.hourly_entries.map(h => h.count), 1)
   const currentHour = new Date().getHours()
 
   return (
@@ -181,42 +300,10 @@ export function OccupancyPanel() {
         </div>
       </div>
 
-      {/* SECCIÓN 4 — Histograma por hora */}
+      {/* SECCIÓN 4 — Gráfico de líneas por facultad */}
       <div style={s.histogramSection}>
-        <span style={s.sectionTitle}>Entradas por hora — hoy</span>
-        <div style={s.histogramChart}>
-          {CHART_HOURS.map(h => {
-            const count = hourlyMap[h] || 0
-            const pctH = count > 0 ? Math.max((count / maxHourlyCount) * 100, 8) : 0
-            const isFuture = h > currentHour
-            const isCurrent = h === currentHour
-            const opacity = isFuture ? 0 : isCurrent ? 1 : 0.25 + (count / maxHourlyCount) * 0.65
-            const glow = isCurrent && count > 0
-              ? '0 0 8px rgba(59,130,246,0.6)' : undefined
-            return (
-              <div key={h} style={s.histCol}>
-                <div style={s.histTrack}>
-                  <div style={{
-                    ...s.histBar,
-                    height: isFuture ? '2px' : `${pctH}%`,
-                    background: isFuture
-                      ? '#0f172a'
-                      : `rgba(59,130,246,${opacity})`,
-                    boxShadow: glow,
-                    transition: 'height 0.6s ease',
-                  }} />
-                </div>
-                <span style={{
-                  ...s.histLabel,
-                  color: isCurrent ? '#94a3b8' : '#334155',
-                  fontWeight: isCurrent ? 600 : 400,
-                }}>
-                  {h % 2 === 1 ? `${h}` : ''}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+        <span style={s.sectionTitle}>Actividad por facultad — hoy</span>
+        <FacultyLineChart timelines={data.faculty_timelines} />
       </div>
 
       {/* SECCIÓN 5 — Feed actividad */}
@@ -401,40 +488,6 @@ const s: Record<string, React.CSSProperties> = {
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
-  },
-  histogramChart: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: '3px',
-    minHeight: 0,
-  },
-  histCol: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '3px',
-    minHeight: 0,
-  },
-  histTrack: {
-    flex: 1,
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-    minHeight: 0,
-  },
-  histBar: {
-    width: '100%',
-    borderRadius: '3px 3px 0 0',
-    minHeight: '2px',
-  },
-  histLabel: {
-    fontSize: 'clamp(8px,0.75vh,10px)',
-    lineHeight: 1,
-    height: 'clamp(10px,1.1vh,14px)',
-    flexShrink: 0,
   },
 
   // Feed

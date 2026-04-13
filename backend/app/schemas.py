@@ -59,6 +59,12 @@ class HourlyCount(BaseModel):
     count: int
 
 
+class FacultyTimeline(BaseModel):
+    faculty: str
+    label: str
+    data: list[HourlyCount]
+
+
 class DashboardStats(BaseModel):
     space_name: str
     capacity: int
@@ -76,3 +82,4 @@ class DashboardStats(BaseModel):
     current_female: int = 0
     faculty_breakdown: list[FacultyCount] = []
     hourly_entries: list[HourlyCount] = []
+    faculty_timelines: list[FacultyTimeline] = []
