@@ -231,9 +231,9 @@ const s: Record<string, React.CSSProperties> = {
     animation: 'promptPulse 2.4s ease-in-out infinite',
   } as React.CSSProperties,
   promptSub: {
-    fontSize: 'clamp(15px,1.8vh,22px)' as unknown as undefined,
-    fontWeight: 500,
-    color: 'oklch(72% 0.010 222)',
+    fontSize: 'clamp(22px,2.8vh,34px)' as unknown as undefined,
+    fontWeight: 700,
+    color: 'oklch(92% 0.008 220)',
     textAlign: 'center',
     fontFamily: "'Barlow', sans-serif",
     lineHeight: 1.2,
