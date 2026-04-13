@@ -72,8 +72,13 @@ export default function App() {
 
   return (
     <div style={styles.root}>
-      {/* Panel izquierdo: escaneo o bienvenida */}
+      {/* Panel izquierdo: dashboard aforo */}
       <div style={styles.left}>
+        <OccupancyPanel />
+      </div>
+
+      {/* Panel derecho: escaneo o bienvenida */}
+      <div style={styles.right}>
         {state === 'idle' && (
           <ScanInput onScan={handleScan} disabled={loading} />
         )}
@@ -92,11 +97,6 @@ export default function App() {
 
         {/* Hora y fecha en pie */}
         <Clock />
-      </div>
-
-      {/* Panel derecho: dashboard aforo */}
-      <div style={styles.right}>
-        <OccupancyPanel />
       </div>
     </div>
   )
@@ -127,18 +127,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#0f172a',
   },
   left: {
-    flex: '0 0 60%',
+    flex: '0 0 65%',
+    background: '#0a1628',
+    overflowY: 'auto',
+  },
+  right: {
+    flex: '0 0 35%',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    borderRight: '1px solid #1e293b',
-  },
-  right: {
-    flex: '0 0 40%',
-    background: '#0a1628',
-    overflowY: 'auto',
+    borderLeft: '1px solid #1e293b',
   },
   errorBox: {
     display: 'flex',

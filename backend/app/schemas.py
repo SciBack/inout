@@ -40,6 +40,12 @@ class PresenceEntry(BaseModel):
         from_attributes = True
 
 
+class CategoryCount(BaseModel):
+    category: str
+    label: str
+    count: int
+
+
 class DashboardStats(BaseModel):
     space_name: str
     capacity: int
@@ -48,3 +54,8 @@ class DashboardStats(BaseModel):
     entries_today: int
     exits_today: int
     recent_events: list[PresenceEntry]
+    unique_visitors_today: int = 0
+    avg_stay_seconds: Optional[int] = None
+    peak_hour: Optional[int] = None
+    category_breakdown: list[CategoryCount] = []
+    entries_yesterday: int = 0
