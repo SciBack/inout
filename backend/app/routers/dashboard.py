@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, timezone
 
 from ..database import get_db
 from ..models import PresenceLog, Space
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount
 from ..config import settings
 
 router = APIRouter()
@@ -267,6 +267,25 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         for row in faculty_rows
     ]
 
+    # Entradas por hora hoy (para histograma)
+    hourly_rows = (
+        db.query(
+            func.extract("hour", PresenceLog.timestamp).label("hour"),
+            func.count(PresenceLog.id).label("cnt"),
+        )
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+            )
+        )
+        .group_by(func.extract("hour", PresenceLog.timestamp))
+        .order_by(func.extract("hour", PresenceLog.timestamp))
+        .all()
+    )
+    hourly_entries = [HourlyCount(hour=int(r.hour), count=r.cnt) for r in hourly_rows]
+
     return DashboardStats(
         space_name=space_name,
         capacity=capacity,
@@ -283,4 +302,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         current_male=current_male,
         current_female=current_female,
         faculty_breakdown=faculty_breakdown,
+        hourly_entries=hourly_entries,
     )

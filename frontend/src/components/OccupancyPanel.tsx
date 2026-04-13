@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
+interface HourlyEntry {
+  hour: number
+  count: number
+}
+
 interface DashboardData {
   space_name: string
   capacity: number
@@ -13,6 +18,7 @@ interface DashboardData {
   current_male: number
   current_female: number
   faculty_breakdown: { faculty: string; label: string; count: number }[]
+  hourly_entries: HourlyEntry[]
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -25,19 +31,8 @@ interface DashboardData {
   entries_yesterday: number
 }
 
-function formatStay(seconds: number | null): string {
-  if (seconds === null) return '—'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatPeakHour(hour: number | null): string {
-  if (hour === null) return '—'
-  const next = (hour + 1) % 24
-  return `${String(hour).padStart(2, '0')}:00–${String(next).padStart(2, '0')}:00`
-}
+// Horas de operación de la biblioteca
+const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
 
 function firstNameCapitalized(fullName: string): string {
   if (!fullName) return ''
@@ -45,49 +40,38 @@ function firstNameCapitalized(fullName: string): string {
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
 }
 
-function animateCounter(
-  el: HTMLElement,
-  from: number,
-  to: number,
-  duration: number
-) {
+function animateCounter(el: HTMLElement, from: number, to: number, duration: number) {
   const start = performance.now()
   const diff = to - from
   const step = (now: number) => {
     const elapsed = now - start
     const progress = Math.min(elapsed / duration, 1)
-    const current = Math.round(from + diff * progress)
-    el.textContent = String(current)
+    el.textContent = String(Math.round(from + diff * progress))
     if (progress < 1) requestAnimationFrame(step)
   }
   requestAnimationFrame(step)
 }
 
-const FACULTY_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b']
-
 export function OccupancyPanel() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
 
-  // Refs para animación de métricas
   const refVisitors = useRef<HTMLSpanElement>(null)
+  const refOccupancy = useRef<HTMLSpanElement>(null)
   const refMale = useRef<HTMLSpanElement>(null)
   const refFemale = useRef<HTMLSpanElement>(null)
 
-  // Valores anteriores para detectar cambios
-  const prevVisitors = useRef<number>(0)
-  const prevMale = useRef<number>(0)
-  const prevFemale = useRef<number>(0)
-
-  // Ref para detectar nuevo evento en feed
+  const prevVisitors = useRef(0)
+  const prevOccupancy = useRef(0)
+  const prevMale = useRef(0)
+  const prevFemale = useRef(0)
   const prevFirstId = useRef<number | null>(null)
 
   const fetchDashboard = async () => {
     try {
       const res = await fetch('/api/dashboard')
       if (res.ok) {
-        const newData: DashboardData = await res.json()
-        setData(newData)
+        setData(await res.json())
         setError(false)
       }
     } catch {
@@ -97,31 +81,29 @@ export function OccupancyPanel() {
 
   useEffect(() => {
     fetchDashboard()
-    const interval = setInterval(fetchDashboard, 5000)
-    return () => clearInterval(interval)
+    const id = setInterval(fetchDashboard, 5000)
+    return () => clearInterval(id)
   }, [])
 
-  // Animar métricas cuando cambian
   useEffect(() => {
     if (!data) return
-
-    const animateMetric = (
+    const pulse = (
       ref: React.RefObject<HTMLSpanElement | null>,
-      prevRef: React.MutableRefObject<number>,
-      newVal: number
+      prev: React.MutableRefObject<number>,
+      val: number
     ) => {
-      if (ref.current && prevRef.current !== newVal) {
-        animateCounter(ref.current, prevRef.current, newVal, 300)
+      if (ref.current && prev.current !== val) {
+        animateCounter(ref.current, prev.current, val, 300)
         ref.current.style.animation = 'none'
         void ref.current.offsetWidth
         ref.current.style.animation = 'metricPulse 0.5s ease'
-        prevRef.current = newVal
+        prev.current = val
       }
     }
-
-    animateMetric(refVisitors, prevVisitors, data.unique_visitors_today)
-    animateMetric(refMale, prevMale, data.current_male)
-    animateMetric(refFemale, prevFemale, data.current_female)
+    pulse(refVisitors, prevVisitors, data.unique_visitors_today)
+    pulse(refOccupancy, prevOccupancy, data.current_occupancy)
+    pulse(refMale, prevMale, data.current_male)
+    pulse(refFemale, prevFemale, data.current_female)
   }, [data])
 
   if (error) return <div style={s.stateMsg}>Sin conexión con el servidor</div>
@@ -130,19 +112,20 @@ export function OccupancyPanel() {
   const pct = Math.min(100, data.occupancy_percent)
   const barColor = pct < 60 ? '#22c55e' : pct < 85 ? '#f59e0b' : '#ef4444'
 
-  const today = new Date()
-  const todayLabel = today.toLocaleDateString('es-PE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+  const todayLabel = new Date().toLocaleDateString('es-PE', {
+    weekday: 'long', day: 'numeric', month: 'long',
   })
   const todayCapitalized = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)
-
-  const maxFacultyCount = data.faculty_breakdown.reduce((m, f) => Math.max(m, f.count), 1)
 
   const firstEventId = data.recent_events[0]?.id ?? null
   const isNewEvent = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
+
+  // Histograma
+  const hourlyMap: Record<number, number> = {}
+  for (const h of data.hourly_entries) hourlyMap[h.hour] = h.count
+  const maxHourlyCount = Math.max(...data.hourly_entries.map(h => h.count), 1)
+  const currentHour = new Date().getHours()
 
   return (
     <div style={s.container}>
@@ -163,66 +146,76 @@ export function OccupancyPanel() {
           <span style={s.occupancyOf}>/ {data.capacity}</span>
         </div>
         <div style={s.barBg}>
-          <div style={{ ...s.barFill, width: `${pct}%`, background: barColor }} />
+          <div style={{ ...s.barFillAnim, width: `${pct}%`, background: barColor }} />
         </div>
         <span style={{ ...s.occupancyPct, color: barColor }}>
           {pct.toFixed(0)}% del aforo
         </span>
       </div>
 
-      {/* SECCIÓN 3 — Métricas 4 cards */}
+      {/* SECCIÓN 3 — Métricas */}
       <div style={s.metricsGrid}>
-        {/* Visitantes únicos */}
         <div style={s.metricCard}>
-          <span style={s.metricLabel}>Visitantes</span>
+          <span style={s.metricLabel}>Visitantes hoy</span>
           <span ref={refVisitors} style={{ ...s.metricNum, color: '#06b6d4' }}>
             {data.unique_visitors_today}
           </span>
         </div>
-        {/* Hombres actuales */}
+        <div style={s.metricCard}>
+          <span style={s.metricLabel}>En edificio</span>
+          <span ref={refOccupancy} style={{ ...s.metricNum, color: barColor }}>
+            {data.current_occupancy}
+          </span>
+        </div>
         <div style={s.metricCard}>
           <span style={s.metricLabel}>Hombres</span>
           <span ref={refMale} style={{ ...s.metricNum, color: '#3b82f6' }}>
             {data.current_male}
           </span>
         </div>
-        {/* Mujeres actuales */}
         <div style={s.metricCard}>
           <span style={s.metricLabel}>Mujeres</span>
           <span ref={refFemale} style={{ ...s.metricNum, color: '#ec4899' }}>
             {data.current_female}
           </span>
         </div>
-        {/* Hora pico */}
-        <div style={s.metricCard}>
-          <span style={s.metricLabel}>Hora pico</span>
-          <span style={{ ...s.metricNum, fontSize: 'clamp(13px,1.6vh,18px)', color: '#8b5cf6' }}>
-            {formatPeakHour(data.peak_hour)}
-          </span>
-        </div>
       </div>
 
-      {/* SECCIÓN 4 — Facultades */}
-      <div style={s.facultySection}>
-        <span style={s.sectionTitle}>Por facultad — hoy</span>
-        <div style={s.facultyList}>
-          {data.faculty_breakdown.length === 0 ? (
-            <span style={s.emptyState}>Sin datos del día</span>
-          ) : (
-            data.faculty_breakdown.map((fac, idx) => {
-              const widthPct = (fac.count / maxFacultyCount) * 100
-              const color = FACULTY_COLORS[idx % FACULTY_COLORS.length]
-              return (
-                <div key={fac.faculty} style={s.facultyRow}>
-                  <span style={s.facultyName}>{fac.label}</span>
-                  <div style={s.facultyBarBg}>
-                    <div style={{ ...s.facultyBarFill, width: `${widthPct}%`, background: color }} />
-                  </div>
-                  <span style={s.facultyCount}>{fac.count}</span>
+      {/* SECCIÓN 4 — Histograma por hora */}
+      <div style={s.histogramSection}>
+        <span style={s.sectionTitle}>Entradas por hora — hoy</span>
+        <div style={s.histogramChart}>
+          {CHART_HOURS.map(h => {
+            const count = hourlyMap[h] || 0
+            const pctH = count > 0 ? Math.max((count / maxHourlyCount) * 100, 8) : 0
+            const isFuture = h > currentHour
+            const isCurrent = h === currentHour
+            const opacity = isFuture ? 0 : isCurrent ? 1 : 0.25 + (count / maxHourlyCount) * 0.65
+            const glow = isCurrent && count > 0
+              ? '0 0 8px rgba(59,130,246,0.6)' : undefined
+            return (
+              <div key={h} style={s.histCol}>
+                <div style={s.histTrack}>
+                  <div style={{
+                    ...s.histBar,
+                    height: isFuture ? '2px' : `${pctH}%`,
+                    background: isFuture
+                      ? '#0f172a'
+                      : `rgba(59,130,246,${opacity})`,
+                    boxShadow: glow,
+                    transition: 'height 0.6s ease',
+                  }} />
                 </div>
-              )
-            })
-          )}
+                <span style={{
+                  ...s.histLabel,
+                  color: isCurrent ? '#94a3b8' : '#334155',
+                  fontWeight: isCurrent ? 600 : 400,
+                }}>
+                  {h % 2 === 1 ? `${h}` : ''}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -239,7 +232,8 @@ export function OccupancyPanel() {
                 style={{
                   ...s.feedItem,
                   background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                  animation: isFirst && isNewEvent ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
+                  animation: isFirst && isNewEvent
+                    ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                 }}
               >
                 <span style={isEntry ? s.feedIconEntry : s.feedIconExit}>
@@ -250,8 +244,7 @@ export function OccupancyPanel() {
                 </span>
                 <span style={s.feedTime}>
                   {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
-                    hour: '2-digit',
-                    minute: '2-digit',
+                    hour: '2-digit', minute: '2-digit',
                   })}
                 </span>
               </div>
@@ -346,7 +339,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: '999px',
     overflow: 'hidden',
   },
-  barFill: {
+  barFillAnim: {
     height: '100%',
     borderRadius: '999px',
     transition: 'width 0.7s ease, background-color 0.7s ease',
@@ -389,8 +382,8 @@ const s: Record<string, React.CSSProperties> = {
     lineHeight: 1,
   },
 
-  // Facultades
-  facultySection: {
+  // Histograma
+  histogramSection: {
     flex: '1.6 0 0',
     minHeight: 0,
     background: '#0d1f35',
@@ -399,7 +392,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: 'clamp(8px,1vh,14px) clamp(12px,1.4vh,18px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(4px,0.5vh,8px)',
+    gap: 'clamp(6px,0.7vh,10px)',
     overflow: 'hidden',
   },
   sectionTitle: {
@@ -409,51 +402,39 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
   },
-  facultyList: {
+  histogramChart: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: '3px',
+    minHeight: 0,
+  },
+  histCol: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-evenly',
-  },
-  emptyState: {
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    color: '#475569',
-    textAlign: 'center',
-    alignSelf: 'center',
-    margin: 'auto',
-  },
-  facultyRow: {
-    display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(6px,0.7vh,10px)',
+    gap: '3px',
+    minHeight: 0,
   },
-  facultyName: {
-    flex: '0 0 clamp(80px,16%,140px)',
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    color: '#94a3b8',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  facultyBarBg: {
+  histTrack: {
     flex: 1,
-    height: 'clamp(5px,0.7vh,8px)',
-    background: '#1e293b',
-    borderRadius: '999px',
-    overflow: 'hidden',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    minHeight: 0,
   },
-  facultyBarFill: {
-    height: '100%',
-    borderRadius: '999px',
-    transition: 'width 0.7s ease',
+  histBar: {
+    width: '100%',
+    borderRadius: '3px 3px 0 0',
+    minHeight: '2px',
   },
-  facultyCount: {
-    flex: '0 0 28px',
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    color: '#f1f5f9',
-    fontWeight: 600,
-    textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums',
+  histLabel: {
+    fontSize: 'clamp(8px,0.75vh,10px)',
+    lineHeight: 1,
+    height: 'clamp(10px,1.1vh,14px)',
+    flexShrink: 0,
   },
 
   // Feed
