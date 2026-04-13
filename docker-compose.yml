@@ -31,6 +31,28 @@ services:
       KOHA_DB_USER: ${KOHA_DB_USER:-}
       KOHA_DB_PASS: ${KOHA_DB_PASS:-}
       KOHA_DB_NAME: ${KOHA_DB_NAME:-}
+      # Koha por sede (REST API)
+      KOHA_BUL_API_URL: ${KOHA_BUL_API_URL:-}
+      KOHA_BUL_API_USER: ${KOHA_BUL_API_USER:-}
+      KOHA_BUL_API_PASS: ${KOHA_BUL_API_PASS:-}
+      KOHA_BUT_API_URL: ${KOHA_BUT_API_URL:-}
+      KOHA_BUT_API_USER: ${KOHA_BUT_API_USER:-}
+      KOHA_BUT_API_PASS: ${KOHA_BUT_API_PASS:-}
+      KOHA_BUJ_API_URL: ${KOHA_BUJ_API_URL:-}
+      KOHA_BUJ_API_USER: ${KOHA_BUJ_API_USER:-}
+      KOHA_BUJ_API_PASS: ${KOHA_BUJ_API_PASS:-}
+      KOHA_CIA_API_URL: ${KOHA_CIA_API_URL:-}
+      KOHA_CIA_API_USER: ${KOHA_CIA_API_USER:-}
+      KOHA_CIA_API_PASS: ${KOHA_CIA_API_PASS:-}
+      # Koha DB directa por sede (fotos)
+      KOHA_BUT_DB_HOST: ${KOHA_BUT_DB_HOST:-}
+      KOHA_BUT_DB_USER: ${KOHA_BUT_DB_USER:-}
+      KOHA_BUT_DB_PASS: ${KOHA_BUT_DB_PASS:-}
+      KOHA_BUT_DB_NAME: ${KOHA_BUT_DB_NAME:-}
+      KOHA_BUJ_DB_HOST: ${KOHA_BUJ_DB_HOST:-}
+      KOHA_BUJ_DB_USER: ${KOHA_BUJ_DB_USER:-}
+      KOHA_BUJ_DB_PASS: ${KOHA_BUJ_DB_PASS:-}
+      KOHA_BUJ_DB_NAME: ${KOHA_BUJ_DB_NAME:-}
     depends_on:
       db:
         condition: service_healthy

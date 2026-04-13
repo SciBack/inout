@@ -5,62 +5,64 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-# Caché en memoria: {cardnumber: (patron_data, timestamp)}
-_cache: dict[str, tuple[dict, float]] = {}
+# Caché en memoria: {(sede_code, cardnumber): (patron_data, timestamp)}
+_cache: dict[tuple[str, str], tuple[dict, float]] = {}
 CACHE_TTL = 1800  # 30 minutos
 
 
-async def get_patron(cardnumber: str) -> dict | None:
+async def get_patron(cardnumber: str, sede_code: str = "BUL") -> dict | None:
     """
-    Busca un patron en Koha por cardnumber.
-    Usa caché de 30 minutos. Si Koha no responde en 2s, usa caché aunque haya expirado.
+    Busca un patron en el Koha correspondiente a la sede.
+    Usa caché de 30 minutos por (sede, cardnumber).
+    Si Koha no responde en 2s usa caché aunque haya expirado.
     Devuelve None si no existe.
     """
-    cached = _cache.get(cardnumber)
+    cache_key = (sede_code.upper(), cardnumber)
+    cached = _cache.get(cache_key)
     cache_fresh = cached and (time.time() - cached[1]) < CACHE_TTL
 
     if cache_fresh:
         return cached[0]
 
-    if not settings.koha_api_url:
-        logger.warning("KOHA_API_URL no configurado — modo demo")
+    koha_url, koha_user, koha_pass = settings.koha_for_sede(sede_code)
+
+    if not koha_url:
+        logger.warning(f"Koha no configurado para sede {sede_code} — modo demo")
         return _demo_patron(cardnumber)
 
     try:
         import json
         query = json.dumps({"cardnumber": cardnumber})
-        url = f"{settings.koha_api_url}/patrons"
 
         async with httpx.AsyncClient(
             verify=settings.koha_verify_ssl,
             timeout=2.0
         ) as client:
             resp = await client.get(
-                url,
+                f"{koha_url}/patrons",
                 params={"q": query},
-                auth=(settings.koha_api_user, settings.koha_api_pass)
+                auth=(koha_user, koha_pass)
             )
 
         if resp.status_code == 200:
             data = resp.json()
             if data:
                 patron = _normalize(data[0])
-                _cache[cardnumber] = (patron, time.time())
+                _cache[cache_key] = (patron, time.time())
                 return patron
             return None
 
-        logger.error(f"Koha API error {resp.status_code} para cardnumber {cardnumber}")
+        logger.error(f"Koha {sede_code} API error {resp.status_code} para {cardnumber}")
         return cached[0] if cached else None
 
     except (httpx.TimeoutException, httpx.ConnectError) as e:
-        logger.warning(f"Koha no disponible ({e}) — usando caché")
+        logger.warning(f"Koha {sede_code} no disponible ({e}) — usando caché")
         return cached[0] if cached else None
 
 
 def _normalize(raw: dict) -> dict:
     firstname = raw.get("firstname") or ""
     surname = raw.get("surname") or ""
-    # Primer nombre: primera palabra del firstname en title case
     first_name = firstname.split()[0].capitalize() if firstname else ""
     return {
         "cardnumber": raw.get("cardnumber", ""),
@@ -78,7 +80,6 @@ def _normalize(raw: dict) -> dict:
 
 
 def _demo_patron(cardnumber: str) -> dict:
-    """Patron de demo cuando Koha no está configurado."""
     return {
         "cardnumber": cardnumber,
         "name": "Usuario Demo",
