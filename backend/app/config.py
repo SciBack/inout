@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     default_space_capacity: int = 150
     default_space_name: str = "Biblioteca UPeU Lima"
     secret_key: str = "changeme"
+    koha_db_host: str = ""
+    koha_db_user: str = ""
+    koha_db_pass: str = ""
+    koha_db_name: str = ""
 
     class Config:
         env_file = ".env"

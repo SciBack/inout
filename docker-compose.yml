@@ -27,6 +27,10 @@ services:
       DEFAULT_SPACE_CAPACITY: ${DEFAULT_SPACE_CAPACITY:-150}
       DEFAULT_SPACE_NAME: ${DEFAULT_SPACE_NAME:-Biblioteca UPeU Lima}
       SECRET_KEY: ${SECRET_KEY}
+      KOHA_DB_HOST: ${KOHA_DB_HOST:-}
+      KOHA_DB_USER: ${KOHA_DB_USER:-}
+      KOHA_DB_PASS: ${KOHA_DB_PASS:-}
+      KOHA_DB_NAME: ${KOHA_DB_NAME:-}
     depends_on:
       db:
         condition: service_healthy
