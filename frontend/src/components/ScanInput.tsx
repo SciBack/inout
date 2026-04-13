@@ -6,12 +6,12 @@ interface Props {
 }
 
 const CARD_SVG = (
-  <svg width="48" height="32" viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
-    <rect x="1" y="1" width="46" height="30" rx="4" stroke="#475569" strokeWidth="1.5" />
-    <rect x="6" y="10" width="14" height="10" rx="1.5" stroke="#475569" strokeWidth="1.2" />
-    <rect x="24" y="10" width="12" height="2" rx="1" fill="#475569" />
-    <rect x="24" y="14" width="8" height="2" rx="1" fill="#334155" />
-    <rect x="24" y="18" width="10" height="2" rx="1" fill="#334155" />
+  <svg width="180" height="120" viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+    <rect x="1" y="1" width="46" height="30" rx="4" stroke="#334155" strokeWidth="1.5" />
+    <rect x="6" y="10" width="14" height="10" rx="1.5" stroke="#3b82f6" strokeWidth="1.2" />
+    <rect x="24" y="10" width="12" height="2" rx="1" fill="#3b82f6" />
+    <rect x="24" y="14" width="8" height="2" rx="1" fill="#1e40af" />
+    <rect x="24" y="18" width="10" height="2" rx="1" fill="#1e40af" />
   </svg>
 )
 
@@ -161,7 +161,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   iconWrap: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.25rem' },
   iconPulse: { animation: 'scanIdlePulse 3s ease-in-out infinite' },
-  label: { fontSize: 'clamp(14px,1.7vh,20px)', fontWeight: 600, color: '#94a3b8', textAlign: 'center' },
+  label: { fontSize: 'clamp(20px,2.8vh,32px)', fontWeight: 700, color: '#94a3b8', textAlign: 'center' },
   kbdBtn: {
     display: 'flex',
     alignItems: 'center',
