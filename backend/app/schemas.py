@@ -69,7 +69,7 @@ class FacultyEvent(BaseModel):
     faculty: str
     label: str
     event_type: str   # 'entry' | 'exit'
-    minute: int       # minutos desde medianoche
+    ts: str           # ISO timestamp — el frontend convierte a hora local
 
 
 class DashboardStats(BaseModel):

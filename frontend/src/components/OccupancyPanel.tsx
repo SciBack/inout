@@ -15,7 +15,7 @@ interface FacultyEventData {
   faculty: string
   label: string
   event_type: string
-  minute: number
+  ts: string          // ISO timestamp — convertir a hora local con new Date()
 }
 
 interface DashboardData {
@@ -50,6 +50,12 @@ interface DashboardData {
 const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
 const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
 
+// Minutos locales desde medianoche usando timezone del navegador (Lima)
+const tsToMinute = (ts: string): number => {
+  const d = new Date(ts)
+  return d.getHours() * 60 + d.getMinutes()
+}
+
 // Construye la curva de ocupación acumulada para una facultad
 // Resultado: lista de [minute, count] que forma una función escalón
 function buildOccupancyCurve(
@@ -60,6 +66,7 @@ function buildOccupancyCurve(
 ): [number, number][] {
   const evts = events
     .filter(e => e.faculty === faculty)
+    .map(e => ({ ...e, minute: tsToMinute(e.ts) }))
     .sort((a, b) => a.minute - b.minute)
 
   if (evts.length === 0) return []
@@ -106,9 +113,10 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   const faculties = [...new Map(events.map(e => [e.faculty, e.label])).entries()]
     .map(([faculty, label]) => ({ faculty, label }))
 
-  // Rango X: desde el primer evento hasta ahora
-  const startMinute = Math.min(...events.map(e => e.minute))
-  const endMinute = Math.max(nowMinute, startMinute + 30) // al menos 30 min de rango
+  // Rango X: desde el primer evento hasta ahora (minutos en hora local Lima)
+  const eventMinutes = events.map(e => tsToMinute(e.ts))
+  const startMinute = Math.min(...eventMinutes)
+  const endMinute = Math.max(nowMinute, startMinute + 10) // al menos 10 min de rango
 
   const W = 300
   const H = 66
@@ -197,6 +205,7 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
             let count = 0
             return events
               .filter(e => e.faculty === faculty)
+              .map(e => ({ ...e, minute: tsToMinute(e.ts) }))
               .sort((a, b) => a.minute - b.minute)
               .map((ev, i) => {
                 count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))

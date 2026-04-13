@@ -344,7 +344,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
             faculty=row.patron_faculty,
             label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
             event_type=row.event_type,
-            minute=row.timestamp.hour * 60 + row.timestamp.minute,
+            ts=row.timestamp.isoformat(),
         )
         for row in raw_faculty_events
     ]
