@@ -171,9 +171,10 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   const faculties = [...new Map(events.map(e => [e.faculty, e.label])).entries()]
     .map(([faculty, label]) => ({ faculty, label }))
 
-  const eventMinutes = events.map(e => tsToMinute(e.ts))
-  const startMinute = Math.min(...eventMinutes)
-  const endMinute = Math.max(nowMinute, startMinute + 10)
+  // Eje X: siempre desde las 7:00 AM hasta el momento actual
+  // Así el eje crece visualmente conforme avanza el día
+  const startMinute = 7 * 60  // 7:00 AM fijo
+  const endMinute = Math.max(nowMinute, startMinute + 30)
 
   const W = 300, H = 52
   const PAD_TOP = 4, PAD_BOT = 13
@@ -229,7 +230,7 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
             return (
               <path key={faculty} d={smoothStepPath(svgPts, 5)}
                 fill="none" stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                strokeWidth="1.8" strokeLinecap="round" />
+                strokeWidth="1.2" strokeLinecap="round" />
             )
           })}
         </svg>
