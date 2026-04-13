@@ -324,11 +324,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                 <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
                 {isEntry ? (
                   <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                    <path d="M3 9 L12 9 M8 5 L13 9 L8 13" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    <path d="M9 15 L9 4 M5 8 L9 3 L13 8" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                   </svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                    <path d="M15 9 L6 9 M10 5 L5 9 L10 13" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    <path d="M9 3 L9 14 M5 10 L9 15 L13 10" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                   </svg>
                 )}
                 <span style={s.feedName}>
