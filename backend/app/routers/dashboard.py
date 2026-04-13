@@ -23,15 +23,7 @@ CATEGORY_LABELS = {
     "ADMIN":   "Administrativos",
 }
 
-FACULTY_LABELS = {
-    "FCS": "Salud",
-    "FCE": "Cs. Empresariales",
-    "FIA": "Ingeniería",
-    "FACTEO": "Teología",
-    "FACIHED": "Humanidades",
-    "EPG": "Posgrado",
-    "COLEGIO": "Colegio Unión",
-}
+FACULTY_LABELS: dict[str, str] = {}
 
 
 @router.get("/dashboard", response_model=DashboardStats)
