@@ -42,7 +42,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '130px', display: 'block' }}>
+    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '160px', display: 'block' }}>
       {/* Track de fondo */}
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke="#132235" strokeWidth="9" strokeLinecap="round"
@@ -87,38 +87,38 @@ function FacultyBarChart({ rows }: { rows: { faculty: string; label: string; cou
   const max = Math.max(...sorted.map(r => r.count), 1)
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(6px,0.8vh,10px)' }}>
       {sorted.map((row, idx) => {
         const pct = (row.count / max) * 100
         const color = FAC_COLORS[idx % FAC_COLORS.length]
         return (
-          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px,0.6vh,8px)' }}>
+          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
             <span style={{
-              width: 'clamp(60px,8vw,95px)', textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(9px,1vh,12px)', color: '#64748b', whiteSpace: 'nowrap',
+              width: 'clamp(80px,10vw,120px)', textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(12px,1.4vh,17px)', color: '#64748b', whiteSpace: 'nowrap',
               overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               {row.label}
             </span>
             <div style={{
-              flex: 1, height: 'clamp(14px,1.8vh,22px)',
-              background: '#132235', borderRadius: 4, overflow: 'hidden',
+              flex: 1, height: 'clamp(20px,2.6vh,30px)',
+              background: '#132235', borderRadius: 5, overflow: 'hidden',
             }}>
               <div style={{
-                height: '100%', width: `${pct}%`, borderRadius: 4,
+                height: '100%', width: `${pct}%`, borderRadius: 5,
                 background: color, transition: 'width 0.6s ease',
-                display: 'flex', alignItems: 'center', paddingLeft: 6,
+                display: 'flex', alignItems: 'center', paddingLeft: 8,
               }}>
-                {row.count > 3 && (
-                  <span style={{ fontSize: 'clamp(8px,0.9vh,11px)', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+                {row.count > 2 && (
+                  <span style={{ fontSize: 'clamp(10px,1.2vh,14px)', fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
                     {row.count}
                   </span>
                 )}
               </div>
             </div>
             <span style={{
-              width: 'clamp(18px,2.5vw,30px)', textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(9px,1vh,12px)', fontWeight: 700,
+              width: 'clamp(24px,3vw,36px)', textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(13px,1.5vh,18px)', fontWeight: 700,
               fontVariantNumeric: 'tabular-nums', color: '#64748b',
             }}>
               {row.count}
@@ -308,15 +308,15 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,16px)',
-    gap: 'clamp(6px,0.7vh,9px)',
+    padding: 'clamp(10px,1.2vh,18px) clamp(12px,1.5vh,20px)',
+    gap: 'clamp(7px,0.9vh,12px)',
     background: '#0a1628',
     overflow: 'hidden',
     boxSizing: 'border-box',
   },
   stateMsg: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: '100%', color: '#ef4444', fontSize: '0.875rem',
+    height: '100%', color: '#ef4444', fontSize: '1rem',
   },
 
   // Header
@@ -327,14 +327,14 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'baseline',
   },
   spaceName: {
-    fontSize: 'clamp(11px,1.3vh,15px)',
-    fontWeight: 600,
+    fontSize: 'clamp(13px,1.7vh,20px)',
+    fontWeight: 700,
     color: '#94a3b8',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.1em',
   },
   dateLabel: {
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    color: '#334155',
+    fontSize: 'clamp(12px,1.4vh,17px)',
+    color: '#475569',
     textTransform: 'capitalize',
   },
 
@@ -343,11 +343,11 @@ const s: Record<string, React.CSSProperties> = {
     flex: '0 0 auto',
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
-    borderRadius: '12px',
-    padding: 'clamp(8px,0.9vh,12px) clamp(10px,1.2vh,16px)',
+    borderRadius: '14px',
+    padding: 'clamp(10px,1.3vh,18px) clamp(14px,1.8vh,22px)',
     display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(8px,1vh,14px)',
+    gap: 'clamp(12px,1.5vh,20px)',
   },
 
   // Bloque gauge (izquierda)
@@ -355,12 +355,12 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '2px',
+    gap: '4px',
     flexShrink: 0,
-    width: 'clamp(110px,14vh,150px)',
+    width: 'clamp(120px,16vh,170px)',
   },
 
-  // Separador vertical entre gauge y métricas
+  // Separador vertical
   metricsDivider: {
     width: 1,
     alignSelf: 'stretch',
@@ -368,7 +368,7 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
 
-  // Grupo de 3 métricas (derecha del gauge)
+  // Grupo de 3 métricas
   metricsGroup: {
     flex: 1,
     display: 'flex',
@@ -382,17 +382,17 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 'clamp(2px,0.3vh,4px)',
+    gap: 'clamp(3px,0.4vh,6px)',
   },
   metricLabel: {
-    fontSize: 'clamp(8px,0.85vh,10px)',
+    fontSize: 'clamp(10px,1.2vh,14px)',
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     whiteSpace: 'nowrap',
   },
   metricNum: {
-    fontSize: 'clamp(28px,3.5vh,44px)',
+    fontSize: 'clamp(42px,5.5vh,70px)',
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1,
@@ -404,54 +404,56 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 0,
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
-    borderRadius: '12px',
-    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,16px)',
+    borderRadius: '14px',
+    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,22px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(4px,0.5vh,7px)',
+    gap: 'clamp(6px,0.8vh,10px)',
     overflow: 'hidden',
   },
   feedList: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: '1px',
+    gap: 'clamp(2px,0.4vh,5px)',
     overflow: 'hidden',
+    justifyContent: 'flex-start',
   },
   feedItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(6px,0.7vh,10px)',
-    borderRadius: '6px',
-    padding: 'clamp(4px,0.45vh,6px) clamp(6px,0.7vh,8px)',
-    flex: '1 1 0',
-    minHeight: 0,
+    gap: 'clamp(10px,1.2vh,16px)',
+    borderRadius: '8px',
+    padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,14px)',
+    flexShrink: 0,        // NO stretch — altura natural
+    background: 'rgba(255,255,255,0.025)',
   },
   feedDotEntry: {
-    width: 7, height: 7,
+    width: 10, height: 10,
     borderRadius: '50%',
     flexShrink: 0,
     background: '#22c55e',
-    boxShadow: '0 0 5px #22c55e88',
+    boxShadow: '0 0 6px #22c55e99',
   } as React.CSSProperties,
   feedDotExit: {
-    width: 7, height: 7,
+    width: 10, height: 10,
     borderRadius: '50%',
     flexShrink: 0,
     background: '#ef4444',
-    boxShadow: '0 0 5px #ef444488',
+    boxShadow: '0 0 6px #ef444499',
   } as React.CSSProperties,
   feedName: {
     flex: 1,
-    fontSize: 'clamp(11px,1.3vh,16px)',
+    fontSize: 'clamp(16px,2vh,24px)',
     color: '#e2e8f0',
+    fontWeight: 500,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   feedTime: {
-    fontSize: 'clamp(9px,1vh,12px)',
-    color: '#334155',
+    fontSize: 'clamp(13px,1.6vh,19px)',
+    color: '#475569',
     fontVariantNumeric: 'tabular-nums',
     flexShrink: 0,
   },
@@ -459,21 +461,21 @@ const s: Record<string, React.CSSProperties> = {
   // Etiqueta de sección
   cardLabel: {
     flex: '0 0 auto',
-    fontSize: 'clamp(8px,0.85vh,10px)',
+    fontSize: 'clamp(10px,1.1vh,13px)',
     color: '#334155',
     textTransform: 'uppercase',
-    letterSpacing: '0.07em',
+    letterSpacing: '0.08em',
   },
 
-  // Barras de facultad — altura fija proporcional
+  // Barras de facultad
   chartSection: {
     flex: '0 0 auto',
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
-    borderRadius: '12px',
-    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,16px)',
+    borderRadius: '14px',
+    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,22px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(5px,0.6vh,8px)',
+    gap: 'clamp(7px,0.9vh,11px)',
   },
 }
