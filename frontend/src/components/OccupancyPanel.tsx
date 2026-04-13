@@ -42,7 +42,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '160px', display: 'block' }}>
+    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '130px', display: 'block' }}>
       {/* Track de fondo */}
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke="#132235" strokeWidth="9" strokeLinecap="round"
@@ -222,86 +222,78 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* ── SECCIÓN MEDIA: 2 columnas ── */}
-      <div style={s.middle}>
+      {/* ── FILA DE MÉTRICAS: gauge + 3 números en una sola tarjeta ── */}
+      <div style={s.metricsRow}>
 
-        {/* COLUMNA IZQUIERDA — Gauge + métricas secundarias */}
-        <div style={s.leftCol}>
-
-          {/* Card gauge aforo */}
-          <div style={s.gaugeCard}>
-            <span style={s.cardLabel}>En edificio</span>
-            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '0.25rem' }}>
-              <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
-            </div>
-            {/* Barra de progreso */}
-            <div style={{ width: '80%', margin: '0 auto', height: 5, background: '#132235', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ height: '100%', borderRadius: 999, background: barColor, width: `${pct}%`, transition: 'width 0.7s ease, background 0.4s ease' }} />
-            </div>
-            <span style={{ textAlign: 'center', fontSize: 'clamp(9px,0.95vh,11px)', color: barColor, fontWeight: 600, letterSpacing: '0.04em' }}>
-              {pct.toFixed(0)}% del aforo máximo
-            </span>
+        {/* Gauge compacto */}
+        <div style={s.gaugeBlock}>
+          <span style={s.cardLabel}>En edificio</span>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
           </div>
-
-          {/* Métricas secundarias: visitantes / hombres / mujeres */}
-          <div style={s.subMetrics}>
-            <div style={s.subItem}>
-              <span style={s.subLabel}>Visitantes hoy</span>
-              <span ref={refVisitors} style={{ ...s.subNum, color: '#06b6d4' }}>
-                {data.unique_visitors_today}
-              </span>
-            </div>
-            <div style={s.subDivider} />
-            <div style={s.subItem}>
-              <span style={s.subLabel}>Hombres</span>
-              <span ref={refMale} style={{ ...s.subNum, color: '#3b82f6' }}>
-                {data.current_male}
-              </span>
-            </div>
-            <div style={s.subDivider} />
-            <div style={s.subItem}>
-              <span style={s.subLabel}>Mujeres</span>
-              <span ref={refFemale} style={{ ...s.subNum, color: '#ec4899' }}>
-                {data.current_female}
-              </span>
-            </div>
-          </div>
+          <span style={{ textAlign: 'center', fontSize: 'clamp(9px,0.9vh,11px)', color: barColor, fontWeight: 600 }}>
+            {pct.toFixed(0)}% del aforo
+          </span>
         </div>
 
-        {/* COLUMNA DERECHA — Feed de actividad */}
-        <div style={s.rightCol}>
-          <span style={s.cardLabel}>Actividad reciente</span>
-          <div style={s.feedList}>
-            {data.recent_events.slice(0, 8).map((ev, idx) => {
-              const isEntry = ev.event_type === 'entry'
-              const isFirst = idx === 0
-              return (
-                <div
-                  key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
-                  style={{
-                    ...s.feedItem,
-                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                    animation: isFirst && isNewEvent
-                      ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
-                  }}
-                >
-                  <span style={isEntry ? s.feedDotEntry : s.feedDotExit} />
-                  <span style={s.feedName}>
-                    {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
-                  </span>
-                  <span style={s.feedTime}>
-                    {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
-                      hour: '2-digit', minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              )
-            })}
+        <div style={s.metricsDivider} />
+
+        {/* Métricas: visitantes / hombres / mujeres */}
+        <div style={s.metricsGroup}>
+          <div style={s.metricItem}>
+            <span style={s.metricLabel}>Visitantes hoy</span>
+            <span ref={refVisitors} style={{ ...s.metricNum, color: '#06b6d4' }}>
+              {data.unique_visitors_today}
+            </span>
+          </div>
+          <div style={s.metricItem}>
+            <span style={s.metricLabel}>Hombres</span>
+            <span ref={refMale} style={{ ...s.metricNum, color: '#3b82f6' }}>
+              {data.current_male}
+            </span>
+          </div>
+          <div style={s.metricItem}>
+            <span style={s.metricLabel}>Mujeres</span>
+            <span ref={refFemale} style={{ ...s.metricNum, color: '#ec4899' }}>
+              {data.current_female}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── SECCIÓN INFERIOR — Barras por facultad ── */}
+      {/* ── FEED DE ACTIVIDAD ── */}
+      <div style={s.feedSection}>
+        <span style={s.cardLabel}>Actividad reciente</span>
+        <div style={s.feedList}>
+          {data.recent_events.slice(0, 10).map((ev, idx) => {
+            const isEntry = ev.event_type === 'entry'
+            const isFirst = idx === 0
+            return (
+              <div
+                key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
+                style={{
+                  ...s.feedItem,
+                  background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                  animation: isFirst && isNewEvent
+                    ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
+                }}
+              >
+                <span style={isEntry ? s.feedDotEntry : s.feedDotExit} />
+                <span style={s.feedName}>
+                  {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
+                </span>
+                <span style={s.feedTime}>
+                  {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── BARRAS POR FACULTAD ── */}
       <div style={s.chartSection}>
         <span style={s.cardLabel}>Visitantes hoy por facultad</span>
         <FacultyBarChart rows={data.faculty_breakdown} />
@@ -316,8 +308,8 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
-    gap: 'clamp(6px,0.8vh,10px)',
+    padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,16px)',
+    gap: 'clamp(6px,0.7vh,9px)',
     background: '#0a1628',
     overflow: 'hidden',
     boxSizing: 'border-box',
@@ -346,86 +338,79 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'capitalize',
   },
 
-  // Sección media: 2 columnas
-  middle: {
-    flex: '2.4 0 0',
-    minHeight: 0,
-    display: 'flex',
-    gap: 'clamp(6px,0.8vh,10px)',
-  },
-
-  // Columna izquierda — gauge + sub métricas
-  leftCol: {
-    flex: '0 0 44%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'clamp(5px,0.7vh,8px)',
-    minHeight: 0,
-  },
-  gaugeCard: {
-    flex: '1 1 auto',
-    background: '#0d1f35',
-    border: '1px solid #1a2a3f',
-    borderRadius: '12px',
-    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,14px)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 'clamp(4px,0.5vh,6px)',
-    overflow: 'hidden',
-  },
-  subMetrics: {
+  // Fila de métricas: gauge + números en horizontal
+  metricsRow: {
     flex: '0 0 auto',
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '12px',
-    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,14px)',
+    padding: 'clamp(8px,0.9vh,12px) clamp(10px,1.2vh,16px)',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    gap: '0.5rem',
+    gap: 'clamp(8px,1vh,14px)',
   },
-  subItem: {
+
+  // Bloque gauge (izquierda)
+  gaugeBlock: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '2px',
-    flex: 1,
+    flexShrink: 0,
+    width: 'clamp(110px,14vh,150px)',
   },
-  subLabel: {
+
+  // Separador vertical entre gauge y métricas
+  metricsDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    background: '#1a2a3f',
+    flexShrink: 0,
+  },
+
+  // Grupo de 3 métricas (derecha del gauge)
+  metricsGroup: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'space-around',
+  },
+
+  metricItem: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'clamp(2px,0.3vh,4px)',
+  },
+  metricLabel: {
     fontSize: 'clamp(8px,0.85vh,10px)',
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     whiteSpace: 'nowrap',
   },
-  subNum: {
-    fontSize: 'clamp(22px,2.8vh,34px)',
+  metricNum: {
+    fontSize: 'clamp(28px,3.5vh,44px)',
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.1,
-  },
-  subDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    background: '#1e293b',
-    flexShrink: 0,
+    lineHeight: 1,
   },
 
-  // Columna derecha — feed
-  rightCol: {
+  // Feed de actividad — toma el mayor espacio
+  feedSection: {
     flex: '1 1 0',
+    minHeight: 0,
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '12px',
-    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,14px)',
+    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,16px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(4px,0.6vh,8px)',
+    gap: 'clamp(4px,0.5vh,7px)',
     overflow: 'hidden',
-    minHeight: 0,
   },
-
   feedList: {
     flex: 1,
     display: 'flex',
@@ -438,7 +423,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 'clamp(6px,0.7vh,10px)',
     borderRadius: '6px',
-    padding: 'clamp(4px,0.5vh,6px) clamp(6px,0.7vh,8px)',
+    padding: 'clamp(4px,0.45vh,6px) clamp(6px,0.7vh,8px)',
     flex: '1 1 0',
     minHeight: 0,
   },
@@ -458,14 +443,14 @@ const s: Record<string, React.CSSProperties> = {
   } as React.CSSProperties,
   feedName: {
     flex: 1,
-    fontSize: 'clamp(11px,1.3vh,15px)',
+    fontSize: 'clamp(11px,1.3vh,16px)',
     color: '#e2e8f0',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   feedTime: {
-    fontSize: 'clamp(9px,1vh,11px)',
+    fontSize: 'clamp(9px,1vh,12px)',
     color: '#334155',
     fontVariantNumeric: 'tabular-nums',
     flexShrink: 0,
@@ -480,17 +465,15 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: '0.07em',
   },
 
-  // Sección gráfico facultades
+  // Barras de facultad — altura fija proporcional
   chartSection: {
-    flex: '1.2 0 0',
-    minHeight: 0,
+    flex: '0 0 auto',
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '12px',
-    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,14px)',
+    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,16px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(4px,0.5vh,6px)',
-    overflow: 'hidden',
+    gap: 'clamp(5px,0.6vh,8px)',
   },
 }
