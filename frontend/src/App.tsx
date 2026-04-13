@@ -3,7 +3,7 @@ import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
 
-type AppState = 'idle' | 'welcome' | 'error'
+type AppState = 'idle' | 'welcome'
 
 interface ScanResult {
   event_type: string
@@ -20,25 +20,79 @@ interface ScanResult {
   timestamp: string
 }
 
-const WELCOME_DURATION = 5000 // 5 segundos mostrando bienvenida
+const WELCOME_DURATION = 5000
+const LEAVE_DURATION = 350
+
+const GLOBAL_CSS = `
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { overflow: hidden; background: #0f172a; }
+@keyframes feedSlideIn {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes metricPulse {
+  0%, 100% { filter: brightness(1); }
+  40%      { filter: brightness(1.7); }
+}
+@keyframes scanIdlePulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(1.06); }
+}
+@keyframes welcomeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes welcomeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-16px); }
+}
+@media (max-width: 767px) {
+  .kiosk-root { flex-direction: column !important; }
+  .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e293b !important; }
+  .panel-right { flex: 0 0 40vh !important; width: 100% !important; }
+}
+`
 
 export default function App() {
   const [state, setState] = useState<AppState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
+  const [isLeaving, setIsLeaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [showError, setShowError] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Volver a idle después de mostrar bienvenida
+  // Inyectar CSS global una sola vez
   useEffect(() => {
-    if (state === 'welcome') {
-      const timer = setTimeout(() => setState('idle'), WELCOME_DURATION)
-      return () => clearTimeout(timer)
+    const existing = document.getElementById('inout-global-css')
+    if (existing) return
+    const style = document.createElement('style')
+    style.id = 'inout-global-css'
+    style.textContent = GLOBAL_CSS
+    document.head.appendChild(style)
+  }, [])
+
+  // Timer welcome: iniciar salida animada, luego volver a idle
+  useEffect(() => {
+    if (state === 'welcome' && !isLeaving) {
+      const leaveTimer = setTimeout(() => setIsLeaving(true), WELCOME_DURATION)
+      return () => clearTimeout(leaveTimer)
     }
-    if (state === 'error') {
-      const timer = setTimeout(() => setState('idle'), 3000)
-      return () => clearTimeout(timer)
+    if (isLeaving) {
+      const idleTimer = setTimeout(() => {
+        setState('idle')
+        setIsLeaving(false)
+      }, LEAVE_DURATION)
+      return () => clearTimeout(idleTimer)
     }
-  }, [state])
+  }, [state, isLeaving])
+
+  // Error overlay temporal
+  useEffect(() => {
+    if (showError) {
+      const t = setTimeout(() => setShowError(false), 2000)
+      return () => clearTimeout(t)
+    }
+  }, [showError])
 
   const handleScan = async (cardnumber: string) => {
     if (loading) return
@@ -52,50 +106,50 @@ export default function App() {
       if (res.ok) {
         const data = await res.json()
         setScanResult(data)
+        setIsLeaving(false)
         setState('welcome')
       } else if (res.status === 429) {
-        // Debounce: escaneo duplicado — ignorar silenciosamente
+        // Debounce silencioso
       } else if (res.status === 404) {
         setErrorMsg('Carnet no encontrado')
-        setState('error')
+        setShowError(true)
       } else {
         setErrorMsg('Error al procesar el carnet')
-        setState('error')
+        setShowError(true)
       }
     } catch {
       setErrorMsg('Sin conexión con el servidor')
-      setState('error')
+      setShowError(true)
     } finally {
       setLoading(false)
     }
   }
 
+  const showWelcome = state === 'welcome' && scanResult !== null
+
   return (
-    <div style={styles.root}>
-      {/* Panel izquierdo: dashboard aforo */}
-      <div style={styles.left}>
+    <div className="kiosk-root" style={styles.root}>
+      <div className="panel-left" style={styles.left}>
         <OccupancyPanel />
       </div>
 
-      {/* Panel derecho: escaneo o bienvenida */}
-      <div style={styles.right}>
-        {state === 'idle' && (
-          <ScanInput onScan={handleScan} disabled={loading} />
+      <div className="panel-right" style={styles.right}>
+        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
+
+        {showWelcome && (
+          <WelcomeScreen result={scanResult!} isVisible={!isLeaving} />
         )}
-        {state === 'welcome' && scanResult && (
-          <WelcomeScreen result={scanResult} />
-        )}
-        {state === 'error' && (
-          <div style={styles.errorBox}>
-            <span style={styles.errorIcon}>⚠️</span>
-            <p style={styles.errorText}>{errorMsg}</p>
+
+        {showError && (
+          <div style={styles.errorOverlay}>
+            <span style={styles.errorText}>{errorMsg}</span>
           </div>
         )}
+
         {loading && state === 'idle' && (
           <div style={styles.loadingOverlay}>Procesando...</div>
         )}
 
-        {/* Hora y fecha en pie */}
         <Clock />
       </div>
     </div>
@@ -123,13 +177,14 @@ function Clock() {
 const styles: Record<string, React.CSSProperties> = {
   root: {
     display: 'flex',
+    width: '100vw',
     height: '100vh',
+    overflow: 'hidden',
     background: '#0f172a',
   },
   left: {
     flex: '0 0 65%',
-    background: '#0a1628',
-    overflowY: 'auto',
+    overflow: 'hidden',
   },
   right: {
     flex: '0 0 35%',
@@ -139,20 +194,22 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     position: 'relative',
     borderLeft: '1px solid #1e293b',
+    overflow: 'hidden',
   },
-  errorBox: {
+  errorOverlay: {
+    position: 'absolute',
+    inset: 0,
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: '1rem',
+    justifyContent: 'center',
+    background: 'rgba(15,23,42,0.92)',
+    zIndex: 30,
     padding: '2rem',
-  },
-  errorIcon: {
-    fontSize: '3rem',
   },
   errorText: {
     fontSize: '1.25rem',
     color: '#ef4444',
+    fontWeight: 600,
     textAlign: 'center',
   },
   loadingOverlay: {

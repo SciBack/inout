@@ -5,11 +5,29 @@ interface Props {
   disabled?: boolean
 }
 
+const CARD_SVG = (
+  <svg
+    width="48"
+    height="32"
+    viewBox="0 0 48 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ display: 'block' }}
+  >
+    <rect x="1" y="1" width="46" height="30" rx="4" stroke="#475569" strokeWidth="1.5" />
+    <rect x="6" y="10" width="14" height="10" rx="1.5" stroke="#475569" strokeWidth="1.2" />
+    <rect x="24" y="10" width="12" height="2" rx="1" fill="#475569" />
+    <rect x="24" y="14" width="8" height="2" rx="1" fill="#334155" />
+    <rect x="24" y="18" width="10" height="2" rx="1" fill="#334155" />
+  </svg>
+)
+
 export function ScanInput({ onScan, disabled }: Props) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Mantener el foco siempre en el input (modo kiosko)
+  // Mantener foco en el input (modo kiosko)
   useEffect(() => {
     const keepFocus = () => {
       if (!disabled) inputRef.current?.focus()
@@ -24,12 +42,7 @@ export function ScanInput({ onScan, disabled }: Props) {
   }, [disabled])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    setValue(val)
-    // Auto-submit cuando el lector de código termina (≥6 caracteres + Enter implícito por tiempo)
-    if (val.length >= 6) {
-      // Los lectores de barras envían Enter automáticamente
-    }
+    setValue(e.target.value)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -39,10 +52,13 @@ export function ScanInput({ onScan, disabled }: Props) {
     }
   }
 
+  const handleClickVisible = () => {
+    inputRef.current?.focus()
+  }
+
   return (
-    <div style={styles.container}>
-      <div style={styles.scanIcon}>📷</div>
-      <p style={styles.label}>Acerca o escanea tu carnet</p>
+    <div ref={containerRef} style={styles.container} onClick={handleClickVisible}>
+      {/* Input invisible — captura todo el input del lector */}
       <input
         ref={inputRef}
         type="text"
@@ -50,12 +66,21 @@ export function ScanInput({ onScan, disabled }: Props) {
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        style={styles.input}
-        placeholder="Escanea o escribe tu código..."
+        style={styles.hiddenInput}
         autoComplete="off"
         autoFocus
+        aria-label="Entrada de escaneo"
       />
-      <p style={styles.hint}>Presiona Enter o usa el lector de código</p>
+
+      {/* Visualización del estado */}
+      <div style={styles.iconWrap}>
+        <div style={styles.iconPulse}>
+          {CARD_SVG}
+        </div>
+      </div>
+
+      <p style={styles.label}>Acerca tu carnet al lector</p>
+      <p style={styles.hint}>El lector de código funciona automáticamente</p>
     </div>
   )
 }
@@ -65,33 +90,37 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '1rem',
+    gap: 'clamp(10px,1.4vh,18px)',
     padding: '2rem',
+    cursor: 'default',
+    userSelect: 'none',
   },
-  scanIcon: {
-    fontSize: '4rem',
+  hiddenInput: {
+    opacity: 0,
+    position: 'absolute',
+    pointerEvents: 'none',
+    width: 1,
+    height: 1,
+    overflow: 'hidden',
+  },
+  iconWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '0.5rem',
+  },
+  iconPulse: {
+    animation: 'scanIdlePulse 3s ease-in-out infinite',
   },
   label: {
-    fontSize: '1.5rem',
+    fontSize: 'clamp(14px,1.7vh,20px)',
     fontWeight: 600,
     color: '#94a3b8',
     textAlign: 'center',
   },
-  input: {
-    width: '100%',
-    maxWidth: '400px',
-    padding: '1rem 1.5rem',
-    fontSize: '1.25rem',
-    borderRadius: '12px',
-    border: '2px solid #334155',
-    background: '#1e293b',
-    color: '#f1f5f9',
-    outline: 'none',
-    textAlign: 'center',
-    letterSpacing: '0.1em',
-  },
   hint: {
-    fontSize: '0.875rem',
+    fontSize: 'clamp(11px,1.2vh,14px)',
     color: '#475569',
+    textAlign: 'center',
   },
 }

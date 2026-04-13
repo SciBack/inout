@@ -72,6 +72,7 @@ def _normalize(raw: dict) -> dict:
         "category": raw.get("category_id") or raw.get("categorycode") or "",
         "expiry_date": raw.get("expiry_date") or "",
         "patron_id": raw.get("patron_id"),
+        "faculty": raw.get("statistics_1") or "",
     }
 
 
@@ -87,4 +88,5 @@ def _demo_patron(cardnumber: str) -> dict:
         "category": "ESTUDI",
         "expiry_date": "2099-12-31",
         "patron_id": None,
+        "faculty": "",
     }

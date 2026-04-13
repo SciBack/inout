@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, timezone
 
 from ..database import get_db
 from ..models import PresenceLog, Space
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount
 from ..config import settings
 
 router = APIRouter()
@@ -14,6 +14,16 @@ CATEGORY_LABELS = {
     "ESTUDI": "Estudiantes",
     "DOCEN": "Docentes",
     "ADMIN": "Administrativos",
+}
+
+FACULTY_LABELS = {
+    "FCS": "Salud",
+    "FCE": "Cs. Empresariales",
+    "FIA": "Ingeniería",
+    "FACTEO": "Teología",
+    "FACIHED": "Humanidades",
+    "EPG": "Posgrado",
+    "COLEGIO": "Colegio Unión",
 }
 
 
@@ -174,6 +184,89 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         for row in category_rows
     ]
 
+    # Ocupación actual por género (entries hoy - exits hoy, mínimo 0)
+    male_entries = (
+        db.query(func.count(PresenceLog.id))
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_gender == "M",
+            )
+        )
+        .scalar() or 0
+    )
+    male_exits = (
+        db.query(func.count(PresenceLog.id))
+        .filter(
+            and_(
+                PresenceLog.event_type == "exit",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_gender == "M",
+            )
+        )
+        .scalar() or 0
+    )
+    current_male = max(0, male_entries - male_exits)
+
+    female_entries = (
+        db.query(func.count(PresenceLog.id))
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_gender == "F",
+            )
+        )
+        .scalar() or 0
+    )
+    female_exits = (
+        db.query(func.count(PresenceLog.id))
+        .filter(
+            and_(
+                PresenceLog.event_type == "exit",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_gender == "F",
+            )
+        )
+        .scalar() or 0
+    )
+    current_female = max(0, female_entries - female_exits)
+
+    # Top 5 facultades por visitantes únicos hoy (solo entries)
+    faculty_rows = (
+        db.query(
+            PresenceLog.patron_faculty,
+            func.count(func.distinct(PresenceLog.cardnumber)).label("cnt"),
+        )
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_faculty.isnot(None),
+                PresenceLog.patron_faculty != "",
+            )
+        )
+        .group_by(PresenceLog.patron_faculty)
+        .order_by(func.count(func.distinct(PresenceLog.cardnumber)).desc())
+        .limit(5)
+        .all()
+    )
+
+    faculty_breakdown = [
+        FacultyCount(
+            faculty=row.patron_faculty,
+            label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
+            count=row.cnt,
+        )
+        for row in faculty_rows
+    ]
+
     return DashboardStats(
         space_name=space_name,
         capacity=capacity,
@@ -187,4 +280,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         peak_hour=peak_hour,
         category_breakdown=category_breakdown,
         entries_yesterday=entries_yesterday,
+        current_male=current_male,
+        current_female=current_female,
+        faculty_breakdown=faculty_breakdown,
     )

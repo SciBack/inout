@@ -55,6 +55,8 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         cardnumber=cardnumber,
         patron_name=patron_data["name"],
         patron_category=patron_data["category"],
+        patron_gender=patron_data.get("gender") or None,
+        patron_faculty=patron_data.get("faculty") or None,
         event_type=event_type,
         space_id=space_id,
     )

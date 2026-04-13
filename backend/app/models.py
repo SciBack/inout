@@ -20,6 +20,8 @@ class PresenceLog(Base):
     cardnumber = Column(String(50), nullable=False, index=True)
     patron_name = Column(String(200))
     patron_category = Column(String(50))
+    patron_gender = Column(String(1))   # 'M' | 'F' | None
+    patron_faculty = Column(String(20)) # sort1 de Koha
     event_type = Column(String(10), nullable=False)  # 'entry' | 'exit'
     space_id = Column(Integer, ForeignKey("spaces.id"))
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

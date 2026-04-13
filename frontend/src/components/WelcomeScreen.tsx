@@ -17,6 +17,7 @@ interface ScanResult {
 
 interface Props {
   result: ScanResult
+  isVisible: boolean
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -36,7 +37,7 @@ function speak(text: string) {
   window.speechSynthesis.speak(msg)
 }
 
-export function WelcomeScreen({ result }: Props) {
+export function WelcomeScreen({ result, isVisible }: Props) {
   const { event_type, patron, message, duration } = result
   const isEntry = event_type === 'entry'
   const [photoError, setPhotoError] = useState(false)
@@ -51,13 +52,17 @@ export function WelcomeScreen({ result }: Props) {
 
   const categoryLabel = CATEGORY_LABELS[patron.category] || patron.category
 
+  const animStyle: React.CSSProperties = isVisible
+    ? { animation: 'welcomeIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards' }
+    : { animation: 'welcomeOut 0.3s ease forwards' }
+
   return (
-    <div style={{ ...styles.container, background: isEntry ? '#0d2137' : '#1a0d2e' }}>
+    <div style={{ ...styles.container, background: isEntry ? '#0d2137' : '#1a0d2e', ...animStyle }}>
       <div style={styles.eventBadge(isEntry)}>
         {isEntry ? '✓ INGRESO' : '← SALIDA'}
       </div>
 
-      <div style={styles.avatarWrap}>
+      <div style={styles.avatarWrap(isEntry)}>
         {photoUrl && !photoError ? (
           <img
             src={photoUrl}
@@ -86,71 +91,68 @@ export function WelcomeScreen({ result }: Props) {
           <span style={styles.durationValue}>{duration}</span>
         </div>
       )}
-
-      <div style={styles.time}>
-        {new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
-      </div>
     </div>
   )
 }
 
 const styles: Record<string, any> = {
   container: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 20,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '1.25rem',
+    gap: 'clamp(10px,1.4vh,18px)',
     padding: '2rem',
-    height: '100%',
-    transition: 'background 0.3s',
   },
   eventBadge: (isEntry: boolean): React.CSSProperties => ({
-    padding: '0.5rem 2rem',
+    padding: '0.4rem 1.75rem',
     borderRadius: '999px',
-    fontSize: '1rem',
+    fontSize: 'clamp(12px,1.3vh,16px)',
     fontWeight: 700,
     letterSpacing: '0.15em',
-    background: isEntry ? '#22c55e20' : '#a855f720',
+    background: isEntry ? 'rgba(34,197,94,0.12)' : 'rgba(168,85,247,0.12)',
     color: isEntry ? '#22c55e' : '#a855f7',
     border: `1px solid ${isEntry ? '#22c55e' : '#a855f7'}`,
   }),
-  avatarWrap: {
-    width: '120px',
-    height: '120px',
+  avatarWrap: (isEntry: boolean): React.CSSProperties => ({
+    width: 'clamp(90px,13vh,120px)',
+    height: 'clamp(90px,13vh,120px)',
     borderRadius: '50%',
     overflow: 'hidden',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     background: '#1e293b',
-    border: '3px solid #334155',
-  },
+    border: `3px solid ${isEntry ? '#22c55e40' : '#a855f740'}`,
+  }),
   photo: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
   },
   avatarEmoji: {
-    fontSize: '4rem',
+    fontSize: 'clamp(36px,6vh,56px)',
     lineHeight: 1,
   },
   name: {
-    fontSize: '2.5rem',
+    fontSize: 'clamp(22px,3vh,32px)',
     fontWeight: 700,
     color: '#f1f5f9',
     textAlign: 'center',
     textTransform: 'capitalize',
   },
   category: {
-    fontSize: '1rem',
-    padding: '0.25rem 1rem',
+    fontSize: 'clamp(11px,1.2vh,14px)',
+    padding: '0.2rem 0.9rem',
     background: '#1e293b',
     borderRadius: '999px',
     color: '#94a3b8',
   },
   message: {
-    fontSize: '1.5rem',
+    fontSize: 'clamp(14px,1.6vh,18px)',
     color: '#cbd5e1',
     textAlign: 'center',
   },
@@ -165,22 +167,16 @@ const styles: Record<string, any> = {
     border: '1px solid #334155',
   } as React.CSSProperties,
   durationLabel: {
-    fontSize: '0.7rem',
+    fontSize: 'clamp(9px,0.9vh,11px)',
     color: '#64748b',
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
   } as React.CSSProperties,
   durationValue: {
-    fontSize: '1.75rem',
+    fontSize: 'clamp(16px,2vh,22px)',
     fontWeight: 700,
-    color: '#94a3b8',
+    color: '#06b6d4',
     fontVariantNumeric: 'tabular-nums',
     letterSpacing: '0.05em',
   } as React.CSSProperties,
-  time: {
-    fontSize: '3rem',
-    fontWeight: 700,
-    color: '#475569',
-    marginTop: '0.5rem',
-  },
 }

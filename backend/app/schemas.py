@@ -17,6 +17,7 @@ class PatronInfo(BaseModel):
     gender: str  # 'M' | 'F' | ''
     category: str
     patron_id: Optional[int] = None
+    faculty: str = ""
 
 
 class ScanResponse(BaseModel):
@@ -33,6 +34,7 @@ class PresenceEntry(BaseModel):
     cardnumber: str
     patron_name: str
     patron_category: str
+    patron_gender: str = ""
     event_type: str
     timestamp: datetime
 
@@ -42,6 +44,12 @@ class PresenceEntry(BaseModel):
 
 class CategoryCount(BaseModel):
     category: str
+    label: str
+    count: int
+
+
+class FacultyCount(BaseModel):
+    faculty: str
     label: str
     count: int
 
@@ -59,3 +67,6 @@ class DashboardStats(BaseModel):
     peak_hour: Optional[int] = None
     category_breakdown: list[CategoryCount] = []
     entries_yesterday: int = 0
+    current_male: int = 0
+    current_female: int = 0
+    faculty_breakdown: list[FacultyCount] = []
