@@ -387,15 +387,14 @@ const FacultyBarChart = memo(function FacultyBarChart({
         return (
           <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
             <span style={{
-              width: 'clamp(85px,10.5vw,130px)',
+              width: 'clamp(42px,4.5vw,60px)',
               textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(13px,1.65vh,21px)',
+              fontSize: 'clamp(11px,1.4vh,17px)',
               color: C.text2,
               fontFamily: FONT_BODY,
-              fontWeight: 500,
+              fontWeight: 600,
               whiteSpace: 'nowrap' as const,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              letterSpacing: '0.04em',
             }}>
               {row.label}
             </span>
