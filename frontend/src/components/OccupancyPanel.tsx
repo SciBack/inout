@@ -94,6 +94,45 @@ function minuteLabel(m: number): string {
   return min === 0 ? `${h}h` : `${h}:${String(min).padStart(2, '0')}`
 }
 
+// Convierte una curva de puntos [x,y] en un path SVG con esquinas redondeadas
+// Crea el efecto de "cerros" suaves en lugar de escalones rectangulares
+function smoothStepPath(
+  pts: [number, number][],
+  r: number = 5   // radio de curvatura en unidades SVG
+): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1]
+    const [cx, cy] = pts[i]
+    const [nx, ny] = pts[i + 1]
+
+    const dx1 = cx - px, dy1 = cy - py
+    const dx2 = nx - cx, dy2 = ny - cy
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
+    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
+
+    if (len1 < 0.1 || len2 < 0.1) {
+      d += ` L ${cx.toFixed(1)},${cy.toFixed(1)}`
+      continue
+    }
+
+    const rr = Math.min(r, len1 / 2, len2 / 2)
+    const t1x = cx - (dx1 / len1) * rr
+    const t1y = cy - (dy1 / len1) * rr
+    const t2x = cx + (dx2 / len2) * rr
+    const t2y = cy + (dy2 / len2) * rr
+
+    d += ` L ${t1x.toFixed(1)},${t1y.toFixed(1)}`
+    d += ` Q ${cx.toFixed(1)},${cy.toFixed(1)} ${t2x.toFixed(1)},${t2y.toFixed(1)}`
+  }
+
+  const last = pts[pts.length - 1]
+  d += ` L ${last[0].toFixed(1)},${last[1].toFixed(1)}`
+  return d
+}
+
 // SVG line chart — ocupación acumulada por facultad a lo largo del día
 function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   const now = new Date()
@@ -168,32 +207,29 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
           <line x1={W} y1={PAD_TOP} x2={W} y2={H - PAD_BOT}
             stroke="#64748b" strokeWidth="1" strokeDasharray="3,2" />
 
-          {/* Área rellena sutil por facultad */}
+          {/* Área rellena con curvas suaves */}
           {faculties.map(({ faculty }, idx) => {
             const curve = allCurves[idx]
             if (curve.length < 2) return null
             const color = LINE_COLORS[idx % LINE_COLORS.length]
-            const linePts = curve.map(([m, v]) => `${xOf(m).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
+            const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
             const base = H - PAD_BOT
-            const area = [
-              `${xOf(curve[0][0]).toFixed(1)},${base}`,
-              linePts,
-              `${xOf(curve[curve.length - 1][0]).toFixed(1)},${base}`,
-            ].join(' ')
-            return <polygon key={`a-${faculty}`} points={area} fill={color} fillOpacity="0.07" />
+            const linePath = smoothStepPath(svgPts, 6)
+            const areaD = `${linePath} L ${svgPts[svgPts.length-1][0].toFixed(1)},${base} L ${svgPts[0][0].toFixed(1)},${base} Z`
+            return <path key={`a-${faculty}`} d={areaD} fill={color} fillOpacity="0.08" stroke="none" />
           })}
 
-          {/* Curvas de ocupación (función escalón) */}
+          {/* Líneas suaves de ocupación */}
           {faculties.map(({ faculty }, idx) => {
             const curve = allCurves[idx]
             if (curve.length < 2) return null
-            const pts = curve.map(([m, v]) => `${xOf(m).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
+            const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
             return (
-              <polyline key={faculty} points={pts}
+              <path key={faculty}
+                d={smoothStepPath(svgPts, 6)}
                 fill="none"
                 stroke={LINE_COLORS[idx % LINE_COLORS.length]}
                 strokeWidth="2"
-                strokeLinejoin="miter"
                 strokeLinecap="round"
               />
             )
