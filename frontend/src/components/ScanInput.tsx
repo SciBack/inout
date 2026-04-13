@@ -8,24 +8,24 @@ interface Props {
 const CARD_SVG = (
   <svg width="200" height="128" viewBox="0 0 60 38" fill="none">
     <rect x="0.5" y="0.5" width="59" height="37" rx="4"
-      fill="oklch(10.5% 0.020 229)" stroke="oklch(25% 0.025 228)" strokeWidth="1"/>
+      fill="oklch(16% 0.035 229)" stroke="oklch(55% 0.18 212 / 0.70)" strokeWidth="1.2"/>
     <rect x="0.5" y="0.5" width="59" height="6.5" rx="4"
-      fill="oklch(67% 0.20 212 / 0.20)"/>
+      fill="oklch(67% 0.22 212 / 0.45)"/>
     <rect x="5" y="13" width="9.5" height="7" rx="1.5"
-      stroke="oklch(67% 0.20 212 / 0.65)" strokeWidth="0.9"
-      fill="oklch(67% 0.20 212 / 0.06)"/>
-    <rect x="5" y="15.3" width="9.5" height="0.7" rx="0.3" fill="oklch(67% 0.20 212 / 0.35)"/>
-    <rect x="5" y="17.3" width="9.5" height="0.7" rx="0.3" fill="oklch(67% 0.20 212 / 0.35)"/>
-    <rect x="20" y="13" width="18" height="2.5" rx="1.2" fill="oklch(60% 0.014 222 / 0.6)"/>
-    <rect x="20" y="17.5" width="13" height="1.8" rx="0.9" fill="oklch(38% 0.012 222 / 0.55)"/>
-    <rect x="20" y="21" width="15" height="1.8" rx="0.9" fill="oklch(38% 0.012 222 / 0.55)"/>
-    <rect x="5" y="30" width="50" height="2.5" rx="0.8" fill="oklch(17% 0.023 228)"/>
-    <rect x="5" y="30" width="7" height="2.5" fill="oklch(67% 0.20 212 / 0.25)"/>
-    <rect x="14" y="30" width="3" height="2.5" fill="oklch(67% 0.20 212 / 0.15)"/>
-    <rect x="20" y="30" width="8" height="2.5" fill="oklch(67% 0.20 212 / 0.20)"/>
-    <rect x="32" y="30" width="4" height="2.5" fill="oklch(67% 0.20 212 / 0.12)"/>
-    <rect x="39" y="30" width="9" height="2.5" fill="oklch(67% 0.20 212 / 0.18)"/>
-    <rect x="51" y="30" width="4" height="2.5" fill="oklch(67% 0.20 212 / 0.10)"/>
+      stroke="oklch(72% 0.22 212 / 0.90)" strokeWidth="0.9"
+      fill="oklch(67% 0.22 212 / 0.18)"/>
+    <rect x="5" y="15.3" width="9.5" height="0.7" rx="0.3" fill="oklch(72% 0.22 212 / 0.70)"/>
+    <rect x="5" y="17.3" width="9.5" height="0.7" rx="0.3" fill="oklch(72% 0.22 212 / 0.70)"/>
+    <rect x="20" y="13" width="18" height="2.5" rx="1.2" fill="oklch(88% 0.010 222 / 0.90)"/>
+    <rect x="20" y="17.5" width="13" height="1.8" rx="0.9" fill="oklch(65% 0.014 222 / 0.80)"/>
+    <rect x="20" y="21" width="15" height="1.8" rx="0.9" fill="oklch(65% 0.014 222 / 0.80)"/>
+    <rect x="5" y="30" width="50" height="2.5" rx="0.8" fill="oklch(22% 0.030 228)"/>
+    <rect x="5" y="30" width="7" height="2.5" fill="oklch(72% 0.22 212 / 0.55)"/>
+    <rect x="14" y="30" width="3" height="2.5" fill="oklch(72% 0.22 212 / 0.35)"/>
+    <rect x="20" y="30" width="8" height="2.5" fill="oklch(72% 0.22 212 / 0.45)"/>
+    <rect x="32" y="30" width="4" height="2.5" fill="oklch(72% 0.22 212 / 0.30)"/>
+    <rect x="39" y="30" width="9" height="2.5" fill="oklch(72% 0.22 212 / 0.40)"/>
+    <rect x="51" y="30" width="4" height="2.5" fill="oklch(72% 0.22 212 / 0.25)"/>
   </svg>
 )
 
@@ -119,7 +119,7 @@ export function ScanInput({ onScan, disabled }: Props) {
             width: '100%',
             height: '100%',
             borderRadius: '50%',
-            border: '1.5px solid oklch(67% 0.20 212 / 0.38)',
+            border: '1.5px solid oklch(72% 0.22 212 / 0.65)',
             animationName: 'scanRing',
             animationDuration: '2.55s',
             animationTimingFunction: 'ease-out',
