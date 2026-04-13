@@ -233,10 +233,13 @@ const s: Record<string, React.CSSProperties> = {
   promptSub: {
     fontSize: 'clamp(22px,2.8vh,34px)' as unknown as undefined,
     fontWeight: 700,
-    color: 'oklch(92% 0.008 220)',
+    color: 'oklch(72% 0.22 212)',
     textAlign: 'center',
     fontFamily: "'Barlow', sans-serif",
     lineHeight: 1.2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    animation: 'promptPulse 2.4s ease-in-out infinite',
   } as React.CSSProperties,
   kbdBtn: {
     display: 'flex',
