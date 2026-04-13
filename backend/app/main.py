@@ -93,14 +93,14 @@ def _seed_default_space():
 def _seed_admin_user():
     from .models import AdminUser
     from .config import settings
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt as _bcrypt
     db = SessionLocal()
     try:
         if not db.query(AdminUser).first():
+            pw_hash = _bcrypt.hashpw(settings.admin_initial_password.encode(), _bcrypt.gensalt()).decode()
             db.add(AdminUser(
                 username="admin",
-                password_hash=pwd_context.hash(settings.admin_initial_password),
+                password_hash=pw_hash,
                 role="superadmin",
             ))
             db.commit()

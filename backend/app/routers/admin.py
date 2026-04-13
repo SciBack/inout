@@ -5,7 +5,7 @@ from sqlalchemy import func, and_, distinct
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from collections import defaultdict
 import calendar
 
@@ -28,7 +28,11 @@ LIMA = ZoneInfo("America/Lima")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 8
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_password(plain: str) -> str:
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 bearer_scheme = HTTPBearer()
 
 MONTH_NAMES = {
@@ -110,7 +114,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         AdminUser.username == body.username,
         AdminUser.active == True,
     ).first()
-    if not user or not pwd_context.verify(body.password, user.password_hash):
+    if not user or not _verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
@@ -500,7 +504,7 @@ def create_user(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El usuario ya existe")
     user = AdminUser(
         username=body.username,
-        password_hash=pwd_context.hash(body.password),
+        password_hash=_hash_password(body.password),
         role=body.role,
     )
     db.add(user)
@@ -519,7 +523,7 @@ def change_password(
     user = db.query(AdminUser).filter(AdminUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
-    user.password_hash = pwd_context.hash(body.password)
+    user.password_hash = _hash_password(body.password)
     db.commit()
     db.refresh(user)
     return user
