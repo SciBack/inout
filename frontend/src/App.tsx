@@ -52,6 +52,8 @@ export default function App() {
         const data = await res.json()
         setScanResult(data)
         setState('welcome')
+      } else if (res.status === 429) {
+        // Debounce: escaneo duplicado — ignorar silenciosamente
       } else if (res.status === 404) {
         setErrorMsg('Carnet no encontrado')
         setState('error')

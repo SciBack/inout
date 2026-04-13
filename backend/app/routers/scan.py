@@ -11,6 +11,8 @@ from ..config import settings
 
 router = APIRouter()
 
+DEBOUNCE_SECONDS = 8  # ignorar re-escaneo del mismo carnet en este intervalo
+
 
 @router.post("/scan", response_model=ScanResponse)
 async def scan(req: ScanRequest, db: Session = Depends(get_db)):
@@ -30,6 +32,16 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         .order_by(desc(PresenceLog.timestamp))
         .first()
     )
+
+    # Debounce: ignorar si el último evento fue hace menos de DEBOUNCE_SECONDS
+    if last:
+        last_ts = last.timestamp
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - last_ts).total_seconds()
+        if elapsed < DEBOUNCE_SECONDS:
+            raise HTTPException(status_code=429, detail="duplicate_scan")
+
     event_type = "exit" if (last and last.event_type == "entry") else "entry"
 
     # Verificar espacio
