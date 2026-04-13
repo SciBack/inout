@@ -322,7 +322,15 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                 }}
               >
                 <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
-                <span style={isEntry ? s.feedDotEntry : s.feedDotExit} />
+                {isEntry ? (
+                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+                    <path d="M3 9 L12 9 M8 5 L13 9 L8 13" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+                    <path d="M15 9 L6 9 M10 5 L5 9 L10 13" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                )}
                 <span style={s.feedName}>
                   {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
                 </span>
@@ -472,20 +480,6 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,        // NO stretch — altura natural
     background: 'rgba(255,255,255,0.025)',
   },
-  feedDotEntry: {
-    width: 10, height: 10,
-    borderRadius: '50%',
-    flexShrink: 0,
-    background: '#22c55e',
-    boxShadow: '0 0 6px #22c55e99',
-  } as React.CSSProperties,
-  feedDotExit: {
-    width: 10, height: 10,
-    borderRadius: '50%',
-    flexShrink: 0,
-    background: '#ef4444',
-    boxShadow: '0 0 6px #ef444499',
-  } as React.CSSProperties,
   feedName: {
     flex: 1,
     fontSize: 'clamp(16px,2vh,24px)',
