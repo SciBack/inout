@@ -6,17 +6,31 @@ interface Props {
 }
 
 const CARD_SVG = (
-  <svg width="180" height="120" viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
-    <rect x="1" y="1" width="46" height="30" rx="4" stroke="#334155" strokeWidth="1.5" />
-    <rect x="6" y="10" width="14" height="10" rx="1.5" stroke="#3b82f6" strokeWidth="1.2" />
-    <rect x="24" y="10" width="12" height="2" rx="1" fill="#3b82f6" />
-    <rect x="24" y="14" width="8" height="2" rx="1" fill="#1e40af" />
-    <rect x="24" y="18" width="10" height="2" rx="1" fill="#1e40af" />
+  <svg width="200" height="128" viewBox="0 0 60 38" fill="none">
+    <rect x="0.5" y="0.5" width="59" height="37" rx="4"
+      fill="oklch(10.5% 0.020 229)" stroke="oklch(25% 0.025 228)" strokeWidth="1"/>
+    <rect x="0.5" y="0.5" width="59" height="6.5" rx="4"
+      fill="oklch(67% 0.20 212 / 0.20)"/>
+    <rect x="5" y="13" width="9.5" height="7" rx="1.5"
+      stroke="oklch(67% 0.20 212 / 0.65)" strokeWidth="0.9"
+      fill="oklch(67% 0.20 212 / 0.06)"/>
+    <rect x="5" y="15.3" width="9.5" height="0.7" rx="0.3" fill="oklch(67% 0.20 212 / 0.35)"/>
+    <rect x="5" y="17.3" width="9.5" height="0.7" rx="0.3" fill="oklch(67% 0.20 212 / 0.35)"/>
+    <rect x="20" y="13" width="18" height="2.5" rx="1.2" fill="oklch(60% 0.014 222 / 0.6)"/>
+    <rect x="20" y="17.5" width="13" height="1.8" rx="0.9" fill="oklch(38% 0.012 222 / 0.55)"/>
+    <rect x="20" y="21" width="15" height="1.8" rx="0.9" fill="oklch(38% 0.012 222 / 0.55)"/>
+    <rect x="5" y="30" width="50" height="2.5" rx="0.8" fill="oklch(17% 0.023 228)"/>
+    <rect x="5" y="30" width="7" height="2.5" fill="oklch(67% 0.20 212 / 0.25)"/>
+    <rect x="14" y="30" width="3" height="2.5" fill="oklch(67% 0.20 212 / 0.15)"/>
+    <rect x="20" y="30" width="8" height="2.5" fill="oklch(67% 0.20 212 / 0.20)"/>
+    <rect x="32" y="30" width="4" height="2.5" fill="oklch(67% 0.20 212 / 0.12)"/>
+    <rect x="39" y="30" width="9" height="2.5" fill="oklch(67% 0.20 212 / 0.18)"/>
+    <rect x="51" y="30" width="4" height="2.5" fill="oklch(67% 0.20 212 / 0.10)"/>
   </svg>
 )
 
 const KEYBOARD_SVG = (
-  <svg width="22" height="16" viewBox="0 0 22 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="22" height="16" viewBox="0 0 22 16" fill="none">
     <rect x="0.75" y="0.75" width="20.5" height="14.5" rx="2.25" stroke="currentColor" strokeWidth="1.5"/>
     <rect x="3" y="3" width="2" height="2" rx="0.5" fill="currentColor"/>
     <rect x="6.5" y="3" width="2" height="2" rx="0.5" fill="currentColor"/>
@@ -78,6 +92,8 @@ export function ScanInput({ onScan, disabled }: Props) {
     if (e.key === 'Escape') setManualOpen(false)
   }
 
+  const ringPlayState = disabled ? 'paused' : 'running'
+
   return (
     <div style={s.container}>
       {/* Input invisible — captura lector HID */}
@@ -93,13 +109,41 @@ export function ScanInput({ onScan, disabled }: Props) {
         aria-label="Entrada de escaneo"
       />
 
-      {/* Estado idle */}
-      <div style={s.iconWrap}>
-        <div style={s.iconPulse}>{CARD_SVG}</div>
+      {/* Scan zone con rings sonar + tarjeta flotante */}
+      <div style={s.scanZone}>
+        {[0, 0.85, 1.7].map(delay => (
+          <div key={delay} style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            border: '1.5px solid oklch(67% 0.20 212 / 0.38)',
+            animationName: 'scanRing',
+            animationDuration: '2.55s',
+            animationTimingFunction: 'ease-out',
+            animationIterationCount: 'infinite',
+            animationDelay: `${delay}s`,
+            animationPlayState: ringPlayState,
+            pointerEvents: 'none',
+          } as React.CSSProperties} />
+        ))}
+        <div style={{
+          animation: disabled ? 'none' : 'cardFloat 4s ease-in-out infinite',
+          display: 'flex',
+        }}>
+          {CARD_SVG}
+        </div>
       </div>
-      <p style={s.label}>Acerca tu carnet al lector</p>
 
-      {/* Botón teclado */}
+      {/* Texto prompt */}
+      <div style={s.promptWrap}>
+        <p style={s.promptMain}>Acerca tu carnet</p>
+        <p style={s.promptSub}>al lector</p>
+      </div>
+
+      {/* Botón entrada manual */}
       <button
         style={s.kbdBtn}
         onClick={() => setManualOpen(true)}
@@ -114,6 +158,7 @@ export function ScanInput({ onScan, disabled }: Props) {
         <div style={s.overlay} onClick={() => setManualOpen(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <p style={s.modalTitle}>Número de carnet</p>
+            <p style={s.modalSubtitle}>Escribe el número e identificador del carnet</p>
             <input
               ref={manualRef}
               type="text"
@@ -146,11 +191,11 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 'clamp(10px,1.4vh,18px)',
+    gap: 'clamp(10px,1.4vh,18px)' as unknown as undefined,
     padding: '2rem',
     userSelect: 'none',
     position: 'relative',
-  },
+  } as React.CSSProperties,
   hiddenInput: {
     opacity: 0,
     position: 'absolute',
@@ -159,73 +204,124 @@ const s: Record<string, React.CSSProperties> = {
     height: 1,
     overflow: 'hidden',
   },
-  iconWrap: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.25rem' },
-  iconPulse: { animation: 'scanIdlePulse 3s ease-in-out infinite' },
-  label: { fontSize: 'clamp(20px,2.8vh,32px)', fontWeight: 700, color: '#94a3b8', textAlign: 'center' },
+  scanZone: {
+    position: 'relative',
+    width: 'clamp(200px, 24vh, 260px)' as unknown as undefined,
+    height: 'clamp(200px, 24vh, 260px)' as unknown as undefined,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 'clamp(8px, 1vh, 16px)' as unknown as undefined,
+  } as React.CSSProperties,
+  promptWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.1rem',
+  },
+  promptMain: {
+    fontSize: 'clamp(22px,2.8vh,34px)' as unknown as undefined,
+    fontWeight: 700,
+    color: 'oklch(55% 0.014 222)',
+    textAlign: 'center',
+    fontFamily: "'Barlow', sans-serif",
+    lineHeight: 1.15,
+  } as React.CSSProperties,
+  promptSub: {
+    fontSize: 'clamp(15px,1.8vh,22px)' as unknown as undefined,
+    fontWeight: 500,
+    color: 'oklch(38% 0.012 222)',
+    textAlign: 'center',
+    fontFamily: "'Barlow', sans-serif",
+    lineHeight: 1.2,
+  } as React.CSSProperties,
   kbdBtn: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
     marginTop: '0.5rem',
-    padding: '0.45rem 1rem',
+    padding: '0.5rem 1.25rem',
     background: 'transparent',
-    border: '1px solid #1e293b',
-    borderRadius: '8px',
-    color: '#475569',
-    fontSize: 'clamp(11px,1.2vh,13px)',
+    border: '1px solid oklch(22% 0.022 228)',
+    borderRadius: '999px',
+    color: 'oklch(40% 0.013 222)',
+    fontSize: 'clamp(11px,1.2vh,13px)' as unknown as undefined,
     cursor: 'pointer',
     transition: 'border-color 0.2s, color 0.2s',
-  },
+    fontFamily: "'Barlow', sans-serif",
+  } as React.CSSProperties,
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.6)',
+    background: 'oklch(7% 0.018 232 / 0.75)',
+    backdropFilter: 'blur(10px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 50,
   },
   modal: {
-    background: '#0d1f35',
-    border: '1px solid #1e293b',
-    borderRadius: '14px',
+    background: 'oklch(10% 0.020 229)',
+    border: '1px solid oklch(22% 0.022 228)',
+    borderRadius: '16px',
     padding: '2rem',
     display: 'flex',
     flexDirection: 'column',
-    gap: '1.25rem',
-    width: 'clamp(280px, 90%, 380px)',
+    gap: '1rem',
+    width: 'clamp(300px, 90%, 400px)' as unknown as undefined,
+    boxShadow: '0 24px 60px oklch(4% 0.015 230 / 0.8)',
+  } as React.CSSProperties,
+  modalTitle: {
+    fontSize: '1.2rem',
+    fontWeight: 700,
+    color: 'oklch(88% 0.010 222)',
+    textAlign: 'center',
+    fontFamily: "'Barlow', sans-serif",
   },
-  modalTitle: { fontSize: '1.1rem', fontWeight: 600, color: '#f1f5f9', textAlign: 'center' },
+  modalSubtitle: {
+    fontSize: '0.85rem',
+    color: 'oklch(45% 0.013 222)',
+    textAlign: 'center',
+    fontFamily: "'Barlow', sans-serif",
+    marginTop: '-0.4rem',
+  },
   modalInput: {
     width: '100%',
-    padding: '0.75rem 1rem',
-    background: '#0a1628',
-    border: '1px solid #334155',
-    borderRadius: '8px',
-    color: '#f1f5f9',
-    fontSize: '1.1rem',
+    padding: '0.85rem 1.1rem',
+    background: 'oklch(8% 0.018 230)',
+    border: '1px solid oklch(25% 0.025 228)',
+    borderRadius: '10px',
+    color: 'oklch(88% 0.010 222)',
+    fontSize: '1.2rem',
     outline: 'none',
     fontVariantNumeric: 'tabular-nums',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.06em',
+    fontFamily: "'Barlow', sans-serif",
   },
-  modalActions: { display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' },
+  modalActions: {
+    display: 'flex',
+    gap: '0.75rem',
+    justifyContent: 'flex-end',
+  },
   cancelBtn: {
-    padding: '0.5rem 1.25rem',
+    padding: '0.55rem 1.25rem',
     background: 'transparent',
-    border: '1px solid #334155',
-    borderRadius: '7px',
-    color: '#64748b',
+    border: '1px solid oklch(25% 0.025 228)',
+    borderRadius: '8px',
+    color: 'oklch(45% 0.013 222)',
     fontSize: '0.9rem',
     cursor: 'pointer',
+    fontFamily: "'Barlow', sans-serif",
   },
   confirmBtn: {
-    padding: '0.5rem 1.5rem',
-    background: '#3b82f6',
+    padding: '0.55rem 1.5rem',
+    background: 'oklch(53% 0.20 212)',
     border: 'none',
-    borderRadius: '7px',
-    color: '#fff',
+    borderRadius: '8px',
+    color: 'oklch(97% 0.005 220)',
     fontSize: '0.9rem',
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: 'pointer',
+    fontFamily: "'Barlow', sans-serif",
   },
 }

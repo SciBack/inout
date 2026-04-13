@@ -64,6 +64,25 @@ body { overflow: hidden; background: #0f172a; }
   from { opacity: 1; transform: translateY(0); }
   to   { opacity: 0; transform: translateY(-16px); }
 }
+@keyframes scanRing {
+  0%   { transform: translate(-50%,-50%) scale(0.85); opacity: 0.55; }
+  80%  { transform: translate(-50%,-50%) scale(1.75); opacity: 0; }
+  100% { transform: translate(-50%,-50%) scale(1.75); opacity: 0; }
+}
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-9px); }
+}
+@keyframes welcomeNameIn {
+  0%   { transform: scale(0.82); opacity: 0; }
+  65%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes badgePop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
 @media (max-width: 767px) {
   .kiosk-root { flex-direction: column !important; }
   .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e293b !important; }
@@ -246,17 +265,23 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '0.25rem',
+    gap: '0.2rem',
   },
   clockTime: {
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    color: '#334155',
+    fontSize: 'clamp(28px,3.5vh,44px)' as unknown as undefined,
+    fontWeight: 400,
+    color: 'oklch(48% 0.016 222)',
     fontVariantNumeric: 'tabular-nums',
-  },
+    letterSpacing: '0.04em',
+    fontFamily: "'Bebas Neue', cursive",
+    lineHeight: 1,
+  } as React.CSSProperties,
   clockDate: {
-    fontSize: '0.75rem',
-    color: '#334155',
+    fontSize: 'clamp(13px,1.5vh,18px)' as unknown as undefined,
+    color: 'oklch(36% 0.013 222)',
     textTransform: 'capitalize',
-  },
+    fontFamily: "'Barlow', sans-serif",
+    fontWeight: 400,
+    letterSpacing: '0.03em',
+  } as React.CSSProperties,
 }
