@@ -30,8 +30,8 @@ interface DashboardData {
 // ── Paleta OKLCH ────────────────────────────────────────────────────────────
 const C = {
   bg:     'oklch(7% 0.018 232)',
-  card:   'oklch(10.5% 0.020 229)',
-  border: 'oklch(17% 0.023 228)',
+  card:   'oklch(15% 0.024 229)',
+  border: 'oklch(25% 0.028 228)',
   text1:  'oklch(88% 0.010 222)',
   text2:  'oklch(78% 0.010 222)',
   text3:  'oklch(62% 0.012 222)',
@@ -627,26 +627,54 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               const exitColor  = 'oklch(68% 0.18 295)'
               const accentColor = isEntry ? entryColor : exitColor
               const cat = CATEGORY_MAP[ev.patron_category?.toUpperCase?.() ?? '']
+              const firstBg = isEntry
+                ? 'oklch(18% 0.035 148)'
+                : 'oklch(18% 0.030 295)'
+              const firstGlow = isEntry
+                ? '0 0 0 1px oklch(73% 0.21 148 / 0.25), inset 0 1px 0 oklch(73% 0.21 148 / 0.10)'
+                : '0 0 0 1px oklch(68% 0.18 295 / 0.25), inset 0 1px 0 oklch(68% 0.18 295 / 0.10)'
+
               return (
                 <div
                   key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
                   style={{
                     ...s.feedItem,
+                    position: 'relative',
                     background: isFirst
-                      ? 'oklch(16% 0.025 228)'
-                      : idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.6)',
+                      ? firstBg
+                      : idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.5)',
                     borderLeft: isFirst
                       ? `3px solid ${accentColor}`
                       : '3px solid transparent',
+                    boxShadow: isFirst ? firstGlow : undefined,
                     animation: isFirst && isNewEvent
                       ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                   }}
                 >
+                  {isFirst && (
+                    <span style={{
+                      position: 'absolute',
+                      top: 'clamp(4px,0.6vh,8px)',
+                      right: 'clamp(6px,0.8vh,10px)',
+                      fontSize: 'clamp(8px,0.85vh,10px)',
+                      fontWeight: 800,
+                      letterSpacing: '0.12em',
+                      color: 'oklch(10% 0.015 140)',
+                      background: 'oklch(87% 0.28 135)',
+                      borderRadius: 999,
+                      padding: '2px 7px',
+                      lineHeight: 1.5,
+                      fontFamily: FONT_BODY,
+                      boxShadow: '0 0 10px oklch(87% 0.28 135 / 0.55)',
+                      pointerEvents: 'none',
+                    }}>NEW</span>
+                  )}
                   <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
                   {isEntry ? ICON_ENTRY : ICON_EXIT}
                   <span style={{
                     ...s.feedName,
-                    color: isFirst ? 'oklch(95% 0.005 220)' : C.text1,
+                    color: isFirst ? 'oklch(97% 0.005 220)' : C.text1,
+                    fontWeight: isFirst ? 700 : 500,
                   }}>
                     {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
                   </span>
@@ -758,7 +786,7 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 0,
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr 1fr 1fr',
+    gridTemplateRows: 'repeat(3, 1fr)',
     gap: 'clamp(5px,0.7vh,9px)',
   },
 
