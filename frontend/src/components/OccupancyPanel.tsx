@@ -12,6 +12,7 @@ interface DashboardData {
   peak_hour: number | null
   current_male: number
   current_female: number
+  category_breakdown: { category: string; label: string; count: number }[]
   faculty_breakdown: { faculty: string; label: string; count: number }[]
   recent_events: Array<{
     id: number
@@ -58,9 +59,20 @@ const CATEGORY_MAP: Record<string, { short: string; bg: string; color: string }>
   'DOCENTE':  { short: 'DOC', bg: 'oklch(68% 0.17 244 / 0.14)', color: 'oklch(68% 0.17 244)' },
   'DOCEN':    { short: 'DOC', bg: 'oklch(68% 0.17 244 / 0.14)', color: 'oklch(68% 0.17 244)' },
   'INVESTI':  { short: 'INV', bg: 'oklch(68% 0.18 295 / 0.14)', color: 'oklch(68% 0.18 295)' },
+  'VISITA':   { short: 'VIS', bg: 'oklch(73% 0.17 76 / 0.14)',  color: 'oklch(73% 0.17 76)' },
+  'STAFF':    { short: 'STF', bg: 'oklch(70% 0.15 148 / 0.14)', color: 'oklch(70% 0.15 148)' },
   'ADMINI':   { short: 'ADM', bg: 'oklch(82% 0.17 76 / 0.14)',  color: 'oklch(82% 0.17 76)' },
   'EXTERNO':  { short: 'EXT', bg: 'oklch(32% 0.012 222 / 0.35)', color: C.text2 },
 }
+
+const CATEGORY_COLORS: string[] = [
+  'oklch(73% 0.18 211)',  // cyan — Estudiantes
+  'oklch(68% 0.17 244)',  // blue — Docentes
+  'oklch(73% 0.17 76)',   // amber — Visitantes
+  'oklch(68% 0.18 295)',  // purple — Investigadores
+  'oklch(70% 0.15 148)',  // green — Staff
+  'oklch(65% 0.24 25)',   // red — otros
+]
 
 // ── Íconos estáticos — hoisted (no re-created per render) ───────────────────
 const ICON_ENTRY = (
@@ -217,6 +229,89 @@ const StatCard = memo(function StatCard({
         }}>
           {sub}
         </span>
+      )}
+    </div>
+  )
+})
+
+// ── ProfilesCard ─────────────────────────────────────────────────────────────
+const ProfilesCard = memo(function ProfilesCard({
+  breakdown,
+}: { breakdown: { category: string; label: string; count: number }[] }) {
+  const total = breakdown.reduce((s, r) => s + r.count, 0)
+  const sorted = [...breakdown].sort((a, b) => b.count - a.count)
+
+  return (
+    <div style={{
+      background: C.card,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: 'clamp(14px,1.9vh,26px) clamp(16px,2vh,24px)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 'clamp(8px,1.0vh,14px)',
+      overflow: 'hidden',
+    }}>
+      <span style={{
+        fontSize: 'clamp(11px,1.3vh,16px)',
+        color: C.text3,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.12em',
+        fontFamily: FONT_BODY,
+        fontWeight: 600,
+        flexShrink: 0,
+      }}>
+        Perfiles hoy
+      </span>
+
+      {total === 0 ? (
+        <span style={{ color: C.text3, fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.4vh,16px)' }}>
+          Sin registros aún
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(5px,0.7vh,9px)', flex: 1, justifyContent: 'center' }}>
+          {sorted.map((row, i) => {
+            const pct = total > 0 ? Math.round((row.count / total) * 100) : 0
+            const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length]
+            return (
+              <div key={row.category} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{
+                    fontFamily: FONT_BODY,
+                    fontSize: 'clamp(11px,1.25vh,15px)',
+                    color: C.text2,
+                    fontWeight: 500,
+                  }}>
+                    {row.label}
+                  </span>
+                  <span style={{
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: 'clamp(14px,1.8vh,22px)',
+                    color,
+                    letterSpacing: '0.03em',
+                    lineHeight: 1,
+                  }}>
+                    {row.count}
+                  </span>
+                </div>
+                <div style={{
+                  height: 'clamp(3px,0.4vh,5px)',
+                  background: C.border,
+                  borderRadius: 99,
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${pct}%`,
+                    background: color,
+                    borderRadius: 99,
+                    transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)',
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
@@ -457,7 +552,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           {/* Tarjetas estadísticas — grid 2 cols */}
           <div style={s.statGrid}>
 
-            {/* Visitantes hoy — ancho completo */}
+            {/* Visitantes hoy */}
             <StatCard
               label="Visitantes hoy"
               value={data.unique_visitors_today}
@@ -465,9 +560,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               color={C.cyan}
               sub={delta?.text}
               subColor={delta?.color}
-              wide
               numSize="clamp(52px,7.0vh,92px)"
             />
+
+            {/* Perfiles hoy */}
+            <ProfilesCard breakdown={data.category_breakdown ?? []} />
 
             {/* Hombres */}
             <StatCard
@@ -640,7 +737,7 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 0,
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr 1fr',
+    gridTemplateRows: '1fr 1fr 1fr 1fr',
     gap: 'clamp(5px,0.7vh,9px)',
   },
 

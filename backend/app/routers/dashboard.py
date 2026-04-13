@@ -15,9 +15,12 @@ from ..config import settings
 router = APIRouter()
 
 CATEGORY_LABELS = {
-    "ESTUDI": "Estudiantes",
-    "DOCEN": "Docentes",
-    "ADMIN": "Administrativos",
+    "ESTUDI":  "Estudiantes",
+    "DOCEN":   "Docentes",
+    "VISITA":  "Visitantes",
+    "INVESTI": "Investigadores",
+    "STAFF":   "Personal biblioteca",
+    "ADMIN":   "Administrativos",
 }
 
 FACULTY_LABELS = {
