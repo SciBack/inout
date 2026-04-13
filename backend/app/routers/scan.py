@@ -1,0 +1,66 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from datetime import datetime, timezone
+
+from ..database import get_db
+from ..models import PresenceLog, Space
+from ..schemas import ScanRequest, ScanResponse, PatronInfo
+from ..services import koha
+from ..config import settings
+
+router = APIRouter()
+
+
+@router.post("/scan", response_model=ScanResponse)
+async def scan(req: ScanRequest, db: Session = Depends(get_db)):
+    cardnumber = req.cardnumber.strip()
+    if not cardnumber:
+        raise HTTPException(status_code=400, detail="cardnumber requerido")
+
+    # Buscar patron en Koha
+    patron_data = await koha.get_patron(cardnumber)
+    if not patron_data:
+        raise HTTPException(status_code=404, detail="Carnet no encontrado en Koha")
+
+    # Determinar si es entrada o salida
+    last = (
+        db.query(PresenceLog)
+        .filter(PresenceLog.cardnumber == cardnumber)
+        .order_by(desc(PresenceLog.timestamp))
+        .first()
+    )
+    event_type = "exit" if (last and last.event_type == "entry") else "entry"
+
+    # Verificar espacio
+    space_id = req.space_id or settings.default_space_id
+    space = db.query(Space).filter(Space.id == space_id).first()
+    if not space:
+        space_id = None
+
+    # Registrar evento
+    log = PresenceLog(
+        cardnumber=cardnumber,
+        patron_name=patron_data["name"],
+        patron_category=patron_data["category"],
+        event_type=event_type,
+        space_id=space_id,
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    gender = patron_data.get("gender", "")
+    if event_type == "entry":
+        greeting = "Bienvenida" if gender == "F" else "Bienvenido"
+        message = f"{greeting}, {patron_data['firstname']}"
+    else:
+        message = f"Hasta luego, {patron_data['firstname']}"
+
+    return ScanResponse(
+        event_type=event_type,
+        patron=PatronInfo(**patron_data),
+        timestamp=log.timestamp or datetime.now(timezone.utc),
+        message=message,
+        from_cache=False,
+    )
