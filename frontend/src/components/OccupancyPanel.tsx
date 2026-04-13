@@ -42,7 +42,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '160px', display: 'block' }}>
+    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '220px', display: 'block' }}>
       {/* Track de fondo */}
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke="#132235" strokeWidth="9" strokeLinecap="round"
@@ -265,87 +265,91 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* ── FILA DE MÉTRICAS: gauge + 3 números en una sola tarjeta ── */}
-      <div style={s.metricsRow}>
+      {/* ── CUERPO: 2 columnas arriba + barra abajo ── */}
+      <div style={s.body}>
 
-        {/* Gauge compacto */}
-        <div style={s.gaugeBlock}>
-          <span style={s.cardLabel}>En edificio</span>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+        {/* COLUMNA IZQUIERDA: gauge + tarjetas de estadísticas */}
+        <div style={s.leftCol}>
+
+          {/* Gauge — aforo en tiempo real */}
+          <div style={s.gaugeCard}>
+            <span style={s.cardLabel}>En edificio ahora</span>
+            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, alignItems: 'center' }}>
+              <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+            </div>
+            <span style={{ textAlign: 'center', fontSize: 'clamp(11px,1.3vh,15px)', color: barColor, fontWeight: 600 }}>
+              {pct.toFixed(0)}% del aforo máximo
+            </span>
           </div>
-          <span style={{ textAlign: 'center', fontSize: 'clamp(9px,0.9vh,11px)', color: barColor, fontWeight: 600 }}>
-            {pct.toFixed(0)}% del aforo
-          </span>
+
+          {/* Tarjetas de estadísticas */}
+          <div style={s.statCards}>
+            <div style={s.statCard}>
+              <span style={s.statLabel}>Visitantes hoy</span>
+              <span ref={refVisitors} style={{ ...s.statNum, color: '#06b6d4' }}>
+                {data.unique_visitors_today}
+              </span>
+            </div>
+            <div style={s.statCard}>
+              <span style={s.statLabel}>Hombres</span>
+              <span ref={refMale} style={{ ...s.statNum, color: '#3b82f6' }}>
+                {data.current_male}
+              </span>
+            </div>
+            <div style={s.statCard}>
+              <span style={s.statLabel}>Mujeres</span>
+              <span ref={refFemale} style={{ ...s.statNum, color: '#ec4899' }}>
+                {data.current_female}
+              </span>
+            </div>
+          </div>
+
         </div>
 
-        <div style={s.metricsDivider} />
-
-        {/* Métricas: visitantes / hombres / mujeres */}
-        <div style={s.metricsGroup}>
-          <div style={s.metricItem}>
-            <span style={s.metricLabel}>Visitantes hoy</span>
-            <span ref={refVisitors} style={{ ...s.metricNum, color: '#06b6d4' }}>
-              {data.unique_visitors_today}
-            </span>
-          </div>
-          <div style={s.metricItem}>
-            <span style={s.metricLabel}>Hombres</span>
-            <span ref={refMale} style={{ ...s.metricNum, color: '#3b82f6' }}>
-              {data.current_male}
-            </span>
-          </div>
-          <div style={s.metricItem}>
-            <span style={s.metricLabel}>Mujeres</span>
-            <span ref={refFemale} style={{ ...s.metricNum, color: '#ec4899' }}>
-              {data.current_female}
-            </span>
+        {/* COLUMNA DERECHA: feed de actividad */}
+        <div style={s.feedSection}>
+          <span style={s.cardLabel}>Actividad reciente</span>
+          <div style={s.feedList}>
+            {data.recent_events.slice(0, 10).map((ev, idx) => {
+              const isEntry = ev.event_type === 'entry'
+              const isFirst = idx === 0
+              return (
+                <div
+                  key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
+                  style={{
+                    ...s.feedItem,
+                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.025)',
+                    animation: isFirst && isNewEvent
+                      ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
+                  }}
+                >
+                  <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
+                  {isEntry ? (
+                    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+                      <path d="M9 15 L9 4 M5 8 L9 3 L13 8" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+                      <path d="M9 3 L9 14 M5 10 L9 15 L13 10" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                  )}
+                  <span style={s.feedName}>
+                    {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
+                  </span>
+                  <span style={s.feedTime}>
+                    {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
+
       </div>
 
-      {/* ── FEED DE ACTIVIDAD ── */}
-      <div style={s.feedSection}>
-        <span style={s.cardLabel}>Actividad reciente</span>
-        <div style={s.feedList}>
-          {data.recent_events.slice(0, 10).map((ev, idx) => {
-            const isEntry = ev.event_type === 'entry'
-            const isFirst = idx === 0
-            return (
-              <div
-                key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
-                style={{
-                  ...s.feedItem,
-                  background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                  animation: isFirst && isNewEvent
-                    ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
-                }}
-              >
-                <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
-                {isEntry ? (
-                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                    <path d="M9 15 L9 4 M5 8 L9 3 L13 8" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                    <path d="M9 3 L9 14 M5 10 L9 15 L13 10" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  </svg>
-                )}
-                <span style={s.feedName}>
-                  {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
-                </span>
-                <span style={s.feedTime}>
-                  {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
-                    hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── BARRAS POR FACULTAD ── */}
+      {/* ── BARRAS POR FACULTAD — ancho completo ── */}
       <div style={s.chartSection}>
         <span style={s.cardLabel}>Visitantes hoy por facultad</span>
         <FacultyBarChart rows={data.faculty_breakdown} />
@@ -390,74 +394,77 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'capitalize',
   },
 
-  // Fila de métricas: gauge + números en horizontal
-  metricsRow: {
-    flex: '0 0 auto',
+  // Cuerpo: 2 columnas arriba + barra abajo
+  body: {
+    flex: '1 1 0',
+    minHeight: 0,
+    display: 'flex',
+    gap: 'clamp(7px,0.9vh,12px)',
+  },
+
+  // Columna izquierda: gauge + tarjetas stats
+  leftCol: {
+    flex: '0 0 38%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'clamp(7px,0.9vh,12px)',
+    minHeight: 0,
+  },
+
+  // Card grande del gauge
+  gaugeCard: {
+    flex: '1 1 0',
+    minHeight: 0,
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '14px',
-    padding: 'clamp(10px,1.3vh,18px) clamp(14px,1.8vh,22px)',
+    padding: 'clamp(10px,1.3vh,18px) clamp(12px,1.5vh,18px)',
     display: 'flex',
-    alignItems: 'center',
-    gap: 'clamp(12px,1.5vh,20px)',
+    flexDirection: 'column',
+    gap: 'clamp(4px,0.5vh,8px)',
+    overflow: 'hidden',
   },
 
-  // Bloque gauge (izquierda)
-  gaugeBlock: {
+  // Grid de 3 tarjetas de estadísticas
+  statCards: {
+    flex: '0 0 auto',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 'clamp(5px,0.7vh,9px)',
+  },
+  statCard: {
+    background: '#0d1f35',
+    border: '1px solid #1a2a3f',
+    borderRadius: '12px',
+    padding: 'clamp(8px,1vh,14px) clamp(8px,1vh,12px)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px',
-    flexShrink: 0,
-    width: 'clamp(120px,16vh,170px)',
+    gap: 'clamp(2px,0.3vh,5px)',
   },
-
-  // Separador vertical
-  metricsDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    background: '#1a2a3f',
-    flexShrink: 0,
-  },
-
-  // Grupo de 3 métricas
-  metricsGroup: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'space-around',
-  },
-
-  metricItem: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'clamp(3px,0.4vh,6px)',
-  },
-  metricLabel: {
-    fontSize: 'clamp(10px,1.2vh,14px)',
+  statLabel: {
+    fontSize: 'clamp(9px,1.05vh,13px)',
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
+    textAlign: 'center' as const,
     whiteSpace: 'nowrap',
   },
-  metricNum: {
-    fontSize: 'clamp(42px,5.5vh,70px)',
+  statNum: {
+    fontSize: 'clamp(32px,4.2vh,56px)',
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1,
   },
 
-  // Feed de actividad — toma el mayor espacio
+  // Columna derecha: feed
   feedSection: {
     flex: '1 1 0',
     minHeight: 0,
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '14px',
-    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,22px)',
+    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(6px,0.8vh,10px)',
@@ -469,20 +476,18 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 'clamp(2px,0.4vh,5px)',
     overflow: 'hidden',
-    justifyContent: 'flex-start',
   },
   feedItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(10px,1.2vh,16px)',
+    gap: 'clamp(8px,1vh,14px)',
     borderRadius: '8px',
-    padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,14px)',
-    flexShrink: 0,        // NO stretch — altura natural
-    background: 'rgba(255,255,255,0.025)',
+    padding: 'clamp(7px,0.9vh,12px) clamp(8px,1vh,12px)',
+    flexShrink: 0,
   },
   feedName: {
     flex: 1,
-    fontSize: 'clamp(16px,2vh,24px)',
+    fontSize: 'clamp(14px,1.8vh,22px)',
     color: '#e2e8f0',
     fontWeight: 500,
     whiteSpace: 'nowrap',
@@ -490,7 +495,7 @@ const s: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   feedTime: {
-    fontSize: 'clamp(13px,1.6vh,19px)',
+    fontSize: 'clamp(12px,1.4vh,17px)',
     color: '#475569',
     fontVariantNumeric: 'tabular-nums',
     flexShrink: 0,
@@ -505,13 +510,13 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: '0.08em',
   },
 
-  // Barras de facultad
+  // Barras de facultad — ancho completo, abajo
   chartSection: {
     flex: '0 0 auto',
     background: '#0d1f35',
     border: '1px solid #1a2a3f',
     borderRadius: '14px',
-    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,22px)',
+    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(7px,0.9vh,11px)',
