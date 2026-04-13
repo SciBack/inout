@@ -52,7 +52,7 @@ def _run_migrations():
 
 
 def _seed_sedes():
-    """Crea las 4 sedes UPeU si no existen."""
+    """Crea las sedes por defecto si no existen."""
     from .models import Sede
     db = SessionLocal()
     try:

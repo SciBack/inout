@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>InOut — Opción C · Aforo real por facultad</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #070f1c; color: #e2e8f0; font-family: system-ui, sans-serif; padding: 2rem; }
+
+  h1 { font-size: 1rem; color: #94a3b8; margin-bottom: 0.2rem; }
+  .subtitle { font-size: 0.78rem; color: #334155; margin-bottom: 2rem; }
+
+  .var-nav { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .var-btn {
+    padding: 0.45rem 1rem; border-radius: 7px; border: 1px solid #1a2a3f;
+    background: transparent; color: #475569; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;
+  }
+  .var-btn.active { background: #0f2540; color: #e2e8f0; border-color: #3b82f6; }
+
+  .var-panel { display: none; }
+  .var-panel.visible { display: block; }
+
+  .snapshots { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 980px; }
+
+  .snapshot-card {
+    background: #0d1f35; border: 1px solid #1a2a3f; border-radius: 14px; padding: 1.25rem 1.5rem;
+  }
+  .snap-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.1rem; }
+  .snap-time { font-size: 1.4rem; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+  .snap-pills { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .snap-pill {
+    font-size: 0.72rem; color: #475569;
+    background: #0a1628; border: 1px solid #1a2a3f; border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+  }
+  .snap-pill span { color: #94a3b8; font-weight: 600; }
+  .section-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.08em; color: #334155; margin-bottom: 0.6rem; }
+  .divider { border: none; border-top: 1px solid #0f2540; margin: 0.75rem 0; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: #475569; }
+
+  /* V1 — Sparklines de aforo (sube y baja) */
+  .v1-rows { display: flex; flex-direction: column; gap: 0.55rem; }
+  .v1-row { display: flex; align-items: center; gap: 0.6rem; }
+  .v1-name { width: 88px; font-size: 0.75rem; color: #64748b; text-align: right; flex-shrink: 0; }
+  .v1-spark { flex: 1; height: 28px; }
+  .v1-nums { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; width: 56px; }
+  .v1-now { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .v1-peak { font-size: 0.63rem; color: #334155; }
+
+  /* V2 — Aforo + entradas del día (doble línea) */
+  .v2-rows { display: flex; flex-direction: column; gap: 0.7rem; }
+  .v2-row { display: flex; align-items: center; gap: 0.6rem; }
+  .v2-name { width: 88px; font-size: 0.75rem; color: #64748b; text-align: right; flex-shrink: 0; }
+  .v2-spark { flex: 1; height: 32px; }
+  .v2-nums { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; width: 56px; gap: 2px; }
+  .v2-now  { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .v2-ent  { font-size: 0.65rem; color: #475569; }
+
+  /* V3 — Cards grandes con mini sparkline de aforo */
+  .v3-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .v3-card {
+    background: #0a1628; border: 1px solid #1a2a3f; border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+  }
+  .v3-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem; }
+  .v3-fac { font-size: 0.7rem; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+  .v3-num { font-size: 1.6rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .v3-label { font-size: 0.62rem; color: #334155; margin-top: 1px; }
+  .v3-spark { height: 24px; margin-top: 0.4rem; }
+  .v3-sub { font-size: 0.68rem; color: #334155; margin-top: 3px; }
+
+  /* V4 — Aforo + barra de % ocupado */
+  .v4-rows { display: flex; flex-direction: column; gap: 0.6rem; }
+  .v4-row { display: flex; align-items: center; gap: 0.6rem; }
+  .v4-name { width: 88px; font-size: 0.75rem; color: #64748b; text-align: right; flex-shrink: 0; }
+  .v4-block { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .v4-spark { height: 24px; }
+  .v4-track { height: 3px; background: #0a1628; border-radius: 99px; overflow: hidden; }
+  .v4-fill  { height: 100%; border-radius: 99px; transition: width 0.4s; }
+  .v4-nums { flex-shrink: 0; width: 56px; display: flex; flex-direction: column; align-items: flex-end; }
+  .v4-now  { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .v4-pct  { font-size: 0.63rem; color: #334155; }
+
+  .var-desc {
+    margin-top: 1.5rem; padding: 0.75rem 1rem; background: #0d1f35;
+    border: 1px solid #1a2a3f; border-radius: 8px; font-size: 0.78rem;
+    color: #475569; max-width: 980px; line-height: 1.6;
+  }
+  .var-desc strong { color: #64748b; }
+  .pro { color: #22c55e; }
+  .con { color: #f59e0b; }
+</style>
+</head>
+<body>
+
+<h1>InOut — Aforo real por facultad · La línea SUBE y BAJA</h1>
+<p class="subtitle">Cada punto = personas de esa facultad dentro del edificio en ese momento · Lunes típico CRAI Lima</p>
+
+<div class="var-nav">
+  <button class="var-btn active" onclick="showVar(1)">C1 · Sparklines de aforo</button>
+  <button class="var-btn" onclick="showVar(2)">C2 · Aforo + entradas del día</button>
+  <button class="var-btn" onclick="showVar(3)">C3 · Cards con mini-sparkline</button>
+  <button class="var-btn" onclick="showVar(4)">C4 · Aforo + % de capacidad</button>
+</div>
+
+<div id="v1" class="var-panel visible">
+  <div class="snapshots">
+    <div id="v1-10am" class="snapshot-card"></div>
+    <div id="v1-4pm"  class="snapshot-card"></div>
+  </div>
+  <div class="var-desc">
+    <strong>C1 — Aforo real por facultad (la línea sube y baja).</strong>
+    Cada línea muestra cuántas personas de esa facultad están dentro del edificio minuto a minuto.
+    El número de la derecha = cuántos hay ahora.<br>
+    <span class="pro">✓ Muestra entradas Y salidas. Pico máximo visible (horario de mayor demanda).</span>
+    <span class="con">· No dice cuántos vinieron en total en el día.</span>
+  </div>
+</div>
+
+<div id="v2" class="var-panel">
+  <div class="snapshots">
+    <div id="v2-10am" class="snapshot-card"></div>
+    <div id="v2-4pm"  class="snapshot-card"></div>
+  </div>
+  <div class="var-desc">
+    <strong>C2 — Doble línea: aforo ahora (sólida) + entradas acumuladas del día (punteada).</strong>
+    La línea sólida sube y baja con el flujo real. La línea punteada solo sube (total de visitantes únicos).<br>
+    <span class="pro">✓ Responde dos preguntas: "¿quién está?" y "¿cuántos vinieron hoy?"</span>
+    <span class="con">· Dos líneas pueden ser confusas si no se explican bien.</span>
+  </div>
+</div>
+
+<div id="v3" class="var-panel">
+  <div class="snapshots">
+    <div id="v3-10am" class="snapshot-card"></div>
+    <div id="v3-4pm"  class="snapshot-card"></div>
+  </div>
+  <div class="var-desc">
+    <strong>C3 — Cards con número grande + mini-sparkline de aforo debajo.</strong>
+    El número grande es el aforo actual de esa facultad. La mini-línea muestra cómo varió desde que abrió.<br>
+    <span class="pro">✓ Lectura instantánea del número. La curva da contexto histórico.</span>
+    <span class="con">· Ocupa más espacio. Con 5 facultades puede quedar apretado.</span>
+  </div>
+</div>
+
+<div id="v4" class="var-panel">
+  <div class="snapshots">
+    <div id="v4-10am" class="snapshot-card"></div>
+    <div id="v4-4pm"  class="snapshot-card"></div>
+  </div>
+  <div class="var-desc">
+    <strong>C4 — Aforo real + barra proporcional al pico del día.</strong>
+    La línea sube y baja. La barra de color muestra qué tan cerca está esta facultad de su máximo histórico de hoy.<br>
+    <span class="pro">✓ Indica visualmente si una facultad está en su pico o bajando.</span>
+    <span class="con">· La barra se compara contra el máximo del día, no contra la capacidad total del edificio.</span>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+//  DATOS: aforo por facultad cada 30 minutos (7:00 → 21:00 = 29 puntos)
+//  Simula personas DENTRO del edificio en ese momento
+//  (entradas − salidas acumuladas)
+// ─────────────────────────────────────────────────────────────────
+const FAC = [
+  { code:'FIA',    label:'Ingeniería',    color:'#3b82f6' },
+  { code:'FCS',    label:'Salud',         color:'#06b6d4' },
+  { code:'FCE',    label:'Empresariales', color:'#8b5cf6' },
+  { code:'FACTEO', label:'Teología',      color:'#22c55e' },
+  { code:'EPG',    label:'Posgrado',      color:'#f59e0b' },
+]
+
+// 29 puntos: 7:00, 7:30, 8:00 … 21:00
+// Patrón: abre 7h, pico mañana 9-10h, caída al mediodía, pico tarde 14-15h, cierre 21h
+const AFORO = {
+  FIA:    [ 0,  2,  6, 14, 22, 27, 24, 18, 12,  8,  5,  4,  7, 16, 26, 30, 28, 22, 16, 11,  7,  4,  2,  1,  1,  0,  0,  0,  0],
+  FCS:    [ 0,  1,  4,  9, 14, 17, 15, 11,  8,  5,  3,  3,  5, 11, 17, 19, 18, 14, 10,  7,  4,  2,  1,  0,  0,  0,  0,  0,  0],
+  FCE:    [ 0,  0,  2,  6, 11, 13, 12,  9,  6,  4,  2,  2,  4,  9, 14, 16, 14, 11,  8,  5,  3,  1,  0,  0,  0,  0,  0,  0,  0],
+  FACTEO: [ 0,  0,  1,  3,  6,  7,  6,  5,  4,  3,  2,  2,  3,  5,  7,  8,  7,  6,  4,  3,  2,  1,  0,  0,  0,  0,  0,  0,  0],
+  EPG:    [ 0,  0,  0,  1,  2,  4,  5,  5,  5,  4,  3,  3,  4,  5,  6,  7,  7,  6,  5,  4,  3,  2,  1,  0,  0,  0,  0,  0,  0],
+}
+
+// Entradas acumuladas por cada punto (para mostrar en C2)
+const ENTRADAS = {
+  FIA:    [ 0,  2,  7, 16, 27, 36, 41, 44, 47, 49, 50, 51, 54, 62, 72, 80, 85, 89, 92, 94, 96, 97, 98, 99, 99,100,100,100,100],
+  FCS:    [ 0,  1,  5, 12, 19, 25, 28, 31, 33, 35, 36, 37, 40, 46, 53, 58, 62, 65, 67, 69, 70, 71, 72, 72, 72, 72, 72, 72, 72],
+  FCE:    [ 0,  0,  2,  7, 13, 18, 21, 23, 25, 26, 27, 28, 31, 38, 45, 50, 53, 56, 58, 59, 60, 61, 61, 61, 61, 61, 61, 61, 61],
+  FACTEO: [ 0,  0,  1,  4,  9, 13, 16, 18, 20, 21, 22, 23, 26, 30, 34, 37, 39, 41, 42, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44],
+  EPG:    [ 0,  0,  0,  1,  3,  6,  9, 11, 13, 14, 15, 16, 19, 22, 25, 27, 29, 30, 31, 32, 33, 33, 33, 33, 33, 33, 33, 33, 33],
+}
+
+// Etiquetas de tiempo (cada 30 min)
+const TIMES = []
+for (let h = 7; h <= 21; h++) {
+  TIMES.push(`${h}:00`)
+  if (h < 21) TIMES.push(`${h}:30`)
+}
+// TIMES tiene 29 elementos: índices 0..28
+
+// Snapshots: 10am = índice 6 (7:00+3h=10:00), 4pm = índice 18 (7:00+9h=16:00)
+const SNAPS = [
+  { id:'10am', time:'10:00 a.m.', idx: 6, label:'Mañana — bajando del pico' },
+  { id:'4pm',  time:'4:00 p.m.',  idx:18, label:'Tarde — segundo pico activo' },
+]
+
+// ── UTILIDADES ────────────────────────────────────────────────────
+function hex2rgb(hex) {
+  const h = hex.slice(1)
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
+}
+
+function makeSpark(data, color, W=260, H=28, filled=true) {
+  const pts = data.map((v,i) => [
+    (i/(data.length-1))*W,
+    H - 2 - ((v / (Math.max(...data,1))) * (H-4))
+  ])
+  if (pts.length < 2) return ''
+  let path = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+  for (let i=1; i<pts.length; i++) {
+    const [x0,y0]=pts[i-1],[x1,y1]=pts[i]
+    const cx = ((x0+x1)/2).toFixed(1)
+    path += ` C ${cx},${y0.toFixed(1)} ${cx},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+  }
+  const area = `${path} L ${pts[pts.length-1][0].toFixed(1)},${H} L 0,${H} Z`
+  const lx = pts[pts.length-1][0].toFixed(1), ly = pts[pts.length-1][1].toFixed(1)
+  const [r,g,b] = hex2rgb(color)
+  const areaFill = filled
+    ? `<defs><linearGradient id="gr_${r}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(${r},${g},${b},0.22)"/>
+        <stop offset="100%" stop-color="rgba(${r},${g},${b},0.02)"/>
+       </linearGradient></defs>
+       <path d="${area}" fill="url(#gr_${r})" stroke="none"/>`
+    : ''
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;" preserveAspectRatio="none">
+    ${areaFill}
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${lx}" cy="${ly}" r="3" fill="${color}"/>
+  </svg>`
+}
+
+function makeDualSpark(aforo, entradas, color, W=260, H=32) {
+  const maxA = Math.max(...aforo, 1)
+  const maxE = Math.max(...entradas, 1)
+  const scaleA = v => H - 2 - ((v/maxA)*(H-4))
+  const scaleE = v => H - 2 - ((v/maxE)*(H-4))
+  const ptsA = aforo.map((v,i)   => [(i/(aforo.length-1))*W, scaleA(v)])
+  const ptsE = entradas.map((v,i) => [(i/(entradas.length-1))*W, scaleE(v)])
+  function bezier(pts) {
+    let p = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+    for (let i=1; i<pts.length; i++) {
+      const [x0,y0]=pts[i-1],[x1,y1]=pts[i]
+      const cx = ((x0+x1)/2).toFixed(1)
+      p += ` C ${cx},${y0.toFixed(1)} ${cx},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+    }
+    return p
+  }
+  const pathA = bezier(ptsA), pathE = bezier(ptsE)
+  const [r,g,b] = hex2rgb(color)
+  const area = `${pathA} L ${ptsA[ptsA.length-1][0].toFixed(1)},${H} L 0,${H} Z`
+  const lx = ptsA[ptsA.length-1][0].toFixed(1), ly = ptsA[ptsA.length-1][1].toFixed(1)
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;" preserveAspectRatio="none">
+    <defs><linearGradient id="da${r}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(${r},${g},${b},0.18)"/>
+      <stop offset="100%" stop-color="rgba(${r},${g},${b},0.01)"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#da${r})" stroke="none"/>
+    <path d="${pathE}" fill="none" stroke="rgba(${r},${g},${b},0.3)" stroke-width="1" stroke-dasharray="3 3" stroke-linecap="round"/>
+    <path d="${pathA}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="${lx}" cy="${ly}" r="3" fill="${color}"/>
+  </svg>`
+}
+
+function snapHeader(snap) {
+  const totalDentro  = FAC.reduce((s,f) => s + AFORO[f.code][snap.idx], 0)
+  const totalEntradas = FAC.reduce((s,f) => s + ENTRADAS[f.code][snap.idx], 0)
+  return `
+    <div class="snap-header">
+      <div>
+        <div class="snap-time">${snap.time}</div>
+        <div style="font-size:0.72rem;color:#334155;margin-top:2px">${snap.label}</div>
+      </div>
+      <div class="snap-pills">
+        <div class="snap-pill">Dentro ahora <span>${totalDentro}</span></div>
+        <div class="snap-pill">Entradas hoy <span>${totalEntradas}</span></div>
+      </div>
+    </div>`
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  V1 — Sparklines de aforo puro (sube y baja)
+// ─────────────────────────────────────────────────────────────────
+function buildV1(snap, containerId) {
+  const sorted = [...FAC].sort((a,b) => AFORO[b.code][snap.idx] - AFORO[a.code][snap.idx])
+  const dayMax = Math.max(...FAC.flatMap(f => AFORO[f.code].slice(0, snap.idx+1)), 1)
+  let html = snapHeader(snap)
+  html += `<div class="section-label">Personas dentro ahora · por facultad</div><div class="v1-rows">`
+  sorted.forEach(f => {
+    const slice = AFORO[f.code].slice(0, snap.idx+1)
+    const now  = AFORO[f.code][snap.idx]
+    const peak = Math.max(...slice)
+    html += `
+      <div class="v1-row">
+        <div class="v1-name">${f.label}</div>
+        <div class="v1-spark">${makeSpark(slice, f.color, 260, 28)}</div>
+        <div class="v1-nums">
+          <div class="v1-now" style="color:${f.color}">${now}</div>
+          <div class="v1-peak">pico ${peak}</div>
+        </div>
+      </div>`
+  })
+  html += `</div>`
+  html += `<hr class="divider">
+    <div class="legend">
+      <div class="leg-item">
+        <svg width="22" height="6"><path d="M 0 3 C 5 0 17 6 22 3" fill="none" stroke="#94a3b8" stroke-width="1.5"/></svg>
+        Personas dentro en cada momento
+      </div>
+      <div class="leg-item" style="color:#334155">· La línea SUBE con entradas y BAJA con salidas</div>
+    </div>`
+  document.getElementById(containerId).innerHTML = html
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  V2 — Doble línea: aforo (sólida) + entradas acumuladas (punteada)
+// ─────────────────────────────────────────────────────────────────
+function buildV2(snap, containerId) {
+  const sorted = [...FAC].sort((a,b) => AFORO[b.code][snap.idx] - AFORO[a.code][snap.idx])
+  let html = snapHeader(snap)
+  html += `<div class="section-label">Aforo ahora (sólida) · visitantes del día (punteada)</div><div class="v2-rows">`
+  sorted.forEach(f => {
+    const sliceA = AFORO[f.code].slice(0, snap.idx+1)
+    const sliceE = ENTRADAS[f.code].slice(0, snap.idx+1)
+    const now = AFORO[f.code][snap.idx]
+    const ent = ENTRADAS[f.code][snap.idx]
+    html += `
+      <div class="v2-row">
+        <div class="v2-name">${f.label}</div>
+        <div class="v2-spark">${makeDualSpark(sliceA, sliceE, f.color, 260, 32)}</div>
+        <div class="v2-nums">
+          <div class="v2-now" style="color:${f.color}">${now}</div>
+          <div class="v2-ent">${ent} hoy</div>
+        </div>
+      </div>`
+  })
+  html += `</div>`
+  html += `<hr class="divider">
+    <div class="legend">
+      <div class="leg-item">
+        <svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#94a3b8" stroke-width="1.5"/></svg>
+        Dentro ahora (sube y baja)
+      </div>
+      <div class="leg-item">
+        <svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#475569" stroke-width="1" stroke-dasharray="3 3"/></svg>
+        Entradas totales del día (solo sube)
+      </div>
+    </div>`
+  document.getElementById(containerId).innerHTML = html
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  V3 — Cards con número grande + sparkline de aforo
+// ─────────────────────────────────────────────────────────────────
+function buildV3(snap, containerId) {
+  const sorted = [...FAC].sort((a,b) => AFORO[b.code][snap.idx] - AFORO[a.code][snap.idx])
+  let html = snapHeader(snap)
+  html += `<div class="section-label">Dentro ahora · por facultad</div><div class="v3-grid">`
+  sorted.forEach(f => {
+    const slice = AFORO[f.code].slice(0, snap.idx+1)
+    const now  = AFORO[f.code][snap.idx]
+    const peak = Math.max(...slice)
+    const ent  = ENTRADAS[f.code][snap.idx]
+    const trend = snap.idx > 0
+      ? (AFORO[f.code][snap.idx] > AFORO[f.code][snap.idx-1] ? '↑' : AFORO[f.code][snap.idx] < AFORO[f.code][snap.idx-1] ? '↓' : '→')
+      : ''
+    const trendColor = trend === '↑' ? '#22c55e' : trend === '↓' ? '#ef4444' : '#475569'
+    html += `
+      <div class="v3-card">
+        <div class="v3-card-top">
+          <div>
+            <div class="v3-fac">${f.label}</div>
+            <div class="v3-num" style="color:${f.color}">${now}<span style="font-size:1rem;color:${trendColor};margin-left:4px">${trend}</span></div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:0.65rem;color:#334155">pico hoy</div>
+            <div style="font-size:0.85rem;font-weight:600;color:#475569">${peak}</div>
+          </div>
+        </div>
+        <div class="v3-spark">${makeSpark(slice, f.color, 200, 24)}</div>
+        <div class="v3-sub">${ent} entradas hoy</div>
+      </div>`
+  })
+  html += `</div>`
+  document.getElementById(containerId).innerHTML = html
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  V4 — Aforo + barra proporcional al pico diario
+// ─────────────────────────────────────────────────────────────────
+function buildV4(snap, containerId) {
+  const sorted = [...FAC].sort((a,b) => AFORO[b.code][snap.idx] - AFORO[a.code][snap.idx])
+  const peaks = Object.fromEntries(FAC.map(f => [f.code, Math.max(...AFORO[f.code].slice(0, snap.idx+1))]))
+  let html = snapHeader(snap)
+  html += `<div class="section-label">Aforo real · la barra = % de su pico histórico hoy</div><div class="v4-rows">`
+  sorted.forEach(f => {
+    const slice = AFORO[f.code].slice(0, snap.idx+1)
+    const now  = AFORO[f.code][snap.idx]
+    const peak = peaks[f.code]
+    const pct  = peak > 0 ? ((now/peak)*100).toFixed(0) : 0
+    const [r,g,b] = hex2rgb(f.color)
+    html += `
+      <div class="v4-row">
+        <div class="v4-name">${f.label}</div>
+        <div class="v4-block">
+          <div class="v4-spark">${makeSpark(slice, f.color, 260, 24)}</div>
+          <div class="v4-track">
+            <div class="v4-fill" style="width:${pct}%;background:rgba(${r},${g},${b},0.55)"></div>
+          </div>
+        </div>
+        <div class="v4-nums">
+          <div class="v4-now" style="color:${f.color}">${now}</div>
+          <div class="v4-pct">${pct}% del pico</div>
+        </div>
+      </div>`
+  })
+  html += `</div>`
+  html += `<hr class="divider">
+    <div class="legend">
+      <div class="leg-item">Número = personas dentro ahora</div>
+      <div class="leg-item" style="color:#334155">Barra = qué tan cerca está del pico máximo del día</div>
+    </div>`
+  document.getElementById(containerId).innerHTML = html
+}
+
+// ── Build all ──────────────────────────────────────────────────────
+SNAPS.forEach(snap => {
+  buildV1(snap, `v1-${snap.id}`)
+  buildV2(snap, `v2-${snap.id}`)
+  buildV3(snap, `v3-${snap.id}`)
+  buildV4(snap, `v4-${snap.id}`)
+})
+
+function showVar(n) {
+  document.querySelectorAll('.var-panel').forEach(p => p.classList.remove('visible'))
+  document.getElementById('v'+n).classList.add('visible')
+  document.querySelectorAll('.var-btn').forEach((b,i) => b.classList.toggle('active', i===n-1))
+}
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     koha_verify_ssl: bool = False
     default_space_id: int = 1
     default_space_capacity: int = 150
-    default_space_name: str = "Biblioteca UPeU Lima"
+    default_space_name: str = "Biblioteca"
     secret_key: str = "changeme"
     koha_db_host: str = ""
     koha_db_user: str = ""

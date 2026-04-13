@@ -2,7 +2,7 @@
 
 Sistema de control de presencia física y aforo en tiempo real para bibliotecas universitarias. Desarrollado por **SciBack** como producto reutilizable para instituciones académicas peruanas.
 
-**Cliente piloto:** CRAI UPeU Lima — en producción desde 2026.
+**Cliente piloto:** CRAI Lima — en producción desde 2026.
 
 ---
 
