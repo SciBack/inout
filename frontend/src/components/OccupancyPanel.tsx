@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 
 interface DashboardData {
   space_name: string
@@ -70,6 +70,49 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
     </svg>
   )
 }
+
+// Avatar del patron: foto de Koha con fallback a iniciales
+const PatronAvatar = memo(function PatronAvatar({
+  cardnumber, name,
+}: { cardnumber: string; name: string }) {
+  const [failed, setFailed] = useState(false)
+
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w.charAt(0).toUpperCase())
+    .join('')
+
+  const SIZE = 'clamp(34px,4.2vh,50px)'
+
+  if (failed) {
+    return (
+      <div style={{
+        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
+        background: '#0f2540', border: '1px solid #1e3a5f',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 'clamp(12px,1.5vh,17px)', fontWeight: 700, color: '#475569',
+        userSelect: 'none',
+      }}>
+        {initials || '?'}
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={`/api/patron-photo/card/${encodeURIComponent(cardnumber)}`}
+      onError={() => setFailed(true)}
+      alt={name}
+      style={{
+        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
+        objectFit: 'cover', objectPosition: 'top',
+        border: '1px solid #1e3a5f', background: '#0f2540',
+      }}
+    />
+  )
+})
 
 // Barras horizontales por facultad — visitantes únicos hoy
 function FacultyBarChart({ rows }: { rows: { faculty: string; label: string; count: number }[] }) {
@@ -278,6 +321,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                     ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                 }}
               >
+                <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
                 <span style={isEntry ? s.feedDotEntry : s.feedDotExit} />
                 <span style={s.feedName}>
                   {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
