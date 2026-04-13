@@ -81,20 +81,20 @@ export function WelcomeScreen({ result, isVisible }: Props) {
   const categoryLabel = CATEGORY_LABELS[patron.category] || patron.category
 
   const accentColor = isEntry
-    ? 'oklch(73% 0.21 148)'
-    : 'oklch(68% 0.18 295)'
+    ? 'oklch(82% 0.30 148)'
+    : 'oklch(78% 0.28 295)'
 
   const accentGlow = isEntry
-    ? 'oklch(11% 0.025 148)'
-    : 'oklch(11% 0.022 295)'
+    ? 'oklch(18% 0.08 148)'
+    : 'oklch(16% 0.07 295)'
 
   const accentBorder = isEntry
-    ? 'oklch(73% 0.21 148 / 0.35)'
-    : 'oklch(68% 0.18 295 / 0.35)'
+    ? 'oklch(82% 0.30 148 / 0.55)'
+    : 'oklch(78% 0.28 295 / 0.55)'
 
   const accentBoxShadow = isEntry
-    ? '0 0 0 3px oklch(73% 0.21 148 / 0.18), 0 0 28px oklch(73% 0.21 148 / 0.22)'
-    : '0 0 0 3px oklch(68% 0.18 295 / 0.18), 0 0 28px oklch(68% 0.18 295 / 0.22)'
+    ? '0 0 0 3px oklch(82% 0.30 148 / 0.35), 0 0 40px oklch(82% 0.30 148 / 0.45)'
+    : '0 0 0 3px oklch(78% 0.28 295 / 0.35), 0 0 40px oklch(78% 0.28 295 / 0.45)'
 
   const containerBg = isEntry
     ? `radial-gradient(ellipse at 50% 40%, ${accentGlow} 0%, oklch(7% 0.018 232) 65%)`
@@ -109,8 +109,8 @@ export function WelcomeScreen({ result, isVisible }: Props) {
     color: accentColor,
     border: `1px solid ${accentBorder}`,
     background: isEntry
-      ? 'oklch(73% 0.21 148 / 0.10)'
-      : 'oklch(68% 0.18 295 / 0.10)',
+      ? 'oklch(82% 0.30 148 / 0.18)'
+      : 'oklch(78% 0.28 295 / 0.18)',
   }
 
   const avatarStyle: React.CSSProperties = {
@@ -230,7 +230,7 @@ const s: Record<string, React.CSSProperties> = {
   name: {
     fontSize: 'clamp(54px,7.5vh,96px)' as unknown as undefined,
     fontWeight: 400,
-    color: 'oklch(92% 0.008 220)',
+    color: 'oklch(97% 0.004 220)',
     textAlign: 'center',
     fontFamily: "'Bebas Neue', cursive",
     letterSpacing: '0.04em',
@@ -240,17 +240,17 @@ const s: Record<string, React.CSSProperties> = {
   category: {
     fontSize: 'clamp(13px,1.5vh,18px)' as unknown as undefined,
     padding: '0.25rem 1rem',
-    background: 'oklch(12% 0.020 229)',
+    background: 'oklch(16% 0.028 229)',
     borderRadius: '999px',
-    color: 'oklch(55% 0.014 222)',
-    border: '1px solid oklch(20% 0.022 228)',
+    color: 'oklch(72% 0.030 222)',
+    border: '1px solid oklch(32% 0.040 228)',
     fontFamily: "'Barlow', sans-serif",
     fontWeight: 500,
     letterSpacing: '0.02em',
   } as React.CSSProperties,
   message: {
     fontSize: 'clamp(16px,2.0vh,24px)' as unknown as undefined,
-    color: 'oklch(70% 0.010 222)',
+    color: 'oklch(80% 0.016 222)',
     textAlign: 'center',
     fontFamily: "'Barlow', sans-serif",
     fontWeight: 400,
@@ -263,9 +263,9 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.15rem',
     padding: '0.65rem 1.75rem',
-    background: 'oklch(10% 0.020 229)',
+    background: 'oklch(13% 0.026 229)',
     borderRadius: '12px',
-    border: '1px solid oklch(20% 0.022 228)',
+    border: '1px solid oklch(30% 0.038 228)',
     marginTop: '0.25rem',
   } as React.CSSProperties,
   durationLabel: {
