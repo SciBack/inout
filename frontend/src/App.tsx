@@ -232,11 +232,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#0f172a',
   },
   left: {
-    flex: '0 0 65%',
+    flex: '0 0 58.3%',
     overflow: 'hidden',
   },
   right: {
-    flex: '0 0 35%',
+    flex: '0 0 41.7%',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',

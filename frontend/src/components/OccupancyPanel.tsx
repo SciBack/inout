@@ -771,7 +771,7 @@ const s: Record<string, React.CSSProperties> = {
 
   // Columna izquierda
   leftCol: {
-    flex: '1 1 0',
+    flex: '0 0 57%',
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
