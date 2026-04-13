@@ -608,29 +608,46 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
             />
 
           </div>
+
+          {/* Barras por facultad — dentro de col izquierda */}
+          <div style={s.facultyInCol}>
+            <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
+            <FacultyBarChart rows={data.faculty_breakdown} />
+          </div>
+
         </div>
 
-        {/* COLUMNA DERECHA: feed de actividad */}
+        {/* COLUMNA DERECHA: feed sin padding vertical */}
         <div style={s.feedSection}>
-          <span style={s.sectionLabel}>Actividad reciente</span>
           <div style={s.feedList}>
-            {data.recent_events.slice(0, 10).map((ev, idx) => {
+            {data.recent_events.map((ev, idx) => {
               const isEntry = ev.event_type === 'entry'
               const isFirst = idx === 0
+              const entryColor = 'oklch(73% 0.21 148)'
+              const exitColor  = 'oklch(68% 0.18 295)'
+              const accentColor = isEntry ? entryColor : exitColor
               const cat = CATEGORY_MAP[ev.patron_category?.toUpperCase?.() ?? '']
               return (
                 <div
                   key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
                   style={{
                     ...s.feedItem,
-                    background: idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.6)',
+                    background: isFirst
+                      ? 'oklch(16% 0.025 228)'
+                      : idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.6)',
+                    borderLeft: isFirst
+                      ? `3px solid ${accentColor}`
+                      : '3px solid transparent',
                     animation: isFirst && isNewEvent
                       ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                   }}
                 >
                   <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
                   {isEntry ? ICON_ENTRY : ICON_EXIT}
-                  <span style={s.feedName}>
+                  <span style={{
+                    ...s.feedName,
+                    color: isFirst ? 'oklch(95% 0.005 220)' : C.text1,
+                  }}>
                     {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
                   </span>
                   {cat && (
@@ -659,12 +676,6 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           </div>
         </div>
 
-      </div>
-
-      {/* ── BARRAS POR FACULTAD ── */}
-      <div style={s.chartSection}>
-        <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
-        <FacultyBarChart rows={data.faculty_breakdown} />
       </div>
 
     </div>
@@ -720,7 +731,8 @@ const s: Record<string, React.CSSProperties> = {
 
   // Columna izquierda
   leftCol: {
-    flex: '0 0 38%',
+    flex: '1 1 0',
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(7px,0.9vh,12px)',
@@ -765,15 +777,27 @@ const s: Record<string, React.CSSProperties> = {
   // Columna derecha: feed
   feedSection: {
     flex: '1 1 0',
+    minWidth: 0,
     minHeight: 0,
     background: C.card,
     border: `1px solid ${C.border}`,
     borderRadius: 14,
-    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,18px)',
+    padding: 0,
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(6px,0.8vh,10px)',
     overflow: 'hidden',
+  },
+
+  // Barras de facultad dentro de col izquierda
+  facultyInCol: {
+    flex: '0 0 auto',
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 14,
+    padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,16px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'clamp(5px,0.7vh,9px)',
   },
   feedList: {
     flex: 1,
@@ -808,15 +832,4 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
 
-  // Barras de facultad
-  chartSection: {
-    flex: '0 0 auto',
-    background: C.card,
-    border: `1px solid ${C.border}`,
-    borderRadius: 14,
-    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'clamp(7px,0.9vh,11px)',
-  },
 }

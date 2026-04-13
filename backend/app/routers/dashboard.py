@@ -77,7 +77,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
             PresenceLog.timestamp >= today_start,
         )
         .order_by(PresenceLog.id.desc())
-        .limit(8)
+        .limit(20)
         .all()
     )
 
