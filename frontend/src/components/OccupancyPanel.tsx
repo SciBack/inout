@@ -25,158 +25,85 @@ interface DashboardData {
   entries_yesterday: number
 }
 
-const FAC_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
-
-// Gauge circular tipo velocímetro
-// Arco de 252° (70% del círculo), hueco centrado abajo
-function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = Math.min(1, max > 0 ? value / max : 0)
-  const R = 38
-  const cx = 50, cy = 50
-  const circumference = 2 * Math.PI * R
-  const arcFraction = 0.72  // 72% = 259°
-  const arcLength = circumference * arcFraction
-  const filledLength = arcLength * pct
-  // rotate(144) pone el inicio del arco en ~234° desde arriba (esquina inferior-izquierda)
-  // dejando el hueco de 28% centrado en la parte baja
-  const rot = `rotate(144, ${cx}, ${cy})`
-
-  return (
-    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '220px', display: 'block' }}>
-      {/* Track de fondo */}
-      <circle cx={cx} cy={cy} r={R}
-        fill="none" stroke="#132235" strokeWidth="9" strokeLinecap="round"
-        strokeDasharray={`${arcLength} ${circumference - arcLength}`}
-        transform={rot}
-      />
-      {/* Progreso */}
-      <circle cx={cx} cy={cy} r={R}
-        fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
-        strokeDasharray={`${filledLength.toFixed(2)} ${(circumference - filledLength).toFixed(2)}`}
-        transform={rot}
-        style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
-      />
-      {/* Número central */}
-      <text x={cx} y={cy - 3} textAnchor="middle" dominantBaseline="middle"
-        fontSize="26" fontWeight="700" fill={color}
-        style={{ fontFamily: 'system-ui, sans-serif', fontVariantNumeric: 'tabular-nums' }}>
-        {value}
-      </text>
-      <text x={cx} y={cy + 16} textAnchor="middle"
-        fontSize="9.5" fill="#475569"
-        style={{ fontFamily: 'system-ui, sans-serif' }}>
-        de {max}
-      </text>
-    </svg>
-  )
+// ── Paleta OKLCH ────────────────────────────────────────────────────────────
+const C = {
+  bg:     'oklch(7% 0.018 232)',
+  card:   'oklch(10.5% 0.020 229)',
+  border: 'oklch(17% 0.023 228)',
+  text1:  'oklch(88% 0.010 222)',
+  text2:  'oklch(54% 0.014 222)',
+  text3:  'oklch(32% 0.012 222)',
+  green:  'oklch(73% 0.21 148)',
+  amber:  'oklch(82% 0.17 76)',
+  red:    'oklch(66% 0.24 25)',
+  blue:   'oklch(68% 0.17 244)',
+  rose:   'oklch(73% 0.17 352)',
+  cyan:   'oklch(73% 0.18 211)',
 }
 
-// Avatar del patron: foto de Koha con fallback a iniciales
-const PatronAvatar = memo(function PatronAvatar({
-  cardnumber, name,
-}: { cardnumber: string; name: string }) {
-  const [failed, setFailed] = useState(false)
+const FONT_DISPLAY = "'Bebas Neue', 'Arial Narrow', impact, sans-serif"
+const FONT_BODY    = "'Barlow', system-ui, sans-serif"
 
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(w => w.charAt(0).toUpperCase())
-    .join('')
+const FAC_COLORS = [
+  'oklch(62% 0.20 256)',
+  'oklch(73% 0.18 211)',
+  'oklch(60% 0.24 299)',
+  'oklch(73% 0.21 148)',
+  'oklch(80% 0.18 76)',
+  'oklch(65% 0.24 25)',
+]
 
-  const SIZE = 'clamp(34px,4.2vh,50px)'
-
-  if (failed) {
-    return (
-      <div style={{
-        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
-        background: '#0f2540', border: '1px solid #1e3a5f',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 'clamp(12px,1.5vh,17px)', fontWeight: 700, color: '#475569',
-        userSelect: 'none',
-      }}>
-        {initials || '?'}
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={`/api/patron-photo/card/${encodeURIComponent(cardnumber)}`}
-      onError={() => setFailed(true)}
-      alt={name}
-      style={{
-        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
-        objectFit: 'cover', objectPosition: 'top',
-        border: '1px solid #1e3a5f', background: '#0f2540',
-      }}
-    />
-  )
-})
-
-// Barras horizontales por facultad — visitantes únicos hoy
-function FacultyBarChart({ rows }: { rows: { faculty: string; label: string; count: number }[] }) {
-  if (rows.length === 0) {
-    return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 'clamp(10px,1.1vh,12px)', color: '#334155' }}>
-          Sin entradas registradas hoy
-        </span>
-      </div>
-    )
-  }
-
-  const sorted = [...rows].sort((a, b) => b.count - a.count)
-  const max = Math.max(...sorted.map(r => r.count), 1)
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(6px,0.8vh,10px)' }}>
-      {sorted.map((row, idx) => {
-        const pct = (row.count / max) * 100
-        const color = FAC_COLORS[idx % FAC_COLORS.length]
-        return (
-          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
-            <span style={{
-              width: 'clamp(80px,10vw,120px)', textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(12px,1.4vh,17px)', color: '#64748b', whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {row.label}
-            </span>
-            <div style={{
-              flex: 1, height: 'clamp(20px,2.6vh,30px)',
-              background: '#132235', borderRadius: 5, overflow: 'hidden',
-            }}>
-              <div style={{
-                height: '100%', width: `${pct}%`, borderRadius: 5,
-                background: color, transition: 'width 0.6s ease',
-                display: 'flex', alignItems: 'center', paddingLeft: 8,
-              }}>
-                {row.count > 2 && (
-                  <span style={{ fontSize: 'clamp(10px,1.2vh,14px)', fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
-                    {row.count}
-                  </span>
-                )}
-              </div>
-            </div>
-            <span style={{
-              width: 'clamp(24px,3vw,36px)', textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(13px,1.5vh,18px)', fontWeight: 700,
-              fontVariantNumeric: 'tabular-nums', color: '#64748b',
-            }}>
-              {row.count}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
+const CATEGORY_MAP: Record<string, { short: string; bg: string; color: string }> = {
+  'ESTUDI':   { short: 'EST', bg: 'oklch(73% 0.18 211 / 0.14)', color: 'oklch(73% 0.18 211)' },
+  'DOCENTE':  { short: 'DOC', bg: 'oklch(68% 0.17 244 / 0.14)', color: 'oklch(68% 0.17 244)' },
+  'DOCEN':    { short: 'DOC', bg: 'oklch(68% 0.17 244 / 0.14)', color: 'oklch(68% 0.17 244)' },
+  'INVESTI':  { short: 'INV', bg: 'oklch(68% 0.18 295 / 0.14)', color: 'oklch(68% 0.18 295)' },
+  'ADMINI':   { short: 'ADM', bg: 'oklch(82% 0.17 76 / 0.14)',  color: 'oklch(82% 0.17 76)' },
+  'EXTERNO':  { short: 'EXT', bg: 'oklch(32% 0.012 222 / 0.35)', color: C.text2 },
 }
 
+// ── Íconos estáticos — hoisted (no re-created per render) ───────────────────
+const ICON_ENTRY = (
+  <svg width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+    <path d="M10 17 L10 4 M5 9.5 L10 3.5 L15 9.5"
+      stroke="#4ade80" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+)
+
+const ICON_EXIT = (
+  <svg width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+    <path d="M10 3 L10 16 M5 10.5 L10 16.5 L15 10.5"
+      stroke="#f87171" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+)
+
+// ── Utilidades ───────────────────────────────────────────────────────────────
 function firstNameCapitalized(fullName: string): string {
   if (!fullName) return ''
   const first = fullName.trim().split(/\s+/)[0]
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
+}
+
+function fmtStay(s: number | null): string {
+  if (s === null || s <= 0) return '—'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min`
+  return `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+function fmtPeakHour(h: number | null): string {
+  if (h === null) return '—'
+  return `${String(h).padStart(2, '0')}:00`
+}
+
+function fmtDelta(today: number, yesterday: number): { text: string; color: string } | null {
+  if (yesterday <= 0) return null
+  const d = today - yesterday
+  const sign = d >= 0 ? '+' : ''
+  return {
+    text: `${sign}${d} vs ayer`,
+    color: d >= 0 ? C.green : C.red,
+  }
 }
 
 function animateCounter(el: HTMLElement, from: number, to: number, duration: number) {
@@ -191,20 +118,250 @@ function animateCounter(el: HTMLElement, from: number, to: number, duration: num
   requestAnimationFrame(step)
 }
 
+// ── ArcGauge ─────────────────────────────────────────────────────────────────
+function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.min(1, max > 0 ? value / max : 0)
+  const R = 34
+  const cx = 50, cy = 46
+  const circumference = 2 * Math.PI * R
+  const arcFraction = 0.72
+  const arcLength = circumference * arcFraction
+  const filledLength = arcLength * pct
+  const rot = `rotate(144, ${cx}, ${cy})`
+
+  return (
+    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: '150px', display: 'block' }}>
+      <circle cx={cx} cy={cy} r={R}
+        fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
+        strokeDasharray={`${arcLength} ${circumference - arcLength}`}
+        transform={rot}
+      />
+      <circle cx={cx} cy={cy} r={R}
+        fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+        strokeDasharray={`${filledLength.toFixed(2)} ${(circumference - filledLength).toFixed(2)}`}
+        transform={rot}
+        style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
+      />
+      <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="middle"
+        fontSize="28" fontWeight="400" fill={color}
+        style={{ fontFamily: FONT_DISPLAY, letterSpacing: '0.02em' }}>
+        {value}
+      </text>
+      <text x={cx} y={cy + 16} textAnchor="middle"
+        fontSize="9" fill={C.text3}
+        style={{ fontFamily: FONT_BODY }}>
+        de {max}
+      </text>
+    </svg>
+  )
+}
+
+// ── StatCard ──────────────────────────────────────────────────────────────────
+interface StatCardProps {
+  label: string
+  value: number | string
+  valueRef?: React.RefObject<HTMLSpanElement | null>
+  color: string
+  sub?: string
+  subColor?: string
+  wide?: boolean
+  numSize?: string
+}
+
+const StatCard = memo(function StatCard({
+  label, value, valueRef, color, sub, subColor, wide, numSize,
+}: StatCardProps) {
+  return (
+    <div style={{
+      background: C.card,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: 'clamp(12px,1.6vh,22px) clamp(14px,1.8vh,20px)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      gap: 4,
+      gridColumn: wide ? 'span 2' : undefined,
+      overflow: 'hidden',
+    }}>
+      <span style={{
+        fontSize: 'clamp(9px,1.05vh,12px)',
+        color: C.text3,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.12em',
+        fontFamily: FONT_BODY,
+        fontWeight: 600,
+      }}>
+        {label}
+      </span>
+      <span
+        ref={valueRef}
+        style={{
+          fontSize: numSize ?? 'clamp(38px,5.2vh,64px)',
+          lineHeight: 1,
+          fontFamily: FONT_DISPLAY,
+          color,
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '0.02em',
+        }}
+      >
+        {value}
+      </span>
+      {sub && (
+        <span style={{
+          fontSize: 'clamp(10px,1.2vh,14px)',
+          color: subColor ?? C.text2,
+          fontFamily: FONT_BODY,
+          fontWeight: 500,
+          marginTop: 2,
+        }}>
+          {sub}
+        </span>
+      )}
+    </div>
+  )
+})
+
+// ── PatronAvatar ──────────────────────────────────────────────────────────────
+const PatronAvatar = memo(function PatronAvatar({
+  cardnumber, name,
+}: { cardnumber: string; name: string }) {
+  const [failed, setFailed] = useState(false)
+
+  const initials = name
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(w => w.charAt(0).toUpperCase()).join('')
+
+  const SIZE = 'clamp(34px,4.4vh,52px)'
+
+  if (failed) {
+    return (
+      <div style={{
+        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
+        background: C.card, border: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 'clamp(12px,1.5vh,17px)',
+        fontFamily: FONT_DISPLAY,
+        color: C.text2,
+        letterSpacing: '0.04em',
+        userSelect: 'none' as const,
+      }}>
+        {initials || '?'}
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={`/api/patron-photo/card/${encodeURIComponent(cardnumber)}`}
+      onError={() => setFailed(true)}
+      alt={name}
+      style={{
+        width: SIZE, height: SIZE, borderRadius: '50%', flexShrink: 0,
+        objectFit: 'cover', objectPosition: 'top',
+        border: `1px solid ${C.border}`,
+        background: C.card,
+      }}
+    />
+  )
+})
+
+// ── FacultyBarChart ───────────────────────────────────────────────────────────
+const FacultyBarChart = memo(function FacultyBarChart({
+  rows,
+}: { rows: { faculty: string; label: string; count: number }[] }) {
+  if (rows.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: C.text3, fontFamily: FONT_BODY }}>
+          Sin entradas registradas hoy
+        </span>
+      </div>
+    )
+  }
+
+  const sorted = [...rows].sort((a, b) => b.count - a.count)
+  const max = Math.max(...sorted.map(r => r.count), 1)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(6px,0.9vh,11px)' }}>
+      {sorted.map((row, idx) => {
+        const pct = (row.count / max) * 100
+        const color = FAC_COLORS[idx % FAC_COLORS.length]
+        return (
+          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
+            <span style={{
+              width: 'clamp(75px,9.5vw,115px)',
+              textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(11px,1.35vh,16px)',
+              color: C.text2,
+              fontFamily: FONT_BODY,
+              fontWeight: 500,
+              whiteSpace: 'nowrap' as const,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {row.label}
+            </span>
+            <div style={{
+              flex: 1,
+              height: 'clamp(20px,2.8vh,32px)',
+              background: C.border,
+              borderRadius: 6,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${pct}%`,
+                borderRadius: 6,
+                background: color,
+                transition: 'width 0.6s ease',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: 8,
+              }}>
+                {row.count > 2 && (
+                  <span style={{
+                    fontSize: 'clamp(10px,1.2vh,14px)',
+                    fontFamily: FONT_DISPLAY,
+                    letterSpacing: '0.04em',
+                    color: 'rgba(255,255,255,0.9)',
+                  }}>
+                    {row.count}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span style={{
+              width: 'clamp(24px,3vw,36px)',
+              textAlign: 'right', flexShrink: 0,
+              fontSize: 'clamp(14px,1.8vh,20px)',
+              fontFamily: FONT_DISPLAY,
+              letterSpacing: '0.04em',
+              color: C.text2,
+            }}>
+              {row.count}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+})
+
+// ── OccupancyPanel ────────────────────────────────────────────────────────────
 export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
 
   const refVisitors = useRef<HTMLSpanElement>(null)
-  const refOccupancy = useRef<HTMLSpanElement>(null)
-  const refMale = useRef<HTMLSpanElement>(null)
-  const refFemale = useRef<HTMLSpanElement>(null)
+  const refMale     = useRef<HTMLSpanElement>(null)
+  const refFemale   = useRef<HTMLSpanElement>(null)
 
   const prevVisitors = useRef(0)
-  const prevOccupancy = useRef(0)
-  const prevMale = useRef(0)
-  const prevFemale = useRef(0)
-  const prevFirstId = useRef<number | null>(null)
+  const prevMale     = useRef(0)
+  const prevFemale   = useRef(0)
+  const prevFirstId  = useRef<number | null>(null)
 
   const fetchDashboard = async () => {
     try {
@@ -228,7 +385,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
       val: number
     ) => {
       if (ref.current && prev.current !== val) {
-        animateCounter(ref.current, prev.current, val, 300)
+        animateCounter(ref.current, prev.current, val, 350)
         ref.current.style.animation = 'none'
         void ref.current.offsetWidth
         ref.current.style.animation = 'metricPulse 0.5s ease'
@@ -236,24 +393,39 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
       }
     }
     pulse(refVisitors, prevVisitors, data.unique_visitors_today)
-    pulse(refOccupancy, prevOccupancy, data.current_occupancy)
-    pulse(refMale, prevMale, data.current_male)
-    pulse(refFemale, prevFemale, data.current_female)
+    pulse(refMale,     prevMale,     data.current_male)
+    pulse(refFemale,   prevFemale,   data.current_female)
   }, [data])
 
-  if (error) return <div style={s.stateMsg}>Sin conexión con el servidor</div>
-  if (!data) return <div style={{ ...s.stateMsg, color: '#475569' }}>Cargando...</div>
+  if (error) {
+    return (
+      <div style={{ ...s.stateMsg, color: C.red, fontFamily: FONT_BODY }}>
+        Sin conexión con el servidor
+      </div>
+    )
+  }
+  if (!data) {
+    return (
+      <div style={{ ...s.stateMsg, color: C.text3, fontFamily: FONT_BODY }}>
+        Cargando...
+      </div>
+    )
+  }
 
-  const pct = Math.min(100, data.occupancy_percent)
-  const barColor = pct < 60 ? '#22c55e' : pct < 85 ? '#f59e0b' : '#ef4444'
+  const pct      = Math.min(100, data.occupancy_percent)
+  const barColor = pct < 60 ? C.green : pct < 85 ? C.amber : C.red
 
   const todayLabel = new Date().toLocaleDateString('es-PE', {
     weekday: 'long', day: 'numeric', month: 'long',
   })
   const todayCapitalized = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)
 
-  const firstEventId = data.recent_events[0]?.id ?? null
-  const isNewEvent = firstEventId !== null && firstEventId !== prevFirstId.current
+  const delta         = fmtDelta(data.unique_visitors_today, data.entries_yesterday)
+  const avgStayStr    = fmtStay(data.avg_stay_seconds)
+  const peakHourStr   = fmtPeakHour(data.peak_hour)
+
+  const firstEventId  = data.recent_events[0]?.id ?? null
+  const isNewEvent    = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
 
   return (
@@ -265,77 +437,111 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* ── CUERPO: 2 columnas arriba + barra abajo ── */}
+      {/* ── CUERPO: 2 columnas ── */}
       <div style={s.body}>
 
-        {/* COLUMNA IZQUIERDA: gauge + tarjetas de estadísticas */}
+        {/* COLUMNA IZQUIERDA */}
         <div style={s.leftCol}>
 
-          {/* Gauge — aforo en tiempo real */}
+          {/* Gauge compacto */}
           <div style={s.gaugeCard}>
-            <span style={s.cardLabel}>En edificio ahora</span>
-            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, alignItems: 'center' }}>
+            <span style={s.sectionLabel}>En edificio ahora</span>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
             </div>
-            <span style={{ textAlign: 'center', fontSize: 'clamp(11px,1.3vh,15px)', color: barColor, fontWeight: 600 }}>
+            <span style={{ textAlign: 'center', fontSize: 'clamp(11px,1.3vh,15px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
               {pct.toFixed(0)}% del aforo máximo
             </span>
           </div>
 
-          {/* Tarjetas de estadísticas */}
-          <div style={s.statCards}>
-            <div style={s.statCard}>
-              <span style={s.statLabel}>Visitantes hoy</span>
-              <span ref={refVisitors} style={{ ...s.statNum, color: '#06b6d4' }}>
-                {data.unique_visitors_today}
-              </span>
-            </div>
-            <div style={s.statCard}>
-              <span style={s.statLabel}>Hombres</span>
-              <span ref={refMale} style={{ ...s.statNum, color: '#3b82f6' }}>
-                {data.current_male}
-              </span>
-            </div>
-            <div style={s.statCard}>
-              <span style={s.statLabel}>Mujeres</span>
-              <span ref={refFemale} style={{ ...s.statNum, color: '#ec4899' }}>
-                {data.current_female}
-              </span>
-            </div>
-          </div>
+          {/* Tarjetas estadísticas — grid 2 cols */}
+          <div style={s.statGrid}>
 
+            {/* Visitantes hoy — ancho completo */}
+            <StatCard
+              label="Visitantes hoy"
+              value={data.unique_visitors_today}
+              valueRef={refVisitors}
+              color={C.cyan}
+              sub={delta?.text}
+              subColor={delta?.color}
+              wide
+              numSize="clamp(44px,5.8vh,72px)"
+            />
+
+            {/* Hombres */}
+            <StatCard
+              label="Hombres"
+              value={data.current_male}
+              valueRef={refMale}
+              color={C.blue}
+            />
+
+            {/* Mujeres */}
+            <StatCard
+              label="Mujeres"
+              value={data.current_female}
+              valueRef={refFemale}
+              color={C.rose}
+            />
+
+            {/* Permanencia media */}
+            <StatCard
+              label="Permanencia"
+              value={avgStayStr}
+              color={C.text1}
+              numSize="clamp(30px,4.0vh,50px)"
+            />
+
+            {/* Hora punta */}
+            <StatCard
+              label="Hora punta"
+              value={peakHourStr}
+              color={C.amber}
+              numSize="clamp(30px,4.0vh,50px)"
+            />
+
+          </div>
         </div>
 
         {/* COLUMNA DERECHA: feed de actividad */}
         <div style={s.feedSection}>
-          <span style={s.cardLabel}>Actividad reciente</span>
+          <span style={s.sectionLabel}>Actividad reciente</span>
           <div style={s.feedList}>
             {data.recent_events.slice(0, 10).map((ev, idx) => {
               const isEntry = ev.event_type === 'entry'
               const isFirst = idx === 0
+              const cat = CATEGORY_MAP[ev.patron_category?.toUpperCase?.() ?? '']
               return (
                 <div
                   key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
                   style={{
                     ...s.feedItem,
-                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.025)',
+                    background: idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.6)',
                     animation: isFirst && isNewEvent
                       ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
                   }}
                 >
                   <PatronAvatar cardnumber={ev.cardnumber} name={ev.patron_name || ev.cardnumber} />
-                  {isEntry ? (
-                    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                      <path d="M9 15 L9 4 M5 8 L9 3 L13 8" stroke="#22c55e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                    </svg>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-                      <path d="M9 3 L9 14 M5 10 L9 15 L13 10" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                    </svg>
-                  )}
+                  {isEntry ? ICON_ENTRY : ICON_EXIT}
                   <span style={s.feedName}>
                     {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
                   </span>
+                  {cat && (
+                    <span style={{
+                      fontSize: 'clamp(9px,1.1vh,12px)',
+                      fontFamily: FONT_BODY,
+                      fontWeight: 700,
+                      letterSpacing: '0.06em',
+                      color: cat.color,
+                      background: cat.bg,
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                      flexShrink: 0,
+                    }}>
+                      {cat.short}
+                    </span>
+                  )}
                   <span style={s.feedTime}>
                     {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
                       hour: '2-digit', minute: '2-digit',
@@ -349,9 +555,9 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
 
       </div>
 
-      {/* ── BARRAS POR FACULTAD — ancho completo ── */}
+      {/* ── BARRAS POR FACULTAD ── */}
       <div style={s.chartSection}>
-        <span style={s.cardLabel}>Visitantes hoy por facultad</span>
+        <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
         <FacultyBarChart rows={data.faculty_breakdown} />
       </div>
 
@@ -359,6 +565,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   )
 }
 
+// ── Estilos ──────────────────────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
@@ -366,13 +573,14 @@ const s: Record<string, React.CSSProperties> = {
     height: '100%',
     padding: 'clamp(10px,1.2vh,18px) clamp(12px,1.5vh,20px)',
     gap: 'clamp(7px,0.9vh,12px)',
-    background: '#0a1628',
+    background: C.bg,
     overflow: 'hidden',
     boxSizing: 'border-box',
+    fontFamily: FONT_BODY,
   },
   stateMsg: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: '100%', color: '#ef4444', fontSize: '1rem',
+    height: '100%', fontSize: '1rem',
   },
 
   // Header
@@ -383,18 +591,20 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'baseline',
   },
   spaceName: {
-    fontSize: 'clamp(13px,1.7vh,20px)',
+    fontSize: 'clamp(12px,1.6vh,19px)',
     fontWeight: 700,
-    color: '#94a3b8',
-    letterSpacing: '0.1em',
+    color: C.text2,
+    letterSpacing: '0.12em',
+    fontFamily: FONT_BODY,
   },
   dateLabel: {
-    fontSize: 'clamp(12px,1.4vh,17px)',
-    color: '#475569',
+    fontSize: 'clamp(11px,1.35vh,16px)',
+    color: C.text3,
     textTransform: 'capitalize',
+    fontFamily: FONT_BODY,
   },
 
-  // Cuerpo: 2 columnas arriba + barra abajo
+  // Cuerpo
   body: {
     flex: '1 1 0',
     minHeight: 0,
@@ -402,7 +612,7 @@ const s: Record<string, React.CSSProperties> = {
     gap: 'clamp(7px,0.9vh,12px)',
   },
 
-  // Columna izquierda: gauge + tarjetas stats
+  // Columna izquierda
   leftCol: {
     flex: '0 0 38%',
     display: 'flex',
@@ -411,60 +621,49 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 0,
   },
 
-  // Card grande del gauge
+  // Gauge card — compacto, no crece
   gaugeCard: {
-    flex: '1 1 0',
-    minHeight: 0,
-    background: '#0d1f35',
-    border: '1px solid #1a2a3f',
-    borderRadius: '14px',
-    padding: 'clamp(10px,1.3vh,18px) clamp(12px,1.5vh,18px)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'clamp(4px,0.5vh,8px)',
-    overflow: 'hidden',
-  },
-
-  // Grid de 3 tarjetas de estadísticas
-  statCards: {
     flex: '0 0 auto',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
-    gap: 'clamp(5px,0.7vh,9px)',
-  },
-  statCard: {
-    background: '#0d1f35',
-    border: '1px solid #1a2a3f',
-    borderRadius: '12px',
-    padding: 'clamp(8px,1vh,14px) clamp(8px,1vh,12px)',
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 14,
+    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,20px)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 'clamp(2px,0.3vh,5px)',
+    gap: 'clamp(4px,0.5vh,7px)',
   },
-  statLabel: {
-    fontSize: 'clamp(9px,1.05vh,13px)',
-    color: '#475569',
+
+  // Grid de tarjetas de estadísticas
+  statGrid: {
+    flex: '1 1 0',
+    minHeight: 0,
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'clamp(5px,0.7vh,9px)',
+    alignContent: 'start',
+  },
+
+  // Etiqueta de sección
+  sectionLabel: {
+    flex: '0 0 auto',
+    fontSize: 'clamp(9px,1.0vh,12px)',
+    color: C.text3,
     textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    textAlign: 'center' as const,
-    whiteSpace: 'nowrap',
-  },
-  statNum: {
-    fontSize: 'clamp(32px,4.2vh,56px)',
-    fontWeight: 700,
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1,
+    letterSpacing: '0.12em',
+    fontFamily: FONT_BODY,
+    fontWeight: 600,
+    alignSelf: 'flex-start',
   },
 
   // Columna derecha: feed
   feedSection: {
     flex: '1 1 0',
     minHeight: 0,
-    background: '#0d1f35',
-    border: '1px solid #1a2a3f',
-    borderRadius: '14px',
-    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 14,
+    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,18px)',
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(6px,0.8vh,10px)',
@@ -474,48 +673,41 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(2px,0.4vh,5px)',
+    gap: 'clamp(1px,0.3vh,4px)',
     overflow: 'hidden',
   },
   feedItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(8px,1vh,14px)',
-    borderRadius: '8px',
-    padding: 'clamp(7px,0.9vh,12px) clamp(8px,1vh,12px)',
+    gap: 'clamp(7px,0.9vh,12px)',
+    borderRadius: 8,
+    padding: 'clamp(6px,0.85vh,11px) clamp(8px,1vh,12px)',
     flexShrink: 0,
   },
   feedName: {
     flex: 1,
-    fontSize: 'clamp(14px,1.8vh,22px)',
-    color: '#e2e8f0',
+    fontSize: 'clamp(13px,1.75vh,21px)',
+    color: C.text1,
     fontWeight: 500,
+    fontFamily: FONT_BODY,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   feedTime: {
     fontSize: 'clamp(12px,1.4vh,17px)',
-    color: '#475569',
+    color: C.text3,
     fontVariantNumeric: 'tabular-nums',
+    fontFamily: FONT_BODY,
     flexShrink: 0,
   },
 
-  // Etiqueta de sección
-  cardLabel: {
-    flex: '0 0 auto',
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    color: '#334155',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-  },
-
-  // Barras de facultad — ancho completo, abajo
+  // Barras de facultad
   chartSection: {
     flex: '0 0 auto',
-    background: '#0d1f35',
-    border: '1px solid #1a2a3f',
-    borderRadius: '14px',
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 14,
     padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
     display: 'flex',
     flexDirection: 'column',
