@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, ForeignKey
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -11,6 +11,11 @@ class Space(Base):
     capacity = Column(Integer, nullable=False)
     location = Column(String(100))
     active = Column(Boolean, default=True)
+    open_time = Column(Time, nullable=True)
+    close_time = Column(Time, nullable=True)
+    description = Column(Text, nullable=True)
+    address = Column(String(200), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class PresenceLog(Base):
@@ -34,3 +39,5 @@ class AdminUser(Base):
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="admin")
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

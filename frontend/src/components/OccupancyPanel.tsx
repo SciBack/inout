@@ -268,7 +268,7 @@ function animateCounter(el: HTMLElement, from: number, to: number, duration: num
   requestAnimationFrame(step)
 }
 
-export function OccupancyPanel() {
+export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
 
@@ -285,7 +285,8 @@ export function OccupancyPanel() {
 
   const fetchDashboard = async () => {
     try {
-      const res = await fetch('/api/dashboard')
+      const url = spaceId ? `/api/dashboard?space_id=${spaceId}` : '/api/dashboard'
+      const res = await fetch(url)
       if (res.ok) { setData(await res.json()); setError(false) }
     } catch { setError(true) }
   }

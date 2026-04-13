@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     koha_db_user: str = ""
     koha_db_pass: str = ""
     koha_db_name: str = ""
+    admin_initial_password: str = "admin123"
 
     class Config:
         env_file = ".env"

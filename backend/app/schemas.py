@@ -1,7 +1,11 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, time, date
 from typing import Optional
 
+
+# ---------------------------------------------------------------------------
+# Scan / Dashboard (existentes)
+# ---------------------------------------------------------------------------
 
 class ScanRequest(BaseModel):
     cardnumber: str
@@ -91,3 +95,134 @@ class DashboardStats(BaseModel):
     hourly_entries: list[HourlyCount] = []
     faculty_timelines: list[FacultyTimeline] = []
     faculty_events: list[FacultyEvent] = []
+
+
+# ---------------------------------------------------------------------------
+# Admin — Spaces
+# ---------------------------------------------------------------------------
+
+class SpaceCreate(BaseModel):
+    name: str
+    capacity: int
+    location: Optional[str] = None
+    active: bool = True
+    open_time: Optional[time] = None
+    close_time: Optional[time] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+
+
+class SpaceUpdate(BaseModel):
+    name: Optional[str] = None
+    capacity: Optional[int] = None
+    location: Optional[str] = None
+    active: Optional[bool] = None
+    open_time: Optional[time] = None
+    close_time: Optional[time] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+
+
+class SpaceResponse(BaseModel):
+    id: int
+    name: str
+    capacity: int
+    location: Optional[str] = None
+    active: bool
+    open_time: Optional[time] = None
+    close_time: Optional[time] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Admin — Auth
+# ---------------------------------------------------------------------------
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+
+
+# ---------------------------------------------------------------------------
+# Admin — Users
+# ---------------------------------------------------------------------------
+
+class AdminUserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "admin"
+
+
+class AdminUserPasswordUpdate(BaseModel):
+    password: str
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+    active: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Admin — Stats
+# ---------------------------------------------------------------------------
+
+class MonthlyStatRow(BaseModel):
+    month: int
+    month_name: str
+    unique_visitors: int
+    entries: int
+    exits: int
+    days_with_activity: int
+
+
+class StatsTotals(BaseModel):
+    unique_visitors: int
+    entries: int
+    exits: int
+    days_with_activity: int
+
+
+class GenderBreakdown(BaseModel):
+    male: int
+    female: int
+
+
+class AnnualStatsResponse(BaseModel):
+    space_name: str
+    year: int
+    monthly: list[MonthlyStatRow]
+    totals: StatsTotals
+    category_breakdown: list[CategoryCount]
+    faculty_breakdown: list[FacultyCount]
+    gender_breakdown: GenderBreakdown
+
+
+class DailyStatRow(BaseModel):
+    date: date
+    day_name: str
+    unique_visitors: int
+    entries: int
+    exits: int
+
+
+class MonthlyStatsResponse(BaseModel):
+    space_name: str
+    year_month: str
+    daily: list[DailyStatRow]

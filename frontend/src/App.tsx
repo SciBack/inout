@@ -2,6 +2,24 @@ import { useState, useEffect } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
+import { AdminApp } from './components/admin/AdminApp'
+
+// ── Routing: /admin → AdminApp ──────────────────────────────────────────────
+const isAdmin = window.location.pathname.startsWith('/admin')
+
+// ── Space ID desde URL param o localStorage ──────────────────────────────────
+function getSpaceId(): number | undefined {
+  const param = new URLSearchParams(window.location.search).get('space')
+  if (param) {
+    const id = Number(param)
+    if (!isNaN(id)) {
+      localStorage.setItem('inout_space_id', String(id))
+      return id
+    }
+  }
+  const stored = localStorage.getItem('inout_space_id')
+  return stored ? Number(stored) : undefined
+}
 
 type AppState = 'idle' | 'welcome'
 
@@ -54,6 +72,10 @@ body { overflow: hidden; background: #0f172a; }
 `
 
 export default function App() {
+  if (isAdmin) return <AdminApp />
+
+  const spaceId = getSpaceId()
+
   const [state, setState] = useState<AppState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [isLeaving, setIsLeaving] = useState(false)
@@ -101,7 +123,7 @@ export default function App() {
       const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardnumber }),
+        body: JSON.stringify({ cardnumber, space_id: spaceId ?? null }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -130,7 +152,7 @@ export default function App() {
   return (
     <div className="kiosk-root" style={styles.root}>
       <div className="panel-left" style={styles.left}>
-        <OccupancyPanel />
+        <OccupancyPanel spaceId={spaceId} />
       </div>
 
       <div className="panel-right" style={styles.right}>
