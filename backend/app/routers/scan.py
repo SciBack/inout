@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from ..database import get_db
 from ..models import PresenceLog, Space
@@ -56,7 +56,11 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         greeting = "Bienvenida" if gender == "F" else "Bienvenido"
         message = f"{greeting}, {first_name}"
     else:
-        message = f"Hasta luego, {first_name}"
+        duration_str = _format_duration(last.timestamp) if last else None
+        if duration_str:
+            message = f"Hasta luego, {first_name}. Estuviste {duration_str}"
+        else:
+            message = f"Hasta luego, {first_name}"
 
     return ScanResponse(
         event_type=event_type,
@@ -65,3 +69,25 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         message=message,
         from_cache=False,
     )
+
+
+def _format_duration(entry_ts: datetime) -> str | None:
+    """Devuelve texto natural con la duración desde entry_ts hasta ahora."""
+    try:
+        now = datetime.now(timezone.utc)
+        if entry_ts.tzinfo is None:
+            entry_ts = entry_ts.replace(tzinfo=timezone.utc)
+        delta = now - entry_ts
+        total = int(delta.total_seconds())
+        if total < 60:
+            return None  # menos de 1 minuto — no decir nada
+        hours, remainder = divmod(total, 3600)
+        minutes = remainder // 60
+        if hours > 0 and minutes > 0:
+            return f"{hours} hora{'s' if hours > 1 else ''} y {minutes} minuto{'s' if minutes > 1 else ''}"
+        elif hours > 0:
+            return f"{hours} hora{'s' if hours > 1 else ''}"
+        else:
+            return f"{minutes} minuto{'s' if minutes > 1 else ''}"
+    except Exception:
+        return None
