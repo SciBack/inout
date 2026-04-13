@@ -11,6 +11,7 @@ interface ScanResult {
     patron_id: number | null
   }
   message: string
+  duration: string | null
   timestamp: string
 }
 
@@ -36,7 +37,7 @@ function speak(text: string) {
 }
 
 export function WelcomeScreen({ result }: Props) {
-  const { event_type, patron, message } = result
+  const { event_type, patron, message, duration } = result
   const isEntry = event_type === 'entry'
   const [photoError, setPhotoError] = useState(false)
 
@@ -78,6 +79,13 @@ export function WelcomeScreen({ result }: Props) {
       )}
 
       <p style={styles.message}>{message}</p>
+
+      {duration && (
+        <div style={styles.duration}>
+          <span style={styles.durationLabel}>Tiempo en biblioteca</span>
+          <span style={styles.durationValue}>{duration}</span>
+        </div>
+      )}
 
       <div style={styles.time}>
         {new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
@@ -146,6 +154,29 @@ const styles: Record<string, any> = {
     color: '#cbd5e1',
     textAlign: 'center',
   },
+  duration: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.1rem',
+    padding: '0.5rem 1.5rem',
+    background: '#1e293b',
+    borderRadius: '0.75rem',
+    border: '1px solid #334155',
+  } as React.CSSProperties,
+  durationLabel: {
+    fontSize: '0.7rem',
+    color: '#64748b',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  } as React.CSSProperties,
+  durationValue: {
+    fontSize: '1.75rem',
+    fontWeight: 700,
+    color: '#94a3b8',
+    fontVariantNumeric: 'tabular-nums',
+    letterSpacing: '0.05em',
+  } as React.CSSProperties,
   time: {
     fontSize: '3rem',
     fontWeight: 700,

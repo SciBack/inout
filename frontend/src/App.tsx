@@ -16,6 +16,7 @@ interface ScanResult {
     patron_id: number | null
   }
   message: string
+  duration: string | null
   timestamp: string
 }
 

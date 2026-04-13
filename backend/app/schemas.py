@@ -24,6 +24,7 @@ class ScanResponse(BaseModel):
     patron: PatronInfo
     timestamp: datetime
     message: str
+    duration: Optional[str] = None  # solo en salida, solo visual
     from_cache: bool = False
 
 

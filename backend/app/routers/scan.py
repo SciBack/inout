@@ -64,42 +64,38 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
 
     gender = patron_data.get("gender", "")
     first_name = patron_data.get("first_name") or patron_data["firstname"].split()[0].capitalize()
+    duration = None
     if event_type == "entry":
         greeting = "Bienvenida" if gender == "F" else "Bienvenido"
         message = f"{greeting}, {first_name}"
     else:
-        duration_str = _format_duration(last.timestamp) if last else None
-        if duration_str:
-            message = f"Hasta luego, {first_name}. Estuviste {duration_str}"
-        else:
-            message = f"Hasta luego, {first_name}"
+        message = f"Hasta luego, {first_name}"
+        duration = _format_duration(last.timestamp) if last else None
 
     return ScanResponse(
         event_type=event_type,
         patron=PatronInfo(**patron_data),
         timestamp=log.timestamp or datetime.now(timezone.utc),
         message=message,
+        duration=duration,
         from_cache=False,
     )
 
 
 def _format_duration(entry_ts: datetime) -> str | None:
-    """Devuelve texto natural con la duración desde entry_ts hasta ahora."""
+    """Devuelve duración exacta en formato H:MM:SS o MM:SS."""
     try:
         now = datetime.now(timezone.utc)
         if entry_ts.tzinfo is None:
             entry_ts = entry_ts.replace(tzinfo=timezone.utc)
-        delta = now - entry_ts
-        total = int(delta.total_seconds())
-        if total < 60:
-            return None  # menos de 1 minuto — no decir nada
+        total = int((now - entry_ts).total_seconds())
+        if total < 0:
+            return None
         hours, remainder = divmod(total, 3600)
-        minutes = remainder // 60
-        if hours > 0 and minutes > 0:
-            return f"{hours} hora{'s' if hours > 1 else ''} y {minutes} minuto{'s' if minutes > 1 else ''}"
-        elif hours > 0:
-            return f"{hours} hora{'s' if hours > 1 else ''}"
+        minutes, seconds = divmod(remainder, 60)
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
         else:
-            return f"{minutes} minuto{'s' if minutes > 1 else ''}"
+            return f"{minutes}:{seconds:02d}"
     except Exception:
         return None
