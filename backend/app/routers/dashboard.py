@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, text
+from sqlalchemy import func, and_, text, literal_column
 from datetime import datetime, date, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+LIMA = ZoneInfo("America/Lima")
 
 from ..database import get_db
 from ..models import PresenceLog, Space
@@ -36,7 +39,8 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     space_name = space.name if space else settings.default_space_name
     capacity = space.capacity if space else settings.default_space_capacity
 
-    today = date.today()
+    # Fecha en hora Lima (UTC-5) — el contenedor Docker corre en UTC
+    today = datetime.now(LIMA).date()
     yesterday = today - timedelta(days=1)
 
     # Entradas de hoy
