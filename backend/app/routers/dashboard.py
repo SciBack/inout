@@ -126,6 +126,28 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     )
     peak_hour = int(peak_hour_row.hour) if peak_hour_row else None
 
+    # Hora punta típica: hora que más entradas tuvo históricamente en este día de semana
+    # Python weekday(): 0=lunes…6=domingo → PostgreSQL dow: 1=lunes…7=domingo (usando isodow)
+    pg_isodow = datetime.now(LIMA).isoweekday()  # 1=lunes…7=domingo
+    typical_peak_row = (
+        db.query(
+            func.extract("hour", func.timezone("America/Lima", PresenceLog.timestamp)).label("hour"),
+            func.count(PresenceLog.id).label("cnt"),
+        )
+        .filter(
+            and_(
+                PresenceLog.event_type == "entry",
+                PresenceLog.space_id == sid,
+                func.date(func.timezone("America/Lima", PresenceLog.timestamp)) < today,
+                func.extract("isodow", func.timezone("America/Lima", PresenceLog.timestamp)) == pg_isodow,
+            )
+        )
+        .group_by(func.extract("hour", func.timezone("America/Lima", PresenceLog.timestamp)))
+        .order_by(func.count(PresenceLog.id).desc())
+        .first()
+    )
+    typical_peak_hour = int(typical_peak_row.hour) if typical_peak_row else None
+
     # Permanencia promedio: para cada exit de hoy, buscar el último entry
     # del mismo cardnumber antes de ese exit, calcular diferencia en segundos
     exits_today_rows = (
@@ -364,6 +386,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         unique_visitors_today=unique_visitors_today,
         avg_stay_seconds=avg_stay_seconds,
         peak_hour=peak_hour,
+        typical_peak_hour=typical_peak_hour,
         category_breakdown=category_breakdown,
         entries_yesterday=entries_yesterday,
         current_male=current_male,

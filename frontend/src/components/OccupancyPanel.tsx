@@ -10,6 +10,7 @@ interface DashboardData {
   unique_visitors_today: number
   avg_stay_seconds: number | null
   peak_hour: number | null
+  typical_peak_hour: number | null
   current_male: number
   current_female: number
   category_breakdown: { category: string; label: string; count: number }[]
@@ -519,6 +520,12 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const avgStayStr    = fmtStay(data.avg_stay_seconds)
   const peakHourStr   = fmtPeakHour(data.peak_hour)
 
+  const DOW_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+  const dowName = DOW_ES[new Date().getDay()]
+  const typicalPeakSub = data.typical_peak_hour !== null
+    ? `Típico ${dowName} · ${fmtPeakHour(data.typical_peak_hour)}`
+    : undefined
+
   const firstEventId  = data.recent_events[0]?.id ?? null
   const isNewEvent    = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
@@ -596,6 +603,8 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               value={peakHourStr}
               color={C.amber}
               numSize="clamp(34px,4.8vh,64px)"
+              sub={typicalPeakSub}
+              subColor={C.text3}
             />
 
           </div>
