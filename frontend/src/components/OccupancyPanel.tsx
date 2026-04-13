@@ -42,114 +42,157 @@ interface DashboardData {
 const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
 const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
 
-// SVG line chart — una línea por facultad
+// SVG line chart — una línea por facultad, eje X dinámico basado en datos reales
 function FacultyLineChart({ timelines }: { timelines: FacultyTimeline[] }) {
-  const currentHour = new Date().getHours()
-  const W = 300
-  const H = 72
-  const PAD_TOP = 6
-  const PAD_BOT = 16
-  const chartH = H - PAD_TOP - PAD_BOT
+  const now = new Date()
+  const currentHour = now.getHours()
 
-  const xOf = (h: number) => ((h - 7) / 14) * W
-  const allCounts = timelines.flatMap(t => t.data.map(d => d.count))
-  const maxCount = Math.max(...allCounts, 1)
-  const yOf = (count: number) => PAD_TOP + chartH * (1 - count / maxCount)
+  const allDataHours = timelines.flatMap(t => t.data.map(d => d.hour))
 
-  const getPoints = (tl: FacultyTimeline) => {
-    const map: Record<number, number> = {}
-    for (const d of tl.data) map[d.hour] = d.count
-    const end = Math.min(Math.max(currentHour, 7), 21)
-    return CHART_HOURS
-      .filter(h => h <= end)
-      .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
-      .join(' ')
-  }
-
-  if (timelines.length === 0) {
+  if (allDataHours.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>Sin datos del día</span>
+        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>
+          Sin entradas registradas hoy
+        </span>
       </div>
     )
   }
 
+  // Eje X: desde la primera entrada hasta la hora actual
+  const startHour = Math.min(...allDataHours)
+  // Fin siempre al menos 1h después del inicio, y no antes de la hora actual
+  const endHour = Math.max(currentHour, ...allDataHours, startHour + 1)
+  const hourRange = endHour - startHour  // siempre >= 1
+
+  const W = 300
+  const H = 66
+  const PAD_TOP = 5
+  const PAD_BOT = 15
+  const chartH = H - PAD_TOP - PAD_BOT
+
+  const xOf = (h: number) => ((h - startHour) / hourRange) * W
+  const allCounts = timelines.flatMap(t => t.data.map(d => d.count))
+  const maxCount = Math.max(...allCounts, 1)
+  const yOf = (count: number) => PAD_TOP + chartH * (1 - count / maxCount)
+
+  // Horas del eje: todas desde startHour hasta endHour
+  const axisHours = Array.from({ length: hourRange + 1 }, (_, i) => startHour + i)
+  // Cuántos labels mostrar (máx 8 para no saturar)
+  const labelStep = Math.max(1, Math.ceil(axisHours.length / 7))
+
+  const getPoints = (tl: FacultyTimeline) => {
+    const map: Record<number, number> = {}
+    for (const d of tl.data) map[d.hour] = d.count
+    // Dibujar desde startHour hasta currentHour (horas futuras no tienen datos)
+    const drawUntil = Math.min(currentHour, endHour)
+    return Array.from({ length: drawUntil - startHour + 1 }, (_, i) => startHour + i)
+      .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
+      .join(' ')
+  }
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,7px)', minHeight: 0 }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        style={{ display: 'block', flex: 1, minHeight: 0 }}
-        preserveAspectRatio="none"
-      >
-        {/* Líneas de hora */}
-        {CHART_HOURS.filter(h => h % 2 === 1).map(h => (
-          <g key={h}>
-            <line x1={xOf(h)} y1={PAD_TOP} x2={xOf(h)} y2={H - PAD_BOT}
-              stroke="#1a2a3f" strokeWidth="0.5" />
-            <text x={xOf(h)} y={H - 1} fontSize="6" fill="#334155" textAnchor="middle">{h}h</text>
-          </g>
-        ))}
-        {/* Línea baseline */}
-        <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="#1e293b" strokeWidth="0.5" />
-        {/* Indicador hora actual */}
-        {currentHour >= 7 && currentHour <= 21 && (
-          <line
-            x1={xOf(currentHour)} y1={PAD_TOP}
-            x2={xOf(currentHour)} y2={H - PAD_BOT}
-            stroke="#475569" strokeWidth="1" strokeDasharray="3,2"
-          />
-        )}
-        {/* Línea por facultad */}
-        {timelines.map((tl, idx) => {
-          const color = LINE_COLORS[idx % LINE_COLORS.length]
-          const pts = getPoints(tl)
-          return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,6px)', minHeight: 0 }}>
+      {/* Wrapper con position:relative garantiza que el SVG tenga altura real */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          preserveAspectRatio="none"
+        >
+          {/* Baseline */}
+          <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT}
+            stroke="#1e293b" strokeWidth="0.6" />
+
+          {/* Grid vertical + labels de hora */}
+          {axisHours
+            .filter((_, i) => i % labelStep === 0 || i === axisHours.length - 1)
+            .map(h => (
+              <g key={h}>
+                <line x1={xOf(h)} y1={PAD_TOP} x2={xOf(h)} y2={H - PAD_BOT}
+                  stroke="#1a2a3f" strokeWidth="0.5" />
+                <text x={xOf(h)} y={H - 2} fontSize="6.5" fill="#475569" textAnchor="middle">
+                  {h}h
+                </text>
+              </g>
+            ))}
+
+          {/* Indicador de hora actual */}
+          {currentHour >= startHour && currentHour <= endHour && (
+            <line
+              x1={xOf(currentHour)} y1={PAD_TOP}
+              x2={xOf(currentHour)} y2={H - PAD_BOT}
+              stroke="#64748b" strokeWidth="1" strokeDasharray="3,2"
+            />
+          )}
+
+          {/* Área rellena por facultad (sutil) */}
+          {timelines.map((tl, idx) => {
+            const color = LINE_COLORS[idx % LINE_COLORS.length]
+            const map: Record<number, number> = {}
+            for (const d of tl.data) map[d.hour] = d.count
+            const drawUntil = Math.min(currentHour, endHour)
+            const pts = Array.from({ length: drawUntil - startHour + 1 }, (_, i) => startHour + i)
+              .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
+            const base = H - PAD_BOT
+            const areaPoints = [
+              `${xOf(startHour).toFixed(1)},${base}`,
+              ...pts,
+              `${xOf(drawUntil).toFixed(1)},${base}`,
+            ].join(' ')
+            return (
+              <polygon
+                key={`area-${tl.faculty}`}
+                points={areaPoints}
+                fill={color}
+                fillOpacity="0.06"
+              />
+            )
+          })}
+
+          {/* Líneas por facultad */}
+          {timelines.map((tl, idx) => (
             <polyline
               key={tl.faculty}
-              points={pts}
+              points={getPoints(tl)}
               fill="none"
-              stroke={color}
-              strokeWidth="1.8"
+              stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+              strokeWidth="2"
               strokeLinejoin="round"
               strokeLinecap="round"
             />
-          )
-        })}
-        {/* Puntos en datos reales */}
-        {timelines.map((tl, idx) => {
-          const color = LINE_COLORS[idx % LINE_COLORS.length]
-          return tl.data
-            .filter(d => d.hour >= 7 && d.hour <= Math.min(currentHour, 21))
-            .map(d => (
+          ))}
+
+          {/* Puntos en cada hora con datos */}
+          {timelines.map((tl, idx) => {
+            const color = LINE_COLORS[idx % LINE_COLORS.length]
+            return tl.data.map(d => (
               <circle
                 key={`${tl.faculty}-${d.hour}`}
-                cx={xOf(d.hour)}
-                cy={yOf(d.count)}
-                r="2.4"
+                cx={xOf(d.hour).toFixed(1)}
+                cy={yOf(d.count).toFixed(1)}
+                r="3"
                 fill={color}
                 stroke="#0d1f35"
-                strokeWidth="0.8"
+                strokeWidth="1"
               />
             ))
-        })}
-      </svg>
+          })}
+        </svg>
+      </div>
+
       {/* Leyenda */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'clamp(4px,0.5vh,8px) clamp(8px,1vh,14px)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 12px', flexShrink: 0 }}>
         {timelines.map((tl, idx) => (
           <div key={tl.faculty} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <div style={{
-              width: 'clamp(12px,1.4vh,18px)',
-              height: '2px',
+              width: 14, height: 2,
               background: LINE_COLORS[idx % LINE_COLORS.length],
-              borderRadius: '1px',
-              flexShrink: 0,
+              borderRadius: 1, flexShrink: 0,
             }} />
-            <span style={{
-              fontSize: 'clamp(8px,0.85vh,11px)',
-              color: '#64748b',
-              whiteSpace: 'nowrap',
-            }}>{tl.label}</span>
+            <span style={{ fontSize: 'clamp(8px,0.85vh,10px)', color: '#64748b', whiteSpace: 'nowrap' }}>
+              {tl.label}
+            </span>
           </div>
         ))}
       </div>
