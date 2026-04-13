@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, distinct
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -10,10 +10,11 @@ from collections import defaultdict
 import calendar
 
 from ..database import get_db
-from ..models import AdminUser, Space, PresenceLog
+from ..models import AdminUser, Space, PresenceLog, Sede
 from ..config import settings
 from ..schemas import (
     LoginRequest, TokenResponse,
+    SedeCreate, SedeUpdate, SedeResponse,
     SpaceCreate, SpaceUpdate, SpaceResponse,
     AdminUserCreate, AdminUserPasswordUpdate, AdminUserResponse,
     AnnualStatsResponse, MonthlyStatsResponse,
@@ -119,15 +120,60 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Sedes CRUD
+# ---------------------------------------------------------------------------
+
+@router.get("/sedes", response_model=list[SedeResponse])
+def list_sedes(current_user: AdminUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Sede).order_by(Sede.id).all()
+
+
+@router.post("/sedes", response_model=SedeResponse, status_code=status.HTTP_201_CREATED)
+def create_sede(body: SedeCreate, current_user: AdminUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    if db.query(Sede).filter(Sede.code == body.code.upper()).first():
+        raise HTTPException(status_code=409, detail="Ya existe una sede con ese código")
+    sede = Sede(**{**body.model_dump(), "code": body.code.upper()})
+    db.add(sede)
+    db.commit()
+    db.refresh(sede)
+    return sede
+
+
+@router.put("/sedes/{sede_id}", response_model=SedeResponse)
+def update_sede(sede_id: int, body: SedeUpdate, current_user: AdminUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    sede = db.query(Sede).filter(Sede.id == sede_id).first()
+    if not sede:
+        raise HTTPException(status_code=404, detail="Sede no encontrada")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(sede, field, value.upper() if field == "code" and value else value)
+    db.commit()
+    db.refresh(sede)
+    return sede
+
+
+@router.delete("/sedes/{sede_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sede(sede_id: int, current_user: AdminUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    sede = db.query(Sede).filter(Sede.id == sede_id).first()
+    if not sede:
+        raise HTTPException(status_code=404, detail="Sede no encontrada")
+    sede.active = False
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Spaces CRUD
 # ---------------------------------------------------------------------------
 
 @router.get("/spaces", response_model=list[SpaceResponse])
 def list_spaces(
+    sede_id: int = None,
     current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return db.query(Space).order_by(Space.id).all()
+    q = db.query(Space).options(joinedload(Space.sede)).order_by(Space.sede_id, Space.id)
+    if sede_id:
+        q = q.filter(Space.sede_id == sede_id)
+    return q.all()
 
 
 @router.post("/spaces", response_model=SpaceResponse, status_code=status.HTTP_201_CREATED)

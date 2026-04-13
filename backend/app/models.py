@@ -1,12 +1,26 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+
+
+class Sede(Base):
+    __tablename__ = "sedes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)       # "Lima", "Tarapoto"
+    code = Column(String(20), unique=True, nullable=False)  # "BUL", "BUT", "BUJ", "CIA"
+    city = Column(String(100))
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Space(Base):
     __tablename__ = "spaces"
 
     id = Column(Integer, primary_key=True, index=True)
+    sede_id = Column(Integer, ForeignKey("sedes.id"), nullable=True)
+    sede = relationship("Sede", lazy="select")
     name = Column(String(100), nullable=False)
     capacity = Column(Integer, nullable=False)
     location = Column(String(100))

@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
 import { LoginPage } from './LoginPage'
+import { SedesPage } from './SedesPage'
 import { SpacesPage } from './SpacesPage'
 import { StatsPage } from './StatsPage'
 
-type Tab = 'spaces' | 'stats' | 'users'
+type Tab = 'sedes' | 'spaces' | 'stats'
 
 const STORAGE_KEY = 'inout_admin_token'
 
 export function AdminApp() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY))
   const [role, setRole] = useState<string>('')
-  const [tab, setTab] = useState<Tab>('spaces')
+  const [tab, setTab] = useState<Tab>('sedes')
 
   // Verificar token al montar
   useEffect(() => {
@@ -50,8 +51,9 @@ export function AdminApp() {
 
         <nav style={s.nav}>
           {([
-            { id: 'spaces', label: 'Espacios', icon: '▦' },
-            { id: 'stats', label: 'Estadísticas', icon: '▲' },
+            { id: 'sedes',  label: 'Sedes',        icon: '⊞' },
+            { id: 'spaces', label: 'Espacios',     icon: '▦' },
+            { id: 'stats',  label: 'Estadísticas', icon: '▲' },
           ] as { id: Tab; label: string; icon: string }[]).map(item => (
             <button
               key={item.id}
@@ -72,8 +74,9 @@ export function AdminApp() {
 
       {/* Contenido principal */}
       <main style={s.main}>
+        {tab === 'sedes'  && <SedesPage token={token} />}
         {tab === 'spaces' && <SpacesPage token={token} />}
-        {tab === 'stats' && <StatsPage token={token} />}
+        {tab === 'stats'  && <StatsPage token={token} />}
       </main>
     </div>
   )

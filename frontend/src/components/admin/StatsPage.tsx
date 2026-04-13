@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-interface Space { id: number; name: string; active: boolean }
+interface Sede { id: number; name: string; code: string }
+interface Space { id: number; sede_id: number | null; sede: Sede | null; name: string; active: boolean }
 interface MonthRow { month: number; month_name: string; unique_visitors: number; entries: number; exits: number; days_with_activity: number }
 interface Totals { unique_visitors: number; entries: number; exits: number; days_with_activity: number }
 interface BreakdownItem { category?: string; faculty?: string; label: string; count: number }

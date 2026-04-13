@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 
+interface Sede { id: number; name: string; code: string }
+
 interface Space {
   id: number
+  sede_id: number | null
+  sede: Sede | null
   name: string
   capacity: number
   location: string | null
   address: string | null
   description: string | null
-  open_time: string | null   // "HH:MM:SS"
+  open_time: string | null
   close_time: string | null
   active: boolean
   created_at: string | null
@@ -18,7 +22,7 @@ interface Props {
 }
 
 const EMPTY_FORM = {
-  name: '', capacity: '', location: '', address: '',
+  sede_id: '', name: '', capacity: '', location: '', address: '',
   description: '', open_time: '07:00', close_time: '21:00', active: true,
 }
 
@@ -29,6 +33,7 @@ function fmtTime(t: string | null): string {
 
 export function SpacesPage({ token }: Props) {
   const [spaces, setSpaces] = useState<Space[]>([])
+  const [sedes, setSedes] = useState<Sede[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Space | null>(null)
@@ -40,8 +45,12 @@ export function SpacesPage({ token }: Props) {
 
   const load = async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/spaces', { headers })
-    if (res.ok) setSpaces(await res.json())
+    const [resSpaces, resSedes] = await Promise.all([
+      fetch('/api/admin/spaces', { headers }),
+      fetch('/api/admin/sedes', { headers }),
+    ])
+    if (resSpaces.ok) setSpaces(await resSpaces.json())
+    if (resSedes.ok) setSedes(await resSedes.json())
     setLoading(false)
   }
 
@@ -57,6 +66,7 @@ export function SpacesPage({ token }: Props) {
   const openEdit = (sp: Space) => {
     setEditing(sp)
     setForm({
+      sede_id: sp.sede_id ? String(sp.sede_id) : '',
       name: sp.name,
       capacity: String(sp.capacity),
       location: sp.location || '',
@@ -75,6 +85,7 @@ export function SpacesPage({ token }: Props) {
     setSaving(true)
     setError('')
     const body = {
+      sede_id: form.sede_id ? Number(form.sede_id) : null,
       name: form.name.trim(),
       capacity: Number(form.capacity),
       location: form.location || null,
@@ -122,7 +133,7 @@ export function SpacesPage({ token }: Props) {
           <table style={s.table}>
             <thead>
               <tr>
-                {['ID', 'Nombre', 'Aforo', 'Horario', 'Ubicación', 'Estado', ''].map(h => (
+                {['ID', 'Sede', 'Nombre', 'Aforo', 'Horario', 'Estado', ''].map(h => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
@@ -132,6 +143,11 @@ export function SpacesPage({ token }: Props) {
                 <tr key={sp.id} style={s.tr}>
                   <td style={s.td}><span style={s.idBadge}>{sp.id}</span></td>
                   <td style={s.td}>
+                    {sp.sede
+                      ? <><code style={s.code}>{sp.sede.code}</code><span style={{ marginLeft: '0.4rem', color: '#64748b', fontSize: '0.8rem' }}>{sp.sede.name}</span></>
+                      : <span style={{ color: '#334155' }}>—</span>}
+                  </td>
+                  <td style={s.td}>
                     <span style={s.spaceName}>{sp.name}</span>
                     {sp.address && <span style={s.spaceAddr}>{sp.address}</span>}
                   </td>
@@ -139,7 +155,6 @@ export function SpacesPage({ token }: Props) {
                     {sp.capacity.toLocaleString()}
                   </td>
                   <td style={s.td}>{fmtTime(sp.open_time)} – {fmtTime(sp.close_time)}</td>
-                  <td style={s.td}>{sp.location || '—'}</td>
                   <td style={s.td}>
                     <span style={{ ...s.badge, background: sp.active ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)', color: sp.active ? '#22c55e' : '#64748b' }}>
                       {sp.active ? 'Activo' : 'Inactivo'}
@@ -183,6 +198,16 @@ export function SpacesPage({ token }: Props) {
             <h3 style={s.modalTitle}>{editing ? 'Editar espacio' : 'Nuevo espacio'}</h3>
 
             <div style={s.formGrid}>
+              <div style={{ ...s.formField, gridColumn: '1 / -1' }}>
+                <label style={s.label}>Sede</label>
+                <select style={s.input} value={form.sede_id}
+                  onChange={e => setForm(prev => ({ ...prev, sede_id: e.target.value }))}>
+                  <option value="">— Sin sede asignada —</option>
+                  {sedes.filter(sd => sd).map(sd => (
+                    <option key={sd.id} value={sd.id}>{sd.code} — {sd.name}</option>
+                  ))}
+                </select>
+              </div>
               <div style={s.formField}>
                 <label style={s.label}>Nombre *</label>
                 <input style={s.input} value={form.name} onChange={f('name')} placeholder="Ej: CRAI Lima" />

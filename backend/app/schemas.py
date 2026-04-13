@@ -98,10 +98,41 @@ class DashboardStats(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Admin — Sedes
+# ---------------------------------------------------------------------------
+
+class SedeCreate(BaseModel):
+    name: str
+    code: str
+    city: Optional[str] = None
+    active: bool = True
+
+
+class SedeUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    city: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class SedeResponse(BaseModel):
+    id: int
+    name: str
+    code: str
+    city: Optional[str] = None
+    active: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
 # Admin — Spaces
 # ---------------------------------------------------------------------------
 
 class SpaceCreate(BaseModel):
+    sede_id: Optional[int] = None
     name: str
     capacity: int
     location: Optional[str] = None
@@ -113,6 +144,7 @@ class SpaceCreate(BaseModel):
 
 
 class SpaceUpdate(BaseModel):
+    sede_id: Optional[int] = None
     name: Optional[str] = None
     capacity: Optional[int] = None
     location: Optional[str] = None
@@ -125,6 +157,8 @@ class SpaceUpdate(BaseModel):
 
 class SpaceResponse(BaseModel):
     id: int
+    sede_id: Optional[int] = None
+    sede: Optional[SedeResponse] = None
     name: str
     capacity: int
     location: Optional[str] = None
