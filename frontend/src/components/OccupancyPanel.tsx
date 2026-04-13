@@ -64,14 +64,14 @@ const CATEGORY_MAP: Record<string, { short: string; bg: string; color: string }>
 
 // ── Íconos estáticos — hoisted (no re-created per render) ───────────────────
 const ICON_ENTRY = (
-  <svg width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+  <svg width="26" height="26" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
     <path d="M10 17 L10 4 M5 9.5 L10 3.5 L15 9.5"
       stroke="#4ade80" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
   </svg>
 )
 
 const ICON_EXIT = (
-  <svg width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+  <svg width="26" height="26" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
     <path d="M10 3 L10 16 M5 10.5 L10 16.5 L15 10.5"
       stroke="#f87171" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
   </svg>
@@ -143,12 +143,12 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
         style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
       />
       <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="middle"
-        fontSize="28" fontWeight="400" fill={color}
+        fontSize="30" fontWeight="400" fill={color}
         style={{ fontFamily: FONT_DISPLAY, letterSpacing: '0.02em' }}>
         {value}
       </text>
-      <text x={cx} y={cy + 16} textAnchor="middle"
-        fontSize="9" fill={C.text3}
+      <text x={cx} y={cy + 17} textAnchor="middle"
+        fontSize="10.5" fill={C.text2}
         style={{ fontFamily: FONT_BODY }}>
         de {max}
       </text>
@@ -176,7 +176,7 @@ const StatCard = memo(function StatCard({
       background: C.card,
       border: `1px solid ${C.border}`,
       borderRadius: 14,
-      padding: 'clamp(12px,1.6vh,22px) clamp(14px,1.8vh,20px)',
+      padding: 'clamp(14px,1.9vh,26px) clamp(16px,2vh,24px)',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
@@ -185,7 +185,7 @@ const StatCard = memo(function StatCard({
       overflow: 'hidden',
     }}>
       <span style={{
-        fontSize: 'clamp(9px,1.05vh,12px)',
+        fontSize: 'clamp(11px,1.3vh,16px)',
         color: C.text3,
         textTransform: 'uppercase' as const,
         letterSpacing: '0.12em',
@@ -197,7 +197,7 @@ const StatCard = memo(function StatCard({
       <span
         ref={valueRef}
         style={{
-          fontSize: numSize ?? 'clamp(38px,5.2vh,64px)',
+          fontSize: numSize ?? 'clamp(42px,6.0vh,78px)',
           lineHeight: 1,
           fontFamily: FONT_DISPLAY,
           color,
@@ -209,7 +209,7 @@ const StatCard = memo(function StatCard({
       </span>
       {sub && (
         <span style={{
-          fontSize: 'clamp(10px,1.2vh,14px)',
+          fontSize: 'clamp(12px,1.5vh,18px)',
           color: subColor ?? C.text2,
           fontFamily: FONT_BODY,
           fontWeight: 500,
@@ -232,7 +232,7 @@ const PatronAvatar = memo(function PatronAvatar({
     .split(/\s+/).filter(Boolean).slice(0, 2)
     .map(w => w.charAt(0).toUpperCase()).join('')
 
-  const SIZE = 'clamp(34px,4.4vh,52px)'
+  const SIZE = 'clamp(38px,5.0vh,60px)'
 
   if (failed) {
     return (
@@ -273,7 +273,7 @@ const FacultyBarChart = memo(function FacultyBarChart({
   if (rows.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: C.text3, fontFamily: FONT_BODY }}>
+        <span style={{ fontSize: 'clamp(13px,1.6vh,20px)', color: C.text3, fontFamily: FONT_BODY }}>
           Sin entradas registradas hoy
         </span>
       </div>
@@ -291,9 +291,9 @@ const FacultyBarChart = memo(function FacultyBarChart({
         return (
           <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
             <span style={{
-              width: 'clamp(75px,9.5vw,115px)',
+              width: 'clamp(85px,10.5vw,130px)',
               textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(11px,1.35vh,16px)',
+              fontSize: 'clamp(13px,1.65vh,21px)',
               color: C.text2,
               fontFamily: FONT_BODY,
               fontWeight: 500,
@@ -305,7 +305,7 @@ const FacultyBarChart = memo(function FacultyBarChart({
             </span>
             <div style={{
               flex: 1,
-              height: 'clamp(20px,2.8vh,32px)',
+              height: 'clamp(24px,3.2vh,38px)',
               background: C.border,
               borderRadius: 6,
               overflow: 'hidden',
@@ -322,7 +322,7 @@ const FacultyBarChart = memo(function FacultyBarChart({
               }}>
                 {row.count > 2 && (
                   <span style={{
-                    fontSize: 'clamp(10px,1.2vh,14px)',
+                    fontSize: 'clamp(12px,1.5vh,18px)',
                     fontFamily: FONT_DISPLAY,
                     letterSpacing: '0.04em',
                     color: 'rgba(255,255,255,0.9)',
@@ -333,9 +333,9 @@ const FacultyBarChart = memo(function FacultyBarChart({
               </div>
             </div>
             <span style={{
-              width: 'clamp(24px,3vw,36px)',
+              width: 'clamp(28px,3.5vw,44px)',
               textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(14px,1.8vh,20px)',
+              fontSize: 'clamp(16px,2.1vh,26px)',
               fontFamily: FONT_DISPLAY,
               letterSpacing: '0.04em',
               color: C.text2,
@@ -449,7 +449,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
             </div>
-            <span style={{ textAlign: 'center', fontSize: 'clamp(11px,1.3vh,15px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
+            <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
               {pct.toFixed(0)}% del aforo máximo
             </span>
           </div>
@@ -466,7 +466,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               sub={delta?.text}
               subColor={delta?.color}
               wide
-              numSize="clamp(44px,5.8vh,72px)"
+              numSize="clamp(52px,7.0vh,92px)"
             />
 
             {/* Hombres */}
@@ -490,7 +490,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               label="Permanencia"
               value={avgStayStr}
               color={C.text1}
-              numSize="clamp(30px,4.0vh,50px)"
+              numSize="clamp(34px,4.8vh,64px)"
             />
 
             {/* Hora punta */}
@@ -498,7 +498,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               label="Hora punta"
               value={peakHourStr}
               color={C.amber}
-              numSize="clamp(30px,4.0vh,50px)"
+              numSize="clamp(34px,4.8vh,64px)"
             />
 
           </div>
@@ -529,14 +529,14 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                   </span>
                   {cat && (
                     <span style={{
-                      fontSize: 'clamp(9px,1.1vh,12px)',
+                      fontSize: 'clamp(10px,1.3vh,16px)',
                       fontFamily: FONT_BODY,
                       fontWeight: 700,
                       letterSpacing: '0.06em',
                       color: cat.color,
                       background: cat.bg,
                       borderRadius: 4,
-                      padding: '2px 6px',
+                      padding: '3px 8px',
                       flexShrink: 0,
                     }}>
                       {cat.short}
@@ -591,14 +591,14 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'baseline',
   },
   spaceName: {
-    fontSize: 'clamp(12px,1.6vh,19px)',
+    fontSize: 'clamp(14px,1.9vh,24px)',
     fontWeight: 700,
     color: C.text2,
     letterSpacing: '0.12em',
     fontFamily: FONT_BODY,
   },
   dateLabel: {
-    fontSize: 'clamp(11px,1.35vh,16px)',
+    fontSize: 'clamp(13px,1.6vh,20px)',
     color: C.text3,
     textTransform: 'capitalize',
     fontFamily: FONT_BODY,
@@ -640,14 +640,14 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 0,
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
+    gridTemplateRows: '1fr 1fr 1fr',
     gap: 'clamp(5px,0.7vh,9px)',
-    alignContent: 'start',
   },
 
   // Etiqueta de sección
   sectionLabel: {
     flex: '0 0 auto',
-    fontSize: 'clamp(9px,1.0vh,12px)',
+    fontSize: 'clamp(11px,1.3vh,16px)',
     color: C.text3,
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
@@ -686,7 +686,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   feedName: {
     flex: 1,
-    fontSize: 'clamp(13px,1.75vh,21px)',
+    fontSize: 'clamp(16px,2.1vh,27px)',
     color: C.text1,
     fontWeight: 500,
     fontFamily: FONT_BODY,
@@ -695,7 +695,7 @@ const s: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   feedTime: {
-    fontSize: 'clamp(12px,1.4vh,17px)',
+    fontSize: 'clamp(14px,1.75vh,22px)',
     color: C.text3,
     fontVariantNumeric: 'tabular-nums',
     fontFamily: FONT_BODY,
