@@ -34,7 +34,7 @@ class PresenceEntry(BaseModel):
     cardnumber: str
     patron_name: str
     patron_category: str
-    patron_gender: str = ""
+    patron_gender: Optional[str] = ""
     event_type: str
     timestamp: datetime
 
