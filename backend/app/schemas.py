@@ -22,6 +22,7 @@ class PatronInfo(BaseModel):
     category: str
     patron_id: Optional[int] = None
     faculty: str = ""
+    program: str = ""
 
 
 class ScanResponse(BaseModel):

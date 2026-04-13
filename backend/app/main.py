@@ -41,6 +41,8 @@ def _run_migrations():
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS address VARCHAR(200)",
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
+        # Columna sort2 de Koha (código programa/escuela)
+        "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS patron_program VARCHAR(20)",
         # Columnas de admin_users
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
