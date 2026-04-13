@@ -73,11 +73,12 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     current_occupancy = max(0, entries_today - exits_today)
     occupancy_percent = round((current_occupancy / capacity) * 100, 1) if capacity > 0 else 0.0
 
-    # Últimos 8 eventos
+    # Últimos 8 eventos — ordenar por id (inserción real) no por timestamp
+    # para evitar que test-data con timestamps futuros entierre escaneos reales
     recent = (
         db.query(PresenceLog)
         .filter(PresenceLog.space_id == sid)
-        .order_by(PresenceLog.timestamp.desc())
+        .order_by(PresenceLog.id.desc())
         .limit(8)
         .all()
     )
