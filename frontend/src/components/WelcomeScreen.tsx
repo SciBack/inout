@@ -69,7 +69,12 @@ export function WelcomeScreen({ result, isVisible }: Props) {
   const photoUrl = patron.patron_id ? `/api/patron-photo/${patron.patron_id}` : null
 
   useEffect(() => {
-    speak(message)
+    const hour = new Date().getHours()
+    const timeGreet = hour < 12 ? 'buenos días' : hour < 19 ? 'buenas tardes' : 'buenas noches'
+    const audioText = isEntry
+      ? (patron.gender === 'F' ? `Bienvenida, ${timeGreet}` : `Bienvenido, ${timeGreet}`)
+      : timeGreet.charAt(0).toUpperCase() + timeGreet.slice(1)
+    speak(audioText)
     setPhotoError(false)
   }, [message])
 
