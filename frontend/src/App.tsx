@@ -10,8 +10,10 @@ interface ScanResult {
   patron: {
     name: string
     firstname: string
+    first_name: string
     gender: string
     category: string
+    patron_id: number | null
   }
   message: string
   timestamp: string
