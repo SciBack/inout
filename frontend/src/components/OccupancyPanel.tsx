@@ -15,7 +15,7 @@ interface FacultyEventData {
   faculty: string
   label: string
   event_type: string
-  ts: string          // ISO timestamp — convertir a hora local con new Date()
+  ts: string
 }
 
 interface DashboardData {
@@ -46,18 +46,13 @@ interface DashboardData {
   entries_yesterday: number
 }
 
-// Horas de operación de la biblioteca
-const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
 const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
 
-// Minutos locales desde medianoche usando timezone del navegador (Lima)
 const tsToMinute = (ts: string): number => {
   const d = new Date(ts)
   return d.getHours() * 60 + d.getMinutes()
 }
 
-// Construye la curva de ocupación acumulada para una facultad
-// Resultado: lista de [minute, count] que forma una función escalón
 function buildOccupancyCurve(
   events: FacultyEventData[],
   faculty: string,
@@ -71,19 +66,16 @@ function buildOccupancyCurve(
 
   if (evts.length === 0) return []
 
-  const pts: [number, number][] = [[startMinute, 0]] // empieza en 0
+  const pts: [number, number][] = [[startMinute, 0]]
   let count = 0
 
   for (const ev of evts) {
     const m = ev.minute
-    // Línea horizontal hasta este momento
     if (pts[pts.length - 1][0] < m) pts.push([m, count])
-    // Salto vertical (entrada sube, salida baja)
     count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))
     pts.push([m, count])
   }
 
-  // Línea horizontal hasta ahora
   pts.push([nowMinute, count])
   return pts
 }
@@ -94,12 +86,7 @@ function minuteLabel(m: number): string {
   return min === 0 ? `${h}h` : `${h}:${String(min).padStart(2, '0')}`
 }
 
-// Convierte una curva de puntos [x,y] en un path SVG con esquinas redondeadas
-// Crea el efecto de "cerros" suaves en lugar de escalones rectangulares
-function smoothStepPath(
-  pts: [number, number][],
-  r: number = 5   // radio de curvatura en unidades SVG
-): string {
+function smoothStepPath(pts: [number, number][], r: number = 5): string {
   if (pts.length < 2) return ''
   let d = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
 
@@ -107,33 +94,66 @@ function smoothStepPath(
     const [px, py] = pts[i - 1]
     const [cx, cy] = pts[i]
     const [nx, ny] = pts[i + 1]
-
     const dx1 = cx - px, dy1 = cy - py
     const dx2 = nx - cx, dy2 = ny - cy
     const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
     const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
-
-    if (len1 < 0.1 || len2 < 0.1) {
-      d += ` L ${cx.toFixed(1)},${cy.toFixed(1)}`
-      continue
-    }
-
+    if (len1 < 0.1 || len2 < 0.1) { d += ` L ${cx.toFixed(1)},${cy.toFixed(1)}`; continue }
     const rr = Math.min(r, len1 / 2, len2 / 2)
-    const t1x = cx - (dx1 / len1) * rr
-    const t1y = cy - (dy1 / len1) * rr
-    const t2x = cx + (dx2 / len2) * rr
-    const t2y = cy + (dy2 / len2) * rr
-
+    const t1x = cx - (dx1 / len1) * rr, t1y = cy - (dy1 / len1) * rr
+    const t2x = cx + (dx2 / len2) * rr, t2y = cy + (dy2 / len2) * rr
     d += ` L ${t1x.toFixed(1)},${t1y.toFixed(1)}`
     d += ` Q ${cx.toFixed(1)},${cy.toFixed(1)} ${t2x.toFixed(1)},${t2y.toFixed(1)}`
   }
-
-  const last = pts[pts.length - 1]
-  d += ` L ${last[0].toFixed(1)},${last[1].toFixed(1)}`
+  d += ` L ${pts[pts.length - 1][0].toFixed(1)},${pts[pts.length - 1][1].toFixed(1)}`
   return d
 }
 
-// SVG line chart — ocupación acumulada por facultad a lo largo del día
+// Gauge circular tipo velocímetro
+// Arco de 252° (70% del círculo), hueco centrado abajo
+function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.min(1, max > 0 ? value / max : 0)
+  const R = 38
+  const cx = 50, cy = 50
+  const circumference = 2 * Math.PI * R
+  const arcFraction = 0.72  // 72% = 259°
+  const arcLength = circumference * arcFraction
+  const filledLength = arcLength * pct
+  // rotate(144) pone el inicio del arco en ~234° desde arriba (esquina inferior-izquierda)
+  // dejando el hueco de 28% centrado en la parte baja
+  const rot = `rotate(144, ${cx}, ${cy})`
+
+  return (
+    <svg viewBox="0 0 100 92" style={{ width: '100%', maxWidth: '160px', display: 'block' }}>
+      {/* Track de fondo */}
+      <circle cx={cx} cy={cy} r={R}
+        fill="none" stroke="#132235" strokeWidth="9" strokeLinecap="round"
+        strokeDasharray={`${arcLength} ${circumference - arcLength}`}
+        transform={rot}
+      />
+      {/* Progreso */}
+      <circle cx={cx} cy={cy} r={R}
+        fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
+        strokeDasharray={`${filledLength.toFixed(2)} ${(circumference - filledLength).toFixed(2)}`}
+        transform={rot}
+        style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
+      />
+      {/* Número central */}
+      <text x={cx} y={cy - 3} textAnchor="middle" dominantBaseline="middle"
+        fontSize="26" fontWeight="700" fill={color}
+        style={{ fontFamily: 'system-ui, sans-serif', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </text>
+      <text x={cx} y={cy + 16} textAnchor="middle"
+        fontSize="9.5" fill="#475569"
+        style={{ fontFamily: 'system-ui, sans-serif' }}>
+        de {max}
+      </text>
+    </svg>
+  )
+}
+
+// Gráfico de líneas por facultad — compacto, para la zona inferior
 function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   const now = new Date()
   const nowMinute = now.getHours() * 60 + now.getMinutes()
@@ -141,127 +161,85 @@ function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   if (events.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>
+        <span style={{ fontSize: 'clamp(10px,1.1vh,12px)', color: '#334155' }}>
           Sin entradas registradas hoy
         </span>
       </div>
     )
   }
 
-  // Facultades distintas en orden de aparición
   const faculties = [...new Map(events.map(e => [e.faculty, e.label])).entries()]
     .map(([faculty, label]) => ({ faculty, label }))
 
-  // Rango X: desde el primer evento hasta ahora (minutos en hora local Lima)
   const eventMinutes = events.map(e => tsToMinute(e.ts))
   const startMinute = Math.min(...eventMinutes)
-  const endMinute = Math.max(nowMinute, startMinute + 10) // al menos 10 min de rango
+  const endMinute = Math.max(nowMinute, startMinute + 10)
 
-  const W = 300
-  const H = 66
-  const PAD_TOP = 5
-  const PAD_BOT = 15
+  const W = 300, H = 52
+  const PAD_TOP = 4, PAD_BOT = 13
   const chartH = H - PAD_TOP - PAD_BOT
   const timeRange = endMinute - startMinute
 
   const xOf = (m: number) => ((m - startMinute) / timeRange) * W
-  const xOfClamped = (m: number) => Math.max(0, Math.min(W, xOf(m)))
+  const xClamped = (m: number) => Math.max(0, Math.min(W, xOf(m)))
 
-  // Max ocupación simultánea para escala Y
   const allCurves = faculties.map(f =>
     buildOccupancyCurve(events, f.faculty, startMinute, nowMinute)
   )
-  const maxOccupancy = Math.max(...allCurves.flatMap(c => c.map(([, v]) => v)), 1)
-  const yOf = (v: number) => PAD_TOP + chartH * (1 - v / maxOccupancy)
+  const maxOcc = Math.max(...allCurves.flatMap(c => c.map(([, v]) => v)), 1)
+  const yOf = (v: number) => PAD_TOP + chartH * (1 - v / maxOcc)
 
-  // Labels del eje X: máx 7, en minutos redondos (cada 30min o 1h)
-  const labelIntervalMin = timeRange <= 90 ? 30 : timeRange <= 240 ? 60 : 120
-  const firstLabel = Math.ceil(startMinute / labelIntervalMin) * labelIntervalMin
+  const interval = timeRange <= 90 ? 30 : timeRange <= 240 ? 60 : 120
+  const firstLabel = Math.ceil(startMinute / interval) * interval
   const axisLabels: number[] = []
-  for (let m = firstLabel; m <= endMinute; m += labelIntervalMin) axisLabels.push(m)
+  for (let m = firstLabel; m <= endMinute; m += interval) axisLabels.push(m)
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,6px)', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px', minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
+        <svg viewBox={`0 0 ${W} ${H}`}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-          preserveAspectRatio="none"
-        >
-          {/* Baseline */}
-          <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT}
-            stroke="#1e293b" strokeWidth="0.6" />
-
-          {/* Grid vertical + labels */}
+          preserveAspectRatio="none">
+          <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="#1a2a3f" strokeWidth="0.6" />
           {axisLabels.map(m => (
             <g key={m}>
-              <line x1={xOfClamped(m)} y1={PAD_TOP} x2={xOfClamped(m)} y2={H - PAD_BOT}
+              <line x1={xClamped(m)} y1={PAD_TOP} x2={xClamped(m)} y2={H - PAD_BOT}
                 stroke="#1a2a3f" strokeWidth="0.5" />
-              <text x={xOfClamped(m)} y={H - 2} fontSize="6.5" fill="#475569" textAnchor="middle">
+              <text x={xClamped(m)} y={H - 2} fontSize="6" fill="#334155" textAnchor="middle">
                 {minuteLabel(m)}
               </text>
             </g>
           ))}
-
-          {/* Indicador "ahora" */}
           <line x1={W} y1={PAD_TOP} x2={W} y2={H - PAD_BOT}
             stroke="#64748b" strokeWidth="1" strokeDasharray="3,2" />
-
-          {/* Área rellena con curvas suaves */}
           {faculties.map(({ faculty }, idx) => {
             const curve = allCurves[idx]
             if (curve.length < 2) return null
             const color = LINE_COLORS[idx % LINE_COLORS.length]
             const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
             const base = H - PAD_BOT
-            const linePath = smoothStepPath(svgPts, 6)
+            const linePath = smoothStepPath(svgPts, 5)
             const areaD = `${linePath} L ${svgPts[svgPts.length-1][0].toFixed(1)},${base} L ${svgPts[0][0].toFixed(1)},${base} Z`
-            return <path key={`a-${faculty}`} d={areaD} fill={color} fillOpacity="0.08" stroke="none" />
+            return <path key={`a-${faculty}`} d={areaD} fill={color} fillOpacity="0.07" stroke="none" />
           })}
-
-          {/* Líneas suaves de ocupación */}
           {faculties.map(({ faculty }, idx) => {
             const curve = allCurves[idx]
             if (curve.length < 2) return null
             const svgPts = curve.map(([m, v]) => [xOf(m), yOf(v)] as [number, number])
             return (
-              <path key={faculty}
-                d={smoothStepPath(svgPts, 6)}
-                fill="none"
-                stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
+              <path key={faculty} d={smoothStepPath(svgPts, 5)}
+                fill="none" stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                strokeWidth="1.8" strokeLinecap="round" />
             )
-          })}
-
-          {/* Punto en cada escalón (solo en eventos reales) */}
-          {faculties.map(({ faculty }, idx) => {
-            const color = LINE_COLORS[idx % LINE_COLORS.length]
-            let count = 0
-            return events
-              .filter(e => e.faculty === faculty)
-              .map(e => ({ ...e, minute: tsToMinute(e.ts) }))
-              .sort((a, b) => a.minute - b.minute)
-              .map((ev, i) => {
-                count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))
-                return (
-                  <circle key={`${faculty}-${i}`}
-                    cx={xOf(ev.minute).toFixed(1)} cy={yOf(count).toFixed(1)}
-                    r="2.8" fill={color} stroke="#0d1f35" strokeWidth="0.8"
-                  />
-                )
-              })
           })}
         </svg>
       </div>
-
-      {/* Leyenda */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 12px', flexShrink: 0 }}>
+      {/* Leyenda compacta */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', flexShrink: 0 }}>
         {faculties.map(({ faculty, label }, idx) => (
-          <div key={faculty} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: 14, height: 2, background: LINE_COLORS[idx % LINE_COLORS.length], borderRadius: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 'clamp(8px,0.85vh,10px)', color: '#64748b', whiteSpace: 'nowrap' }}>
+          <div key={faculty} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ width: 12, height: 2, background: LINE_COLORS[idx % LINE_COLORS.length], borderRadius: 1, flexShrink: 0 }} />
+            <span style={{ fontSize: 'clamp(7px,0.75vh,9px)', color: '#475569', whiteSpace: 'nowrap' }}>
               {label}
             </span>
           </div>
@@ -307,13 +285,8 @@ export function OccupancyPanel() {
   const fetchDashboard = async () => {
     try {
       const res = await fetch('/api/dashboard')
-      if (res.ok) {
-        setData(await res.json())
-        setError(false)
-      }
-    } catch {
-      setError(true)
-    }
+      if (res.ok) { setData(await res.json()); setError(false) }
+    } catch { setError(true) }
   }
 
   useEffect(() => {
@@ -358,97 +331,98 @@ export function OccupancyPanel() {
   const isNewEvent = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
 
-  const currentHour = new Date().getHours()
-
   return (
     <div style={s.container}>
 
-      {/* SECCIÓN 1 — Header */}
+      {/* ── HEADER ── */}
       <div style={s.header}>
         <span style={s.spaceName}>{data.space_name.toUpperCase()}</span>
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* SECCIÓN 2 — Gráfico de líneas por facultad (ocupa el lugar del aforo) */}
-      <div style={s.histogramSection}>
-        <span style={s.sectionTitle}>Actividad por facultad — hoy</span>
+      {/* ── SECCIÓN MEDIA: 2 columnas ── */}
+      <div style={s.middle}>
+
+        {/* COLUMNA IZQUIERDA — Gauge + métricas secundarias */}
+        <div style={s.leftCol}>
+
+          {/* Card gauge aforo */}
+          <div style={s.gaugeCard}>
+            <span style={s.cardLabel}>En edificio</span>
+            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '0.25rem' }}>
+              <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+            </div>
+            {/* Barra de progreso */}
+            <div style={{ width: '80%', margin: '0 auto', height: 5, background: '#132235', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 999, background: barColor, width: `${pct}%`, transition: 'width 0.7s ease, background 0.4s ease' }} />
+            </div>
+            <span style={{ textAlign: 'center', fontSize: 'clamp(9px,0.95vh,11px)', color: barColor, fontWeight: 600, letterSpacing: '0.04em' }}>
+              {pct.toFixed(0)}% del aforo máximo
+            </span>
+          </div>
+
+          {/* Métricas secundarias: visitantes / hombres / mujeres */}
+          <div style={s.subMetrics}>
+            <div style={s.subItem}>
+              <span style={s.subLabel}>Visitantes hoy</span>
+              <span ref={refVisitors} style={{ ...s.subNum, color: '#06b6d4' }}>
+                {data.unique_visitors_today}
+              </span>
+            </div>
+            <div style={s.subDivider} />
+            <div style={s.subItem}>
+              <span style={s.subLabel}>Hombres</span>
+              <span ref={refMale} style={{ ...s.subNum, color: '#3b82f6' }}>
+                {data.current_male}
+              </span>
+            </div>
+            <div style={s.subDivider} />
+            <div style={s.subItem}>
+              <span style={s.subLabel}>Mujeres</span>
+              <span ref={refFemale} style={{ ...s.subNum, color: '#ec4899' }}>
+                {data.current_female}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* COLUMNA DERECHA — Feed de actividad */}
+        <div style={s.rightCol}>
+          <span style={s.cardLabel}>Actividad reciente</span>
+          <div style={s.feedList}>
+            {data.recent_events.slice(0, 8).map((ev, idx) => {
+              const isEntry = ev.event_type === 'entry'
+              const isFirst = idx === 0
+              return (
+                <div
+                  key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
+                  style={{
+                    ...s.feedItem,
+                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                    animation: isFirst && isNewEvent
+                      ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
+                  }}
+                >
+                  <span style={isEntry ? s.feedDotEntry : s.feedDotExit} />
+                  <span style={s.feedName}>
+                    {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
+                  </span>
+                  <span style={s.feedTime}>
+                    {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECCIÓN INFERIOR — Gráfico facultades ── */}
+      <div style={s.chartSection}>
+        <span style={s.cardLabel}>Actividad por facultad — hoy</span>
         <FacultyLineChart events={data.faculty_events} />
-      </div>
-
-      {/* SECCIÓN 3 — Métricas: AFORO ACTUAL integrado en su card */}
-      <div style={s.metricsGrid}>
-        <div style={s.metricCard}>
-          <span style={s.metricLabel}>Visitantes hoy</span>
-          <span ref={refVisitors} style={{ ...s.metricNum, color: '#06b6d4' }}>
-            {data.unique_visitors_today}
-          </span>
-        </div>
-
-        {/* AFORO ACTUAL — card enriquecido con barra */}
-        <div style={s.metricCard}>
-          <span style={s.metricLabel}>Aforo actual</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
-            <span ref={refOccupancy} style={{ ...s.metricNum, color: barColor }}>
-              {data.current_occupancy}
-            </span>
-            <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>
-              / {data.capacity}
-            </span>
-          </div>
-          <div style={{ width: '100%', height: 4, background: '#1e293b', borderRadius: 999, overflow: 'hidden', marginTop: 2 }}>
-            <div style={{ height: '100%', borderRadius: 999, background: barColor, width: `${pct}%`, transition: 'width 0.7s ease' }} />
-          </div>
-          <span style={{ fontSize: 'clamp(8px,0.9vh,11px)', color: barColor, fontWeight: 600 }}>
-            {pct.toFixed(0)}% del aforo
-          </span>
-        </div>
-
-        <div style={s.metricCard}>
-          <span style={s.metricLabel}>Hombres</span>
-          <span ref={refMale} style={{ ...s.metricNum, color: '#3b82f6' }}>
-            {data.current_male}
-          </span>
-        </div>
-        <div style={s.metricCard}>
-          <span style={s.metricLabel}>Mujeres</span>
-          <span ref={refFemale} style={{ ...s.metricNum, color: '#ec4899' }}>
-            {data.current_female}
-          </span>
-        </div>
-      </div>
-
-      {/* SECCIÓN 5 — Feed actividad */}
-      <div style={s.feedSection}>
-        <span style={s.sectionTitle}>Actividad reciente</span>
-        <div style={s.feedList}>
-          {data.recent_events.slice(0, 7).map((ev, idx) => {
-            const isEntry = ev.event_type === 'entry'
-            const isFirst = idx === 0
-            return (
-              <div
-                key={isFirst && isNewEvent ? ev.id + '-anim' : ev.id}
-                style={{
-                  ...s.feedItem,
-                  background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                  animation: isFirst && isNewEvent
-                    ? 'feedSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)' : undefined,
-                }}
-              >
-                <span style={isEntry ? s.feedIconEntry : s.feedIconExit}>
-                  {isEntry ? '↑' : '↓'}
-                </span>
-                <span style={s.feedName}>
-                  {firstNameCapitalized(ev.patron_name || ev.cardnumber)}
-                </span>
-                <span style={s.feedTime}>
-                  {new Date(ev.timestamp).toLocaleTimeString('es-PE', {
-                    hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
-              </div>
-            )
-          })}
-        </div>
       </div>
 
     </div>
@@ -460,19 +434,15 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    padding: 'clamp(10px,1.2vh,18px) clamp(12px,1.5vh,22px)',
-    gap: 'clamp(6px,0.8vh,12px)',
+    padding: 'clamp(10px,1.2vh,16px) clamp(12px,1.5vh,20px)',
+    gap: 'clamp(6px,0.8vh,10px)',
     background: '#0a1628',
     overflow: 'hidden',
     boxSizing: 'border-box',
   },
   stateMsg: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#ef4444',
-    fontSize: '0.875rem',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    height: '100%', color: '#ef4444', fontSize: '0.875rem',
   },
 
   // Header
@@ -483,89 +453,102 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'baseline',
   },
   spaceName: {
-    fontSize: 'clamp(12px,1.4vh,16px)',
+    fontSize: 'clamp(11px,1.3vh,15px)',
     fontWeight: 600,
     color: '#94a3b8',
     letterSpacing: '0.08em',
-    textTransform: 'uppercase',
   },
   dateLabel: {
-    fontSize: 'clamp(11px,1.2vh,14px)',
-    color: '#475569',
+    fontSize: 'clamp(10px,1.1vh,13px)',
+    color: '#334155',
     textTransform: 'capitalize',
   },
 
-  // Métricas
-  metricsGrid: {
-    flex: '1.1 0 0',
+  // Sección media: 2 columnas
+  middle: {
+    flex: '2.4 0 0',
     minHeight: 0,
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 'clamp(6px,0.7vh,10px)',
+    display: 'flex',
+    gap: 'clamp(6px,0.8vh,10px)',
   },
-  metricCard: {
-    background: '#0d1f35',
-    border: '1px solid #1e293b',
-    borderRadius: '10px',
-    padding: 'clamp(6px,0.8vh,12px) clamp(8px,1vh,14px)',
+
+  // Columna izquierda — gauge + sub métricas
+  leftCol: {
+    flex: '0 0 44%',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
+    gap: 'clamp(5px,0.7vh,8px)',
+    minHeight: 0,
+  },
+  gaugeCard: {
+    flex: '1 1 auto',
+    background: '#0d1f35',
+    border: '1px solid #1a2a3f',
+    borderRadius: '12px',
+    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,14px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 'clamp(4px,0.5vh,6px)',
     overflow: 'hidden',
   },
-  metricLabel: {
-    fontSize: 'clamp(9px,0.9vh,11px)',
-    color: '#64748b',
+  subMetrics: {
+    flex: '0 0 auto',
+    background: '#0d1f35',
+    border: '1px solid #1a2a3f',
+    borderRadius: '12px',
+    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,14px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    gap: '0.5rem',
+  },
+  subItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    flex: 1,
+  },
+  subLabel: {
+    fontSize: 'clamp(8px,0.85vh,10px)',
+    color: '#475569',
     textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    letterSpacing: '0.05em',
     whiteSpace: 'nowrap',
   },
-  metricNum: {
-    fontSize: 'clamp(20px,3vh,36px)',
+  subNum: {
+    fontSize: 'clamp(22px,2.8vh,34px)',
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1,
+    lineHeight: 1.1,
+  },
+  subDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    background: '#1e293b',
+    flexShrink: 0,
   },
 
-  // Gráfico facultades (ocupa posición hero, arriba)
-  histogramSection: {
-    flex: '3.0 0 0',
-    minHeight: 0,
+  // Columna derecha — feed
+  rightCol: {
+    flex: '1 1 0',
     background: '#0d1f35',
-    border: '1px solid #1e293b',
-    borderRadius: '10px',
-    padding: 'clamp(8px,1vh,14px) clamp(12px,1.4vh,18px)',
+    border: '1px solid #1a2a3f',
+    borderRadius: '12px',
+    padding: 'clamp(8px,1vh,12px) clamp(10px,1.2vh,14px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(6px,0.7vh,10px)',
+    gap: 'clamp(4px,0.6vh,8px)',
     overflow: 'hidden',
-  },
-  sectionTitle: {
-    flex: '0 0 auto',
-    fontSize: 'clamp(9px,0.9vh,11px)',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    minHeight: 0,
   },
 
-  // Feed
-  feedSection: {
-    flex: '1.5 0 0',
-    minHeight: 0,
-    background: '#0d1f35',
-    border: '1px solid #1e293b',
-    borderRadius: '10px',
-    padding: 'clamp(8px,1vh,14px) clamp(12px,1.4vh,18px)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'clamp(4px,0.5vh,8px)',
-    overflow: 'hidden',
-  },
   feedList: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: 'clamp(3px,0.4vh,6px)',
+    gap: '1px',
     overflow: 'hidden',
   },
   feedItem: {
@@ -573,44 +556,59 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 'clamp(6px,0.7vh,10px)',
     borderRadius: '6px',
-    padding: 'clamp(3px,0.4vh,5px) clamp(6px,0.7vh,8px)',
+    padding: 'clamp(4px,0.5vh,6px) clamp(6px,0.7vh,8px)',
+    flex: '1 1 0',
+    minHeight: 0,
   },
-  feedIconEntry: {
-    width: 'clamp(18px,2vh,24px)',
-    height: 'clamp(18px,2vh,24px)',
+  feedDotEntry: {
+    width: 7, height: 7,
     borderRadius: '50%',
     flexShrink: 0,
-    fontSize: 'clamp(9px,1vh,12px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(34,197,94,0.12)',
-    color: '#22c55e',
+    background: '#22c55e',
+    boxShadow: '0 0 5px #22c55e88',
   } as React.CSSProperties,
-  feedIconExit: {
-    width: 'clamp(18px,2vh,24px)',
-    height: 'clamp(18px,2vh,24px)',
+  feedDotExit: {
+    width: 7, height: 7,
     borderRadius: '50%',
     flexShrink: 0,
-    fontSize: 'clamp(9px,1vh,12px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(239,68,68,0.10)',
-    color: '#ef4444',
+    background: '#ef4444',
+    boxShadow: '0 0 5px #ef444488',
   } as React.CSSProperties,
   feedName: {
     flex: 1,
-    fontSize: 'clamp(11px,1.2vh,14px)',
-    color: '#f1f5f9',
+    fontSize: 'clamp(11px,1.3vh,15px)',
+    color: '#e2e8f0',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   feedTime: {
-    fontSize: 'clamp(10px,1vh,12px)',
-    color: '#475569',
+    fontSize: 'clamp(9px,1vh,11px)',
+    color: '#334155',
     fontVariantNumeric: 'tabular-nums',
     flexShrink: 0,
+  },
+
+  // Etiqueta de sección
+  cardLabel: {
+    flex: '0 0 auto',
+    fontSize: 'clamp(8px,0.85vh,10px)',
+    color: '#334155',
+    textTransform: 'uppercase',
+    letterSpacing: '0.07em',
+  },
+
+  // Sección gráfico facultades
+  chartSection: {
+    flex: '1.2 0 0',
+    minHeight: 0,
+    background: '#0d1f35',
+    border: '1px solid #1a2a3f',
+    borderRadius: '12px',
+    padding: 'clamp(6px,0.8vh,10px) clamp(10px,1.2vh,14px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'clamp(4px,0.5vh,6px)',
+    overflow: 'hidden',
   },
 }
