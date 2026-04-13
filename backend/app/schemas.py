@@ -65,6 +65,13 @@ class FacultyTimeline(BaseModel):
     data: list[HourlyCount]
 
 
+class FacultyEvent(BaseModel):
+    faculty: str
+    label: str
+    event_type: str   # 'entry' | 'exit'
+    minute: int       # minutos desde medianoche
+
+
 class DashboardStats(BaseModel):
     space_name: str
     capacity: int
@@ -83,3 +90,4 @@ class DashboardStats(BaseModel):
     faculty_breakdown: list[FacultyCount] = []
     hourly_entries: list[HourlyCount] = []
     faculty_timelines: list[FacultyTimeline] = []
+    faculty_events: list[FacultyEvent] = []

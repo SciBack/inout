@@ -11,6 +11,13 @@ interface FacultyTimeline {
   data: HourlyEntry[]
 }
 
+interface FacultyEventData {
+  faculty: string
+  label: string
+  event_type: string
+  minute: number
+}
+
 interface DashboardData {
   space_name: string
   capacity: number
@@ -26,6 +33,7 @@ interface DashboardData {
   faculty_breakdown: { faculty: string; label: string; count: number }[]
   hourly_entries: HourlyEntry[]
   faculty_timelines: FacultyTimeline[]
+  faculty_events: FacultyEventData[]
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -42,14 +50,49 @@ interface DashboardData {
 const CHART_HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7 → 21
 const LINE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444']
 
-// SVG line chart — una línea por facultad, eje X dinámico basado en datos reales
-function FacultyLineChart({ timelines }: { timelines: FacultyTimeline[] }) {
+// Construye la curva de ocupación acumulada para una facultad
+// Resultado: lista de [minute, count] que forma una función escalón
+function buildOccupancyCurve(
+  events: FacultyEventData[],
+  faculty: string,
+  startMinute: number,
+  nowMinute: number
+): [number, number][] {
+  const evts = events
+    .filter(e => e.faculty === faculty)
+    .sort((a, b) => a.minute - b.minute)
+
+  if (evts.length === 0) return []
+
+  const pts: [number, number][] = [[startMinute, 0]] // empieza en 0
+  let count = 0
+
+  for (const ev of evts) {
+    const m = ev.minute
+    // Línea horizontal hasta este momento
+    if (pts[pts.length - 1][0] < m) pts.push([m, count])
+    // Salto vertical (entrada sube, salida baja)
+    count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))
+    pts.push([m, count])
+  }
+
+  // Línea horizontal hasta ahora
+  pts.push([nowMinute, count])
+  return pts
+}
+
+function minuteLabel(m: number): string {
+  const h = Math.floor(m / 60)
+  const min = m % 60
+  return min === 0 ? `${h}h` : `${h}:${String(min).padStart(2, '0')}`
+}
+
+// SVG line chart — ocupación acumulada por facultad a lo largo del día
+function FacultyLineChart({ events }: { events: FacultyEventData[] }) {
   const now = new Date()
-  const currentHour = now.getHours()
+  const nowMinute = now.getHours() * 60 + now.getMinutes()
 
-  const allDataHours = timelines.flatMap(t => t.data.map(d => d.hour))
-
-  if (allDataHours.length === 0) {
+  if (events.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 'clamp(10px,1.1vh,13px)', color: '#475569' }}>
@@ -59,41 +102,39 @@ function FacultyLineChart({ timelines }: { timelines: FacultyTimeline[] }) {
     )
   }
 
-  // Eje X: desde la primera entrada hasta la hora actual
-  const startHour = Math.min(...allDataHours)
-  // Fin siempre al menos 1h después del inicio, y no antes de la hora actual
-  const endHour = Math.max(currentHour, ...allDataHours, startHour + 1)
-  const hourRange = endHour - startHour  // siempre >= 1
+  // Facultades distintas en orden de aparición
+  const faculties = [...new Map(events.map(e => [e.faculty, e.label])).entries()]
+    .map(([faculty, label]) => ({ faculty, label }))
+
+  // Rango X: desde el primer evento hasta ahora
+  const startMinute = Math.min(...events.map(e => e.minute))
+  const endMinute = Math.max(nowMinute, startMinute + 30) // al menos 30 min de rango
 
   const W = 300
   const H = 66
   const PAD_TOP = 5
   const PAD_BOT = 15
   const chartH = H - PAD_TOP - PAD_BOT
+  const timeRange = endMinute - startMinute
 
-  const xOf = (h: number) => ((h - startHour) / hourRange) * W
-  const allCounts = timelines.flatMap(t => t.data.map(d => d.count))
-  const maxCount = Math.max(...allCounts, 1)
-  const yOf = (count: number) => PAD_TOP + chartH * (1 - count / maxCount)
+  const xOf = (m: number) => ((m - startMinute) / timeRange) * W
+  const xOfClamped = (m: number) => Math.max(0, Math.min(W, xOf(m)))
 
-  // Horas del eje: todas desde startHour hasta endHour
-  const axisHours = Array.from({ length: hourRange + 1 }, (_, i) => startHour + i)
-  // Cuántos labels mostrar (máx 8 para no saturar)
-  const labelStep = Math.max(1, Math.ceil(axisHours.length / 7))
+  // Max ocupación simultánea para escala Y
+  const allCurves = faculties.map(f =>
+    buildOccupancyCurve(events, f.faculty, startMinute, nowMinute)
+  )
+  const maxOccupancy = Math.max(...allCurves.flatMap(c => c.map(([, v]) => v)), 1)
+  const yOf = (v: number) => PAD_TOP + chartH * (1 - v / maxOccupancy)
 
-  const getPoints = (tl: FacultyTimeline) => {
-    const map: Record<number, number> = {}
-    for (const d of tl.data) map[d.hour] = d.count
-    // Dibujar desde startHour hasta currentHour (horas futuras no tienen datos)
-    const drawUntil = Math.min(currentHour, endHour)
-    return Array.from({ length: drawUntil - startHour + 1 }, (_, i) => startHour + i)
-      .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
-      .join(' ')
-  }
+  // Labels del eje X: máx 7, en minutos redondos (cada 30min o 1h)
+  const labelIntervalMin = timeRange <= 90 ? 30 : timeRange <= 240 ? 60 : 120
+  const firstLabel = Math.ceil(startMinute / labelIntervalMin) * labelIntervalMin
+  const axisLabels: number[] = []
+  for (let m = firstLabel; m <= endMinute; m += labelIntervalMin) axisLabels.push(m)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,6px)', minHeight: 0 }}>
-      {/* Wrapper con position:relative garantiza que el SVG tenga altura real */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -104,94 +145,79 @@ function FacultyLineChart({ timelines }: { timelines: FacultyTimeline[] }) {
           <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT}
             stroke="#1e293b" strokeWidth="0.6" />
 
-          {/* Grid vertical + labels de hora */}
-          {axisHours
-            .filter((_, i) => i % labelStep === 0 || i === axisHours.length - 1)
-            .map(h => (
-              <g key={h}>
-                <line x1={xOf(h)} y1={PAD_TOP} x2={xOf(h)} y2={H - PAD_BOT}
-                  stroke="#1a2a3f" strokeWidth="0.5" />
-                <text x={xOf(h)} y={H - 2} fontSize="6.5" fill="#475569" textAnchor="middle">
-                  {h}h
-                </text>
-              </g>
-            ))}
+          {/* Grid vertical + labels */}
+          {axisLabels.map(m => (
+            <g key={m}>
+              <line x1={xOfClamped(m)} y1={PAD_TOP} x2={xOfClamped(m)} y2={H - PAD_BOT}
+                stroke="#1a2a3f" strokeWidth="0.5" />
+              <text x={xOfClamped(m)} y={H - 2} fontSize="6.5" fill="#475569" textAnchor="middle">
+                {minuteLabel(m)}
+              </text>
+            </g>
+          ))}
 
-          {/* Indicador de hora actual */}
-          {currentHour >= startHour && currentHour <= endHour && (
-            <line
-              x1={xOf(currentHour)} y1={PAD_TOP}
-              x2={xOf(currentHour)} y2={H - PAD_BOT}
-              stroke="#64748b" strokeWidth="1" strokeDasharray="3,2"
-            />
-          )}
+          {/* Indicador "ahora" */}
+          <line x1={W} y1={PAD_TOP} x2={W} y2={H - PAD_BOT}
+            stroke="#64748b" strokeWidth="1" strokeDasharray="3,2" />
 
-          {/* Área rellena por facultad (sutil) */}
-          {timelines.map((tl, idx) => {
+          {/* Área rellena sutil por facultad */}
+          {faculties.map(({ faculty }, idx) => {
+            const curve = allCurves[idx]
+            if (curve.length < 2) return null
             const color = LINE_COLORS[idx % LINE_COLORS.length]
-            const map: Record<number, number> = {}
-            for (const d of tl.data) map[d.hour] = d.count
-            const drawUntil = Math.min(currentHour, endHour)
-            const pts = Array.from({ length: drawUntil - startHour + 1 }, (_, i) => startHour + i)
-              .map(h => `${xOf(h).toFixed(1)},${yOf(map[h] ?? 0).toFixed(1)}`)
+            const linePts = curve.map(([m, v]) => `${xOf(m).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
             const base = H - PAD_BOT
-            const areaPoints = [
-              `${xOf(startHour).toFixed(1)},${base}`,
-              ...pts,
-              `${xOf(drawUntil).toFixed(1)},${base}`,
+            const area = [
+              `${xOf(curve[0][0]).toFixed(1)},${base}`,
+              linePts,
+              `${xOf(curve[curve.length - 1][0]).toFixed(1)},${base}`,
             ].join(' ')
+            return <polygon key={`a-${faculty}`} points={area} fill={color} fillOpacity="0.07" />
+          })}
+
+          {/* Curvas de ocupación (función escalón) */}
+          {faculties.map(({ faculty }, idx) => {
+            const curve = allCurves[idx]
+            if (curve.length < 2) return null
+            const pts = curve.map(([m, v]) => `${xOf(m).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
             return (
-              <polygon
-                key={`area-${tl.faculty}`}
-                points={areaPoints}
-                fill={color}
-                fillOpacity="0.06"
+              <polyline key={faculty} points={pts}
+                fill="none"
+                stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                strokeWidth="2"
+                strokeLinejoin="miter"
+                strokeLinecap="round"
               />
             )
           })}
 
-          {/* Líneas por facultad */}
-          {timelines.map((tl, idx) => (
-            <polyline
-              key={tl.faculty}
-              points={getPoints(tl)}
-              fill="none"
-              stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
-
-          {/* Puntos en cada hora con datos */}
-          {timelines.map((tl, idx) => {
+          {/* Punto en cada escalón (solo en eventos reales) */}
+          {faculties.map(({ faculty }, idx) => {
             const color = LINE_COLORS[idx % LINE_COLORS.length]
-            return tl.data.map(d => (
-              <circle
-                key={`${tl.faculty}-${d.hour}`}
-                cx={xOf(d.hour).toFixed(1)}
-                cy={yOf(d.count).toFixed(1)}
-                r="3"
-                fill={color}
-                stroke="#0d1f35"
-                strokeWidth="1"
-              />
-            ))
+            let count = 0
+            return events
+              .filter(e => e.faculty === faculty)
+              .sort((a, b) => a.minute - b.minute)
+              .map((ev, i) => {
+                count = Math.max(0, count + (ev.event_type === 'entry' ? 1 : -1))
+                return (
+                  <circle key={`${faculty}-${i}`}
+                    cx={xOf(ev.minute).toFixed(1)} cy={yOf(count).toFixed(1)}
+                    r="2.8" fill={color} stroke="#0d1f35" strokeWidth="0.8"
+                  />
+                )
+              })
           })}
         </svg>
       </div>
 
       {/* Leyenda */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 12px', flexShrink: 0 }}>
-        {timelines.map((tl, idx) => (
-          <div key={tl.faculty} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{
-              width: 14, height: 2,
-              background: LINE_COLORS[idx % LINE_COLORS.length],
-              borderRadius: 1, flexShrink: 0,
-            }} />
+        {faculties.map(({ faculty, label }, idx) => (
+          <div key={faculty} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: 14, height: 2, background: LINE_COLORS[idx % LINE_COLORS.length], borderRadius: 1, flexShrink: 0 }} />
             <span style={{ fontSize: 'clamp(8px,0.85vh,10px)', color: '#64748b', whiteSpace: 'nowrap' }}>
-              {tl.label}
+              {label}
             </span>
           </div>
         ))}
@@ -346,7 +372,7 @@ export function OccupancyPanel() {
       {/* SECCIÓN 4 — Gráfico de líneas por facultad */}
       <div style={s.histogramSection}>
         <span style={s.sectionTitle}>Actividad por facultad — hoy</span>
-        <FacultyLineChart timelines={data.faculty_timelines} />
+        <FacultyLineChart events={data.faculty_events} />
       </div>
 
       {/* SECCIÓN 5 — Feed actividad */}

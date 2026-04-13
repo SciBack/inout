@@ -6,7 +6,7 @@ from datetime import datetime, date, timedelta, timezone
 from ..database import get_db
 from ..models import PresenceLog, Space
 from collections import defaultdict
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent
 from ..config import settings
 
 router = APIRouter()
@@ -321,6 +321,34 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         for fac, hours in fac_hours.items()
     ]
 
+    # Eventos individuales de hoy con facultad (para curva de ocupación acumulada)
+    raw_faculty_events = (
+        db.query(
+            PresenceLog.patron_faculty,
+            PresenceLog.event_type,
+            PresenceLog.timestamp,
+        )
+        .filter(
+            and_(
+                func.date(PresenceLog.timestamp) == today,
+                PresenceLog.space_id == sid,
+                PresenceLog.patron_faculty.isnot(None),
+                PresenceLog.patron_faculty != "",
+            )
+        )
+        .order_by(PresenceLog.timestamp)
+        .all()
+    )
+    faculty_events = [
+        FacultyEvent(
+            faculty=row.patron_faculty,
+            label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
+            event_type=row.event_type,
+            minute=row.timestamp.hour * 60 + row.timestamp.minute,
+        )
+        for row in raw_faculty_events
+    ]
+
     return DashboardStats(
         space_name=space_name,
         capacity=capacity,
@@ -339,4 +367,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         faculty_breakdown=faculty_breakdown,
         hourly_entries=hourly_entries,
         faculty_timelines=faculty_timelines,
+        faculty_events=faculty_events,
     )
