@@ -121,17 +121,6 @@ function fmtDelta(today: number, yesterday: number): { text: string; color: stri
   }
 }
 
-function animateCounter(el: HTMLElement, from: number, to: number, duration: number) {
-  const start = performance.now()
-  const diff = to - from
-  const step = (now: number) => {
-    const elapsed = now - start
-    const progress = Math.min(elapsed / duration, 1)
-    el.textContent = String(Math.round(from + diff * progress))
-    if (progress < 1) requestAnimationFrame(step)
-  }
-  requestAnimationFrame(step)
-}
 
 // ── ArcGauge ─────────────────────────────────────────────────────────────────
 function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
@@ -482,7 +471,6 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
       val: number
     ) => {
       if (ref.current && prev.current !== val) {
-        animateCounter(ref.current, prev.current, val, 350)
         ref.current.style.animation = 'none'
         void ref.current.offsetWidth
         ref.current.style.animation = 'metricPulse 0.5s ease'
