@@ -9,6 +9,7 @@ interface DashboardData {
   exits_today: number
   unique_visitors_today: number
   avg_stay_seconds: number | null
+  typical_avg_stay_seconds: number | null
   peak_hour: number | null
   typical_peak_hour: number | null
   current_male: number
@@ -514,6 +515,9 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const typicalPeakSub = data.typical_peak_hour !== null
     ? `Típico ${dowName} · ${fmtPeakHour(data.typical_peak_hour)}`
     : undefined
+  const typicalStaySub = data.typical_avg_stay_seconds != null
+    ? `Típico ${dowName} · ${fmtStay(data.typical_avg_stay_seconds)}`
+    : undefined
 
   const firstEventId  = data.recent_events[0]?.id ?? null
   const isNewEvent    = firstEventId !== null && firstEventId !== prevFirstId.current
@@ -588,6 +592,8 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               value={avgStayStr}
               color={C.text1}
               numSize="clamp(34px,4.8vh,64px)"
+              sub={typicalStaySub}
+              subColor={C.text3}
             />
 
             {/* Hora punta */}

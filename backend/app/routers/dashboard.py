@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, text
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -191,6 +191,39 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
                 durations.append(diff)
 
     avg_stay_seconds = int(sum(durations) / len(durations)) if durations else None
+
+    # ── Permanencia típica (histórico mismo día de semana, últimas 52 sem.) ──
+    cutoff_52w = hoy_ini - timedelta(weeks=52)
+    typical_stay_sql = text("""
+        WITH exit_pairs AS (
+            SELECT
+                EXTRACT(EPOCH FROM (
+                    e.timestamp - (
+                        SELECT en.timestamp
+                        FROM presence_log en
+                        WHERE en.event_type = 'entry'
+                          AND en.cardnumber = e.cardnumber
+                          AND en.space_id = e.space_id
+                          AND DATE(TIMEZONE('America/Lima', en.timestamp)) = DATE(TIMEZONE('America/Lima', e.timestamp))
+                          AND en.timestamp < e.timestamp
+                        ORDER BY en.timestamp DESC
+                        LIMIT 1
+                    )
+                )) AS dur
+            FROM presence_log e
+            WHERE e.event_type = 'exit'
+              AND e.space_id = :sid
+              AND e.timestamp >= :cutoff
+              AND e.timestamp < :hoy_ini
+              AND EXTRACT(isodow FROM TIMEZONE('America/Lima', e.timestamp)) = :dow
+        )
+        SELECT AVG(dur) FROM exit_pairs WHERE dur > 0
+    """)
+    typical_stay_scalar = db.execute(
+        typical_stay_sql,
+        {"sid": sid, "cutoff": cutoff_52w, "hoy_ini": hoy_ini, "dow": pg_isodow},
+    ).scalar()
+    typical_avg_stay_seconds = int(typical_stay_scalar) if typical_stay_scalar else None
 
     # ── Perfiles (categorías) hoy ────────────────────────────────────────────
     category_rows = (
@@ -383,6 +416,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         recent_events=[PresenceEntry.model_validate(r) for r in recent],
         unique_visitors_today=unique_visitors_today,
         avg_stay_seconds=avg_stay_seconds,
+        typical_avg_stay_seconds=typical_avg_stay_seconds,
         peak_hour=peak_hour,
         typical_peak_hour=typical_peak_hour,
         category_breakdown=category_breakdown,

@@ -87,6 +87,7 @@ class DashboardStats(BaseModel):
     recent_events: list[PresenceEntry]
     unique_visitors_today: int = 0
     avg_stay_seconds: Optional[int] = None
+    typical_avg_stay_seconds: Optional[int] = None
     peak_hour: Optional[int] = None
     typical_peak_hour: Optional[int] = None
     category_breakdown: list[CategoryCount] = []
