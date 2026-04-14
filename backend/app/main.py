@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from .database import init_db, SessionLocal
 from .routers import scan, dashboard, photo
 from .routers import admin
+from .services.scheduler import setup_scheduler, stop_scheduler
 
 
 @asynccontextmanager
@@ -14,7 +15,9 @@ async def lifespan(app: FastAPI):
     _seed_sedes()
     _seed_default_space()
     _seed_admin_user()
+    setup_scheduler()
     yield
+    stop_scheduler()
 
 
 def _run_migrations():
