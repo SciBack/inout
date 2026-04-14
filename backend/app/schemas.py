@@ -93,6 +93,8 @@ class DashboardStats(BaseModel):
     entries_yesterday: int = 0
     current_male: int = 0
     current_female: int = 0
+    total_male_today: int = 0
+    total_female_today: int = 0
     faculty_breakdown: list[FacultyCount] = []
     hourly_entries: list[HourlyCount] = []
     faculty_timelines: list[FacultyTimeline] = []

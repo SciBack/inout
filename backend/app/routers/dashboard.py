@@ -391,6 +391,8 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         entries_yesterday=entries_yesterday,
         current_male=current_male,
         current_female=current_female,
+        total_male_today=male_entries,
+        total_female_today=female_entries,
         faculty_breakdown=faculty_breakdown,
         hourly_entries=hourly_entries,
         faculty_timelines=faculty_timelines,

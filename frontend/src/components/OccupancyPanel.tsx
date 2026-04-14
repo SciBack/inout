@@ -13,6 +13,8 @@ interface DashboardData {
   typical_peak_hour: number | null
   current_male: number
   current_female: number
+  total_male_today: number
+  total_female_today: number
   category_breakdown: { category: string; label: string; count: number }[]
   faculty_breakdown: { faculty: string; label: string; count: number }[]
   recent_events: Array<{
@@ -574,18 +576,22 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
 
             {/* Hombres */}
             <StatCard
-              label="Hombres"
+              label="Hombres en edificio"
               value={data.current_male}
               valueRef={refMale}
               color={C.blue}
+              sub={`${data.total_male_today} total hoy`}
+              subColor={C.text3}
             />
 
             {/* Mujeres */}
             <StatCard
-              label="Mujeres"
+              label="Mujeres en edificio"
               value={data.current_female}
               valueRef={refFemale}
               color={C.rose}
+              sub={`${data.total_female_today} total hoy`}
+              subColor={C.text3}
             />
 
             {/* Permanencia media */}
