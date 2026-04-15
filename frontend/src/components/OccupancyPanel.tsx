@@ -18,6 +18,7 @@ interface DashboardData {
   total_female_today: number
   category_breakdown: { category: string; label: string; count: number }[]
   faculty_breakdown: { faculty: string; label: string; count: number }[]
+  faculty_no_data: number
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -357,7 +358,8 @@ const PatronAvatar = memo(function PatronAvatar({
 // ── FacultyBarChart ───────────────────────────────────────────────────────────
 const FacultyBarChart = memo(function FacultyBarChart({
   rows,
-}: { rows: { faculty: string; label: string; count: number }[] }) {
+  missingCount,
+}: { rows: { faculty: string; label: string; count: number }[]; missingCount: number }) {
   if (rows.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -377,7 +379,7 @@ const FacultyBarChart = memo(function FacultyBarChart({
         const pct = (row.count / max) * 100
         const color = FAC_COLORS[idx % FAC_COLORS.length]
         return (
-          <div key={row.faculty} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
+          <div key={row.faculty || idx} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
             <span style={{
               width: 'clamp(42px,4.5vw,60px)',
               textAlign: 'right', flexShrink: 0,
@@ -432,6 +434,17 @@ const FacultyBarChart = memo(function FacultyBarChart({
           </div>
         )
       })}
+      {missingCount > 0 && (
+        <div style={{
+          marginTop: 'clamp(4px,0.6vh,8px)',
+          fontSize: 'clamp(11px,1.3vh,15px)',
+          color: C.text3,
+          fontFamily: FONT_BODY,
+          fontStyle: 'italic',
+        }}>
+          +{missingCount} sin facultad asignada en Koha
+        </div>
+      )}
     </div>
   )
 })
@@ -611,7 +624,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           {/* Barras por facultad — dentro de col izquierda */}
           <div style={s.facultyInCol}>
             <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
-            <FacultyBarChart rows={data.faculty_breakdown} />
+            <FacultyBarChart rows={data.faculty_breakdown} missingCount={data.faculty_no_data ?? 0} />
           </div>
 
         </div>

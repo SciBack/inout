@@ -328,6 +328,19 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         for row in faculty_rows
     ]
 
+    # ── Visitantes hoy sin facultad asignada ─────────────────────────────────
+    faculty_no_data = (
+        db.query(func.count(func.distinct(PresenceLog.cardnumber)))
+        .filter(
+            PresenceLog.event_type == "entry",
+            PresenceLog.space_id == sid,
+            PresenceLog.timestamp >= hoy_ini,
+            PresenceLog.timestamp < hoy_fin,
+            (PresenceLog.patron_faculty.is_(None)) | (PresenceLog.patron_faculty == ""),
+        )
+        .scalar() or 0
+    )
+
     # ── Entradas por hora hoy (Lima) ─────────────────────────────────────────
     hourly_rows = (
         db.query(
@@ -426,6 +439,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         total_male_today=male_entries,
         total_female_today=female_entries,
         faculty_breakdown=faculty_breakdown,
+        faculty_no_data=faculty_no_data,
         hourly_entries=hourly_entries,
         faculty_timelines=faculty_timelines,
         faculty_events=faculty_events,

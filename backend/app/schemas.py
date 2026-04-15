@@ -97,6 +97,7 @@ class DashboardStats(BaseModel):
     total_male_today: int = 0
     total_female_today: int = 0
     faculty_breakdown: list[FacultyCount] = []
+    faculty_no_data: int = 0
     hourly_entries: list[HourlyCount] = []
     faculty_timelines: list[FacultyTimeline] = []
     faculty_events: list[FacultyEvent] = []
