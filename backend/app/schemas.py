@@ -92,6 +92,8 @@ class DashboardStats(BaseModel):
     typical_peak_hour: Optional[int] = None
     category_breakdown: list[CategoryCount] = []
     entries_yesterday: int = 0
+    prev_day_visitors: int = 0
+    prev_day_label: str = ""
     current_male: int = 0
     current_female: int = 0
     total_male_today: int = 0

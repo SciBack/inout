@@ -29,6 +29,8 @@ interface DashboardData {
     timestamp: string
   }>
   entries_yesterday: number
+  prev_day_visitors: number
+  prev_day_label: string
 }
 
 // ── Paleta OKLCH ────────────────────────────────────────────────────────────
@@ -510,7 +512,9 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   })
   const todayCapitalized = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)
 
-  const delta         = fmtDelta(data.unique_visitors_today, data.entries_yesterday)
+  const prevDaySub    = data.prev_day_label && data.prev_day_visitors > 0
+    ? `${data.prev_day_label.charAt(0).toUpperCase() + data.prev_day_label.slice(1)}: ${data.prev_day_visitors}`
+    : undefined
   const avgStayStr    = fmtStay(data.avg_stay_seconds)
   const peakHourStr   = fmtPeakHour(data.peak_hour)
 
@@ -562,8 +566,8 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               value={data.unique_visitors_today}
               valueRef={refVisitors}
               color={C.cyan}
-              sub={delta?.text}
-              subColor={delta?.color}
+              sub={prevDaySub}
+              subColor={C.text3}
               numSize="clamp(52px,7.0vh,92px)"
             />
 

@@ -111,17 +111,28 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         .scalar() or 0
     )
 
-    # ── Entradas de ayer ─────────────────────────────────────────────────────
-    entries_yesterday = (
-        db.query(func.count(PresenceLog.id))
-        .filter(
-            PresenceLog.event_type == "entry",
-            PresenceLog.space_id == sid,
-            PresenceLog.timestamp >= ayer_ini,
-            PresenceLog.timestamp < ayer_fin,
+    # ── Último día con actividad (hasta 7 días atrás) ────────────────────────
+    DAY_NAMES = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+    prev_day_visitors = 0
+    prev_day_label = ""
+    for days_back in range(1, 8):
+        d_ini = hoy_ini - timedelta(days=days_back)
+        d_fin = hoy_ini - timedelta(days=days_back - 1)
+        count = (
+            db.query(func.count(func.distinct(PresenceLog.cardnumber)))
+            .filter(
+                PresenceLog.event_type == "entry",
+                PresenceLog.space_id == sid,
+                PresenceLog.timestamp >= d_ini,
+                PresenceLog.timestamp < d_fin,
+            )
+            .scalar() or 0
         )
-        .scalar() or 0
-    )
+        if count > 0:
+            prev_day_visitors = count
+            prev_day_label = "ayer" if days_back == 1 else DAY_NAMES[d_ini.weekday()]
+            break
+    entries_yesterday = prev_day_visitors  # mantener compatibilidad
 
     # ── Hora pico hoy (en hora Lima) ─────────────────────────────────────────
     peak_hour_row = (
@@ -428,6 +439,8 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         typical_peak_hour=typical_peak_hour,
         category_breakdown=category_breakdown,
         entries_yesterday=entries_yesterday,
+        prev_day_visitors=prev_day_visitors,
+        prev_day_label=prev_day_label,
         current_male=current_male,
         current_female=current_female,
         total_male_today=male_entries,
