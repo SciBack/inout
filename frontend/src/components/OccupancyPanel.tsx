@@ -186,6 +186,8 @@ const StatCard = memo(function StatCard({
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
+      alignItems: 'center',
+      textAlign: 'center' as const,
       gap: 4,
       gridColumn: wide ? 'span 2' : undefined,
       overflow: 'hidden',
