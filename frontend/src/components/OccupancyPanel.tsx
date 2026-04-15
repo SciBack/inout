@@ -383,58 +383,63 @@ const FacultyBarChart = memo(function FacultyBarChart({
         const isSinFac = row.faculty === 'Sin Facultad'
         const color = isSinFac ? C.border : FAC_COLORS[idx % FAC_COLORS.length]
         return (
-          <div key={row.faculty || idx} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
-            <span style={{
-              width: 'clamp(42px,4.5vw,60px)',
-              textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(11px,1.4vh,17px)',
-              color: C.text2,
-              fontFamily: FONT_BODY,
-              fontWeight: 600,
-              whiteSpace: 'nowrap' as const,
-              letterSpacing: '0.04em',
-            }}>
-              {row.label}
-            </span>
+          <div key={row.faculty || idx} style={{ position: 'relative', height: 'clamp(26px,3.4vh,42px)' }}>
+            {/* Track (fondo) — muestra label en gris cuando la barra no lo cubre */}
             <div style={{
-              flex: 1,
-              height: 'clamp(24px,3.2vh,38px)',
-              background: C.border,
-              borderRadius: 6,
+              position: 'absolute', inset: 0,
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              paddingLeft: 'clamp(8px,1vh,14px)',
+              paddingRight: 'clamp(8px,1vh,14px)',
+            }}>
+              <span style={{
+                fontSize: 'clamp(11px,1.4vh,16px)',
+                fontFamily: FONT_BODY,
+                fontWeight: 600,
+                color: C.text3,
+                letterSpacing: '0.06em',
+                whiteSpace: 'nowrap' as const,
+              }}>
+                {row.label}
+              </span>
+            </div>
+            {/* Barra rellena — encima del track */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              width: `${pct}%`,
+              background: color,
+              borderRadius: 8,
+              transition: 'width 0.6s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingLeft: 'clamp(8px,1vh,14px)',
+              paddingRight: 'clamp(8px,1vh,14px)',
               overflow: 'hidden',
             }}>
-              <div style={{
-                height: '100%',
-                width: `${pct}%`,
-                borderRadius: 6,
-                background: color,
-                transition: 'width 0.6s ease',
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 8,
+              <span style={{
+                fontSize: 'clamp(11px,1.4vh,16px)',
+                fontFamily: FONT_BODY,
+                fontWeight: 700,
+                color: 'rgba(255,255,255,0.95)',
+                letterSpacing: '0.06em',
+                whiteSpace: 'nowrap' as const,
               }}>
-                {row.count > 2 && (
-                  <span style={{
-                    fontSize: 'clamp(12px,1.5vh,18px)',
-                    fontFamily: FONT_DISPLAY,
-                    letterSpacing: '0.04em',
-                    color: 'rgba(255,255,255,0.9)',
-                  }}>
-                    {row.count}
-                  </span>
-                )}
-              </div>
+                {row.label}
+              </span>
+              <span style={{
+                fontSize: 'clamp(13px,1.7vh,20px)',
+                fontFamily: FONT_DISPLAY,
+                color: 'rgba(255,255,255,0.95)',
+                letterSpacing: '0.04em',
+                flexShrink: 0,
+              }}>
+                {row.count}
+              </span>
             </div>
-            <span style={{
-              width: 'clamp(28px,3.5vw,44px)',
-              textAlign: 'right', flexShrink: 0,
-              fontSize: 'clamp(16px,2.1vh,26px)',
-              fontFamily: FONT_DISPLAY,
-              letterSpacing: '0.04em',
-              color: C.text2,
-            }}>
-              {row.count}
-            </span>
           </div>
         )
       })}
