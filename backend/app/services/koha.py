@@ -2,6 +2,7 @@ import httpx
 import time
 import logging
 from ..config import settings
+from .faculty_map import resolve_faculty
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def _normalize(raw: dict) -> dict:
         "category": raw.get("category_id") or raw.get("categorycode") or "",
         "expiry_date": raw.get("expiry_date") or "",
         "patron_id": raw.get("patron_id"),
-        "faculty": raw.get("statistics_1") or "",
+        "faculty": resolve_faculty(raw.get("statistics_1"), raw.get("statistics_2")),
         "program": raw.get("statistics_2") or "",
     }
 

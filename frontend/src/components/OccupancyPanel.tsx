@@ -358,8 +358,7 @@ const PatronAvatar = memo(function PatronAvatar({
 // ── FacultyBarChart ───────────────────────────────────────────────────────────
 const FacultyBarChart = memo(function FacultyBarChart({
   rows,
-  missingCount,
-}: { rows: { faculty: string; label: string; count: number }[]; missingCount: number }) {
+}: { rows: { faculty: string; label: string; count: number }[] }) {
   if (rows.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -377,7 +376,8 @@ const FacultyBarChart = memo(function FacultyBarChart({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(6px,0.9vh,11px)' }}>
       {sorted.map((row, idx) => {
         const pct = (row.count / max) * 100
-        const color = FAC_COLORS[idx % FAC_COLORS.length]
+        const isSinFac = row.faculty === 'Sin Facultad'
+        const color = isSinFac ? C.border : FAC_COLORS[idx % FAC_COLORS.length]
         return (
           <div key={row.faculty || idx} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px,1vh,14px)' }}>
             <span style={{
@@ -434,17 +434,6 @@ const FacultyBarChart = memo(function FacultyBarChart({
           </div>
         )
       })}
-      {missingCount > 0 && (
-        <div style={{
-          marginTop: 'clamp(4px,0.6vh,8px)',
-          fontSize: 'clamp(11px,1.3vh,15px)',
-          color: C.text3,
-          fontFamily: FONT_BODY,
-          fontStyle: 'italic',
-        }}>
-          +{missingCount} sin facultad asignada en Koha
-        </div>
-      )}
     </div>
   )
 })
@@ -624,7 +613,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           {/* Barras por facultad — dentro de col izquierda */}
           <div style={s.facultyInCol}>
             <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
-            <FacultyBarChart rows={data.faculty_breakdown} missingCount={data.faculty_no_data ?? 0} />
+            <FacultyBarChart rows={data.faculty_breakdown} />
           </div>
 
         </div>

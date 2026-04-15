@@ -11,6 +11,7 @@ from ..models import PresenceLog, Space
 from collections import defaultdict
 from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent
 from ..config import settings
+from ..services.faculty_map import resolve_faculty
 
 router = APIRouter()
 
@@ -299,47 +300,40 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     )
     current_female = max(0, female_entries - female_exits)
 
-    # ── Top facultades hoy ───────────────────────────────────────────────────
-    faculty_rows = (
-        db.query(
-            PresenceLog.patron_faculty,
-            func.count(func.distinct(PresenceLog.cardnumber)).label("cnt"),
-        )
+    # ── Top facultades hoy (con fallback a programa académico) ──────────────
+    all_entries_fac = (
+        db.query(PresenceLog.cardnumber, PresenceLog.patron_faculty, PresenceLog.patron_program)
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
             PresenceLog.timestamp >= hoy_ini,
             PresenceLog.timestamp < hoy_fin,
-            PresenceLog.patron_faculty.isnot(None),
-            PresenceLog.patron_faculty != "",
         )
-        .group_by(PresenceLog.patron_faculty)
-        .order_by(func.count(func.distinct(PresenceLog.cardnumber)).desc())
-        .limit(5)
         .all()
     )
 
-    faculty_breakdown = [
-        FacultyCount(
-            faculty=row.patron_faculty,
-            label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
-            count=row.cnt,
-        )
-        for row in faculty_rows
-    ]
+    # Resolver facultad efectiva por visitante único (último registro gana)
+    card_fac: dict[str, str] = {}
+    for row in all_entries_fac:
+        card_fac[row.cardnumber] = resolve_faculty(row.patron_faculty, row.patron_program)
 
-    # ── Visitantes hoy sin facultad asignada ─────────────────────────────────
-    faculty_no_data = (
-        db.query(func.count(func.distinct(PresenceLog.cardnumber)))
-        .filter(
-            PresenceLog.event_type == "entry",
-            PresenceLog.space_id == sid,
-            PresenceLog.timestamp >= hoy_ini,
-            PresenceLog.timestamp < hoy_fin,
-            (PresenceLog.patron_faculty.is_(None)) | (PresenceLog.patron_faculty == ""),
+    fac_counts: dict[str, int] = defaultdict(int)
+    for fac in card_fac.values():
+        fac_counts[fac] += 1
+
+    sin_fac = fac_counts.pop("Sin Facultad", 0)
+    sorted_facs = sorted(fac_counts.items(), key=lambda x: -x[1])[:5]
+
+    faculty_breakdown = [
+        FacultyCount(faculty=fac, label=FACULTY_LABELS.get(fac, fac), count=cnt)
+        for fac, cnt in sorted_facs
+    ]
+    if sin_fac > 0:
+        faculty_breakdown.append(
+            FacultyCount(faculty="Sin Facultad", label="Sin Facultad", count=sin_fac)
         )
-        .scalar() or 0
-    )
+
+    faculty_no_data = 0  # absorbido en faculty_breakdown como "Sin Facultad"
 
     # ── Entradas por hora hoy (Lima) ─────────────────────────────────────────
     hourly_rows = (
