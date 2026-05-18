@@ -1,3 +1,29 @@
+Migrate from v5 to v6
+
+Open Terminal.
+
+Login to mysql.
+
+Select inout database.
+
+Execute the following queries one by one.
+
+-- Índices en inout: cubre reportes por fecha, local y género
+ALTER TABLE `inout` ADD INDEX `idx_date_loc` (`date`, `loc`);
+ALTER TABLE `inout` ADD INDEX `idx_date_gender_loc` (`date`, `gender`, `loc`);
+ALTER TABLE `inout` ADD INDEX `idx_cardnumber_date_status` (`cardnumber`, `date`, `status`);
+
+-- Índice en tmp2: se consulta en cada escaneo, actualmente sin índice
+ALTER TABLE `tmp2` ADD INDEX `idx_usn` (`usn`);
+
+-- Corregir AUTO_INCREMENT faltante en log
+ALTER TABLE `log` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+-- Índice en log para búsquedas por usuario
+ALTER TABLE `log` ADD INDEX `idx_userid` (`userid`);
+
+------------------------------------------------------------------------
+
 Migrate from v4.* to v5
 
 Open Terminal.

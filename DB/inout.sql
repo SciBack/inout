@@ -200,7 +200,10 @@ INSERT INTO `users` (`id`, `username`, `fname`, `pass`, `role`, `active`, `llogi
 -- Indexes for table `inout`
 --
 ALTER TABLE `inout`
-  ADD PRIMARY KEY (`sl`);
+  ADD PRIMARY KEY (`sl`),
+  ADD INDEX `idx_date_loc` (`date`, `loc`),
+  ADD INDEX `idx_date_gender_loc` (`date`, `gender`, `loc`),
+  ADD INDEX `idx_cardnumber_date_status` (`cardnumber`, `date`, `status`);
 
 --
 -- Indexes for table `loc`
@@ -212,7 +215,14 @@ ALTER TABLE `loc`
 -- Indexes for table `log`
 --
 ALTER TABLE `log`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD INDEX `idx_userid` (`userid`);
+
+--
+-- Indexes for table `tmp2`
+--
+ALTER TABLE `tmp2`
+  ADD INDEX `idx_usn` (`usn`);
 
 --
 -- Indexes for table `news`
@@ -242,6 +252,12 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `loc`
 --
 ALTER TABLE `loc`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `log`
+--
+ALTER TABLE `log`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
