@@ -4,11 +4,12 @@
 from ...config import settings as default_settings
 from .base import IdentityProvider
 from .koha_provider import KohaProvider
+from .koha_db_provider import KohaDbProvider
 from .ldap_provider import LdapProvider
 from .csv_provider import CsvProvider
 
 # Todos los adaptadores conocidos (Fase 1). Fase 2 añadirá Midpoint/SQL.
-_PROVIDER_CLASSES = (KohaProvider, LdapProvider, CsvProvider)
+_PROVIDER_CLASSES = (KohaProvider, KohaDbProvider, LdapProvider, CsvProvider)
 
 
 def build_enabled_providers(settings=default_settings) -> list[IdentityProvider]:

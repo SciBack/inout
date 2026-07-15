@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     sedes_config_path: str = ""     # JSON con lista [{code, name, city}]
     default_sede_code: str = ""     # código de sede para el espacio por defecto
 
+    # Proveedor Koha por BD directa (lee borrowers vía MariaDB, reusa koha_db_*).
+    koha_db_enabled: bool = False
+    koha_db_priority: int = 40
+
     # Koha DB directa (fotos) — por sede también
     koha_db_host: str = ""
     koha_db_user: str = ""
