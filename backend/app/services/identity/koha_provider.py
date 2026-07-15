@@ -49,11 +49,15 @@ class KohaProvider:
         # Koha REST no ofrece volcado masivo estándar en este producto.
         return []
 
-    async def lookup(self, id_type: str, id_value: str) -> PersonRecord | None:
+    async def lookup(
+        self, id_type: str, id_value: str, sede_code: str = ""
+    ) -> PersonRecord | None:
         if id_type != "cardnumber":
             return None
         try:
-            data = await koha.get_patron(id_value, "")
+            # sede_code dirige la consulta al Koha del campus correcto
+            # (biblioteca-staff/tarapoto/juliaca/cia); "" cae al Koha global.
+            data = await koha.get_patron(id_value, sede_code)
         except Exception as e:  # nunca propagar: el aforo no se detiene
             logger.warning(f"KohaProvider.lookup falló para {id_value}: {e}")
             return None

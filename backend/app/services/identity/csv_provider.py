@@ -43,7 +43,9 @@ class CsvProvider:
             logger.warning(f"CsvProvider.fetch_all falló: {e}")
             return []
 
-    async def lookup(self, id_type: str, id_value: str) -> PersonRecord | None:
+    async def lookup(
+        self, id_type: str, id_value: str, sede_code: str = ""
+    ) -> PersonRecord | None:
         try:
             records = await asyncio.to_thread(self._records)
         except Exception as e:

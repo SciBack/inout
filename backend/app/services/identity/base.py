@@ -50,8 +50,14 @@ class IdentityProvider(Protocol):
         """Volcado completo para el sync del padrón."""
         ...
 
-    async def lookup(self, id_type: str, id_value: str) -> "PersonRecord | None":
-        """Relleno perezoso en vivo por credencial."""
+    async def lookup(
+        self, id_type: str, id_value: str, sede_code: str = ""
+    ) -> "PersonRecord | None":
+        """Relleno perezoso en vivo por credencial.
+
+        `sede_code` permite a fuentes multi-sede (p. ej. Koha por campus) dirigir
+        la consulta a la instancia correcta; las fuentes globales lo ignoran.
+        """
         ...
 
     async def health(self) -> bool:

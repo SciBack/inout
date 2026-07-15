@@ -106,7 +106,9 @@ class LdapProvider:
             logger.warning(f"LdapProvider.fetch_all falló: {e}")
             return []
 
-    async def lookup(self, id_type: str, id_value: str) -> PersonRecord | None:
+    async def lookup(
+        self, id_type: str, id_value: str, sede_code: str = ""
+    ) -> PersonRecord | None:
         attr = self._attr_for_id_type(id_type)
         if not attr:
             return None

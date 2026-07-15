@@ -46,7 +46,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     # NUNCA lanza: si nada responde/encuentra devuelve (None, "unidentified")
     # y el aforo se registra igual. Ya NO se lanza 404 por carnet desconocido.
     id_type = _infer_id_type(cardnumber)
-    person, origin = await resolve_person(db, id_type, cardnumber)
+    person, origin = await resolve_person(db, id_type, cardnumber, sede_code)
 
     # Snapshot de datos para el evento y la respuesta.
     if person is not None:

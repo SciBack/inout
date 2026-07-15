@@ -22,10 +22,15 @@ logger = logging.getLogger(__name__)
 LOOKUP_TIMEOUT = 2.0
 
 
-async def resolve_person(db: Session, id_type: str, id_value: str) -> tuple[Person | None, str]:
+async def resolve_person(
+    db: Session, id_type: str, id_value: str, sede_code: str = ""
+) -> tuple[Person | None, str]:
     """Resuelve la persona de un escaneo. Devuelve (Person|None, origen).
 
     origen ∈ {"local", <nombre_proveedor>, "unidentified"}.
+
+    `sede_code` se propaga al relleno perezoso para que las fuentes multi-sede
+    (Koha por campus) consulten la instancia correcta.
     """
     id_value = (id_value or "").strip()
     if not id_value:
@@ -49,7 +54,7 @@ async def resolve_person(db: Session, id_type: str, id_value: str) -> tuple[Pers
     for provider in providers:
         try:
             rec = await asyncio.wait_for(
-                provider.lookup(id_type, id_value), timeout=LOOKUP_TIMEOUT
+                provider.lookup(id_type, id_value, sede_code), timeout=LOOKUP_TIMEOUT
             )
         except Exception:
             logger.warning(f"resolve_person: lookup en '{provider.name}' falló", exc_info=True)
