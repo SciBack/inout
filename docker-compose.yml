@@ -25,6 +25,21 @@ services:
       FACULTY_CONFIG_PATH: ${FACULTY_CONFIG_PATH:-/config/faculty_map.json}
       SEDES_CONFIG_PATH: ${SEDES_CONFIG_PATH:-/config/sedes.json}
       DEFAULT_SEDE_CODE: ${DEFAULT_SEDE_CODE:-}
+      # Proveedores de identidad (todos deshabilitados por defecto → agnóstico)
+      IDENTITY_MAP_PATH: ${IDENTITY_MAP_PATH:-/config/identity_map.json}
+      KOHA_ENABLED: ${KOHA_ENABLED:-false}
+      KOHA_PRIORITY: ${KOHA_PRIORITY:-50}
+      LDAP_ENABLED: ${LDAP_ENABLED:-false}
+      LDAP_PRIORITY: ${LDAP_PRIORITY:-100}
+      LDAP_HOST: ${LDAP_HOST:-}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:-}
+      LDAP_BIND_PASS: ${LDAP_BIND_PASS:-}
+      LDAP_BASE_DN: ${LDAP_BASE_DN:-}
+      LDAP_USER_FILTER: ${LDAP_USER_FILTER:-}
+      LDAP_PAGE_SIZE: ${LDAP_PAGE_SIZE:-500}
+      CSV_ENABLED: ${CSV_ENABLED:-false}
+      CSV_PRIORITY: ${CSV_PRIORITY:-200}
+      CSV_PATH: ${CSV_PATH:-}
       KOHA_API_URL: ${KOHA_API_URL}
       KOHA_API_USER: ${KOHA_API_USER}
       KOHA_API_PASS: ${KOHA_API_PASS}

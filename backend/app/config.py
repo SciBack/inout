@@ -62,6 +62,31 @@ class Settings(BaseSettings):
 
     admin_initial_password: str = "admin123"
 
+    # ── Proveedores de identidad (padrón local pluggable) ──────────────────
+    # Todo con default vacío/False → producto agnóstico: sin proveedores
+    # configurados el arranque no se rompe y el aforo degrada a "sin identificar".
+    # Mapeo declarativo de atributos fuente→padrón por proveedor (JSON en /config).
+    identity_map_path: str = ""
+
+    # Koha como proveedor de identidad (la config REST vive arriba en koha_*)
+    koha_enabled: bool = False
+    koha_priority: int = 50
+
+    # LDAP / Active Directory (mismo adaptador para OpenLDAP y AD)
+    ldap_enabled: bool = False
+    ldap_priority: int = 100
+    ldap_host: str = ""
+    ldap_bind_dn: str = ""
+    ldap_bind_pass: str = ""
+    ldap_base_dn: str = ""
+    ldap_user_filter: str = ""
+    ldap_page_size: int = 500
+
+    # CSV (volumen /config) — testing sin LDAP real y clientes sin directorio
+    csv_enabled: bool = False
+    csv_priority: int = 200
+    csv_path: str = ""
+
     def koha_for_sede(self, sede_code: str) -> tuple[str, str, str]:
         """Devuelve (url, user, pass) del Koha REST para la sede dada.
         Si no están configurados, usa el global."""

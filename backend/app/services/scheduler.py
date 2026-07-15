@@ -17,8 +17,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import and_, func, select
 
+from ..config import settings
 from ..database import SessionLocal
 from ..models import PresenceLog, Space
+from .sync import sync_all
 
 LIMA = ZoneInfo("America/Lima")
 logger = logging.getLogger(__name__)
@@ -99,6 +101,19 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
         db.close()
 
 
+async def _daily_sync():
+    """
+    Job programado: sincroniza el padrón local desde los proveedores
+    habilitados. Agnóstico y tolerante a fallos (sync_all no lanza; si no hay
+    proveedores habilitados, no hace nada).
+    """
+    try:
+        runs = await sync_all()
+        logger.info("[sync-job] sincronización diaria completada: %d proveedores.", len(runs))
+    except Exception:
+        logger.exception("[sync-job] error en la sincronización diaria del padrón")
+
+
 def setup_scheduler():
     """
     Lee close_time de cada space activo y registra un CronTrigger diario.
@@ -131,6 +146,23 @@ def setup_scheduler():
             )
     finally:
         db.close()
+
+    # Job diario de sincronización del padrón de identidad (hora configurable,
+    # default 03:00 America/Lima). Agnóstico: si no hay proveedores habilitados
+    # el job corre pero no hace nada.
+    sync_hour = getattr(settings, "sync_hour", 3)
+    sync_minute = getattr(settings, "sync_minute", 0)
+    scheduler.add_job(
+        _daily_sync,
+        trigger=CronTrigger(hour=sync_hour, minute=sync_minute, timezone=LIMA),
+        id="daily_identity_sync",
+        replace_existing=True,
+        name=f"Sync padrón identidad {sync_hour:02d}:{sync_minute:02d} Lima",
+    )
+    logger.info(
+        "[scheduler] sync de padrón programado diario a las %02d:%02d Lima",
+        sync_hour, sync_minute,
+    )
 
     scheduler.start()
     logger.info("[scheduler] iniciado.")

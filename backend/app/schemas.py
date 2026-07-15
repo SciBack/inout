@@ -268,3 +268,45 @@ class MonthlyStatsResponse(BaseModel):
     space_name: str
     year_month: str
     daily: list[DailyStatRow]
+
+
+# ---------------------------------------------------------------------------
+# Admin — Identidad (padrón local y proveedores)
+# ---------------------------------------------------------------------------
+
+class PersonResponse(BaseModel):
+    id: int
+    person_key: str
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    gender: Optional[str] = None
+    category: Optional[str] = None
+    faculty: Optional[str] = None
+    program: Optional[str] = None
+    escuela: Optional[str] = None
+    role: Optional[str] = None
+    dni: Optional[str] = None
+    email: Optional[str] = None
+    home_sede_code: Optional[str] = None
+    home_building: Optional[str] = None
+    source: Optional[str] = None
+    synced_at: Optional[datetime] = None
+    active: bool = True
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ProviderSyncRunResponse(BaseModel):
+    id: int
+    provider: str
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created: int = 0
+    updated: int = 0
+    errors: int = 0
+    status: Optional[str] = None
+
+    class Config:
+        from_attributes = True

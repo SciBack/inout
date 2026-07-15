@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, distinct
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from jose import JWTError, jwt
+import asyncio
 import bcrypt as _bcrypt
 from collections import defaultdict
 import calendar
@@ -12,6 +13,8 @@ import calendar
 from ..database import get_db
 from ..models import AdminUser, Space, PresenceLog, Sede
 from ..config import settings
+from ..services.identity import build_enabled_providers
+from ..services.sync import sync_all
 from ..schemas import (
     LoginRequest, TokenResponse,
     SedeCreate, SedeUpdate, SedeResponse,
@@ -519,3 +522,41 @@ def change_password(
     db.commit()
     db.refresh(user)
     return user
+
+
+# ---------------------------------------------------------------------------
+# Sincronización del padrón de identidad (solo superadmin)
+# ---------------------------------------------------------------------------
+
+@router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
+def trigger_sync(
+    background_tasks: BackgroundTasks,
+    current_user: AdminUser = Depends(require_superadmin),
+):
+    """
+    Dispara la sincronización del padrón local desde todos los proveedores
+    habilitados, en background. Devuelve de inmediato con el listado de
+    proveedores que se van a sincronizar.
+
+    El detalle de cada corrida (altas/cambios/errores) queda en
+    `provider_sync_runs`. Agnóstico: si no hay proveedores habilitados,
+    no hace nada y lo reporta.
+    """
+    providers = build_enabled_providers()
+    provider_names = [p.name for p in providers]
+
+    if not providers:
+        return {
+            "status": "sin-proveedores",
+            "detail": "No hay proveedores de identidad habilitados.",
+            "providers": [],
+        }
+
+    # sync_all es async y abre su propia sesión; BackgroundTasks la corre tras responder.
+    background_tasks.add_task(sync_all)
+
+    return {
+        "status": "aceptado",
+        "detail": "Sincronización iniciada en background.",
+        "providers": provider_names,
+    }

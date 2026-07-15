@@ -46,9 +46,62 @@ def _run_migrations():
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
         # Columna sort2 de Koha (código programa/escuela)
         "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS patron_program VARCHAR(20)",
+        # FK lógica al padrón local (nullable — el aforo no depende de la identidad)
+        "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS person_key VARCHAR(100)",
+        "CREATE INDEX IF NOT EXISTS ix_presence_log_person_key ON presence_log (person_key)",
         # Columnas de admin_users
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
+        # Padrón local de identidades (nueva)
+        """
+        CREATE TABLE IF NOT EXISTS persons (
+            id SERIAL PRIMARY KEY,
+            person_key VARCHAR(100) UNIQUE NOT NULL,
+            full_name VARCHAR(200),
+            first_name VARCHAR(100),
+            gender VARCHAR(1),
+            category VARCHAR(50),
+            faculty VARCHAR(20),
+            program VARCHAR(20),
+            escuela VARCHAR(100),
+            role VARCHAR(50),
+            dni VARCHAR(20),
+            email VARCHAR(200),
+            home_sede_code VARCHAR(20),
+            home_building VARCHAR(100),
+            source VARCHAR(50),
+            raw JSONB,
+            synced_at TIMESTAMPTZ,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT now()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_persons_person_key ON persons (person_key)",
+        # Índice de credenciales → person_key (nueva)
+        """
+        CREATE TABLE IF NOT EXISTS person_identifiers (
+            id SERIAL PRIMARY KEY,
+            id_type VARCHAR(50) NOT NULL,
+            id_value VARCHAR(200) NOT NULL,
+            person_key VARCHAR(100) NOT NULL,
+            CONSTRAINT uq_person_identifier UNIQUE (id_type, id_value)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_person_identifiers_id_value ON person_identifiers (id_value)",
+        "CREATE INDEX IF NOT EXISTS ix_person_identifiers_person_key ON person_identifiers (person_key)",
+        # Auditoría de sincronización por proveedor (nueva)
+        """
+        CREATE TABLE IF NOT EXISTS provider_sync_runs (
+            id SERIAL PRIMARY KEY,
+            provider VARCHAR(50) NOT NULL,
+            started_at TIMESTAMPTZ DEFAULT now(),
+            finished_at TIMESTAMPTZ,
+            created INTEGER DEFAULT 0,
+            updated INTEGER DEFAULT 0,
+            errors INTEGER DEFAULT 0,
+            status VARCHAR(20)
+        )
+        """,
     ]
     with engine.connect() as conn:
         for stmt in stmts:
