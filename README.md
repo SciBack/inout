@@ -92,7 +92,7 @@ inout/
 ├── backend/
 │   ├── app/
 │   │   ├── routers/      dashboard.py, scan.py, admin.py, photo.py
-│   │   ├── services/     koha.py, scheduler.py
+│   │   ├── services/     koha.py, scheduler.py, faculty_map.py
 │   │   ├── models.py
 │   │   ├── schemas.py
 │   │   └── main.py
@@ -100,10 +100,27 @@ inout/
 ├── frontend/
 │   └── src/
 │       └── components/   OccupancyPanel.tsx, WelcomeScreen.tsx, ScanInput.tsx
+├── config/              config por institución (vacío en el canónico)
 ├── nginx/
 ├── docker-compose.yml
 └── .env.example
 ```
+
+## Modelo de despliegue — canónico + overlay
+
+Este repo es el **canónico agnóstico**: no contiene datos de ninguna institución.
+La personalización de cada cliente (mapa de facultades, sedes, `.env`, branding)
+vive en su propio overlay (`instituciones/<cliente>/`) y se monta en runtime:
+
+| Qué | Cómo se parametriza |
+|-----|---------------------|
+| Mapa programa→facultad | JSON en `FACULTY_CONFIG_PATH` (montado en `/config/faculty_map.json`) |
+| Sedes sembradas al arranque | JSON en `SEDES_CONFIG_PATH` (`/config/sedes.json`) |
+| Sede del espacio por defecto | `DEFAULT_SEDE_CODE` |
+| Credenciales Koha, capacidades | `.env` |
+
+Sin overlay, el canónico corre igual pero sin sembrar sedes y sin dimensión
+facultad (todo cae a "Sin Facultad"). El overlay UPeU es `SciBack/inout-upeu`.
 
 ---
 

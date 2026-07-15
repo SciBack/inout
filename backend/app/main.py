@@ -57,37 +57,51 @@ def _run_migrations():
 
 
 def _seed_sedes():
-    """Crea las sedes por defecto si no existen."""
+    """Crea las sedes definidas por el overlay de la institución, si las hay.
+    Sin sedes_config_path (producto agnóstico) no siembra nada."""
+    import json
+    import os
     from .models import Sede
+    from .config import settings
+
+    path = settings.sedes_config_path
+    if not path or not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        sedes = json.load(fh)
+
     db = SessionLocal()
     try:
-        sedes = [
-            {"code": "BUL", "name": "Lima",      "city": "Lima"},
-            {"code": "BUT", "name": "Tarapoto",  "city": "Tarapoto"},
-            {"code": "BUJ", "name": "Juliaca",   "city": "Juliaca"},
-            {"code": "CIA", "name": "CIA",        "city": "Ñaña"},
-        ]
         for s in sedes:
             if not db.query(Sede).filter(Sede.code == s["code"]).first():
-                db.add(Sede(**s))
+                db.add(Sede(
+                    code=s["code"],
+                    name=s.get("name", s["code"]),
+                    city=s.get("city"),
+                ))
         db.commit()
     finally:
         db.close()
 
 
 def _seed_default_space():
-    """Crea el espacio CRAI Lima si no existe ningún espacio."""
+    """Crea el espacio por defecto si no existe ningún espacio.
+    Se ancla a la sede default_sede_code del overlay, si está definida."""
     from .models import Space, Sede
     from .config import settings
     db = SessionLocal()
     try:
         if not db.query(Space).first():
-            sede = db.query(Sede).filter(Sede.code == "BUL").first()
+            sede = None
+            if settings.default_sede_code:
+                sede = db.query(Sede).filter(
+                    Sede.code == settings.default_sede_code
+                ).first()
             db.add(Space(
                 id=settings.default_space_id,
                 name=settings.default_space_name,
                 capacity=settings.default_space_capacity,
-                location="Lima",
+                location=sede.city if sede else None,
                 sede_id=sede.id if sede else None,
             ))
             db.commit()

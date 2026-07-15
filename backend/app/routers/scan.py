@@ -26,7 +26,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     if not space:
         space_id = None
 
-    sede_code = "BUL"  # fallback
+    sede_code = settings.default_sede_code  # fallback (vacío → Koha global)
     if space and space.sede_id:
         sede = db.query(Sede).filter(Sede.id == space.sede_id).first()
         if sede:

@@ -1,0 +1,3 @@
+# Directorio de config por institución (overlay).
+# En el canónico está vacío a propósito: el producto corre agnóstico.
+# El overlay del cliente monta aquí faculty_map.json y sedes.json.

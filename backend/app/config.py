@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     default_space_name: str = "Biblioteca"
     secret_key: str = "changeme"
 
+    # ── Config por institución (overlay) ───────────────────────────────────
+    # Rutas a JSON montados por el overlay del cliente. Vacío = producto
+    # agnóstico (sin dimensión facultad, sin sedes sembradas).
+    faculty_config_path: str = ""   # JSON con valid_faculty_codes + program_to_faculty
+    sedes_config_path: str = ""     # JSON con lista [{code, name, city}]
+    default_sede_code: str = ""     # código de sede para el espacio por defecto
+
     # Koha DB directa (fotos) — por sede también
     koha_db_host: str = ""
     koha_db_user: str = ""
@@ -65,10 +72,9 @@ class Settings(BaseSettings):
         return url, user, pass_
 
     def koha_db_for_sede(self, sede_code: str) -> tuple[str, str, str, str]:
-        """Devuelve (host, user, pass, name) del Koha DB para la sede dada."""
+        """Devuelve (host, user, pass, name) del Koha DB para la sede dada.
+        Sin overrides por sede (koha_<code>_db_*) usa la config global koha_db_*."""
         code = sede_code.upper()
-        if code == "BUL":
-            return self.koha_db_host, self.koha_db_user, self.koha_db_pass, self.koha_db_name
         host  = getattr(self, f"koha_{code.lower()}_db_host",  "") or self.koha_db_host
         user  = getattr(self, f"koha_{code.lower()}_db_user",  "") or self.koha_db_user
         pass_ = getattr(self, f"koha_{code.lower()}_db_pass",  "") or self.koha_db_pass

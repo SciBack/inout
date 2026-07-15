@@ -17,8 +17,14 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    volumes:
+      # Config por institución (overlay). Vacío en el canónico → agnóstico.
+      - ${INSTITUTION_CONFIG_DIR:-./config}:/config:ro
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-inout}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-inout}
+      FACULTY_CONFIG_PATH: ${FACULTY_CONFIG_PATH:-/config/faculty_map.json}
+      SEDES_CONFIG_PATH: ${SEDES_CONFIG_PATH:-/config/sedes.json}
+      DEFAULT_SEDE_CODE: ${DEFAULT_SEDE_CODE:-}
       KOHA_API_URL: ${KOHA_API_URL}
       KOHA_API_USER: ${KOHA_API_USER}
       KOHA_API_PASS: ${KOHA_API_PASS}

@@ -11,7 +11,7 @@ _cache: dict[tuple[str, str], tuple[dict, float]] = {}
 CACHE_TTL = 1800  # 30 minutos
 
 
-async def get_patron(cardnumber: str, sede_code: str = "BUL") -> dict | None:
+async def get_patron(cardnumber: str, sede_code: str = "") -> dict | None:
     """
     Busca un patron en el Koha correspondiente a la sede.
     Usa caché de 30 minutos por (sede, cardnumber).

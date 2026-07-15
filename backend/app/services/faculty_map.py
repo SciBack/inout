@@ -1,43 +1,36 @@
-# Mapeo programa académico (statistics_2 de Koha) → facultad
-# Construido desde la tabla borrowers de Koha BUL (2026-04-15)
-# Para cada programa se usa la facultad con mayor cantidad de registros.
-# Códigos de facultad válidos: FACTEO, FCS, FIA, FCE, FACIHED, EPG
+# Mapeo programa académico (statistics_2 de Koha) → facultad.
+#
+# El mapa NO es parte del producto canónico: es data específica de cada
+# institución. Se carga en runtime desde el JSON apuntado por
+# settings.faculty_config_path (montado por el overlay del cliente).
+#
+# Formato del JSON:
+#   {
+#     "valid_faculty_codes": ["FCS", "FIA", ...],
+#     "program_to_faculty":  {"P22": "FCS", "P01": "FCE", ...}
+#   }
+#
+# Si no hay archivo (producto agnóstico), el mapa queda vacío: resolve_faculty
+# devuelve el patron_faculty tal cual si viene informado, o "Sin Facultad".
 
-PROGRAM_TO_FACULTY: dict[str, str] = {
-    # FCS — Ciencias de la Salud
-    "P22": "FCS", "P30": "FCS", "P31": "FCS", "P33": "FCS",
-    "P153": "FCS", "P154": "FCS",
-    "Taller de Toma de Muestras Biológicas": "FCS",
-    # FCE — Ciencias Empresariales
-    "P01": "FCE", "P04": "FCE", "P05": "FCE", "P08": "FCE",
-    "P09": "FCE", "P29": "FCE", "P96": "FCE",
-    "EP Digital Business": "FCE",
-    "Cont. - Proesad Lima": "FCE",
-    # FIA — Ingeniería y Arquitectura
-    "P06": "FIA", "P24": "FIA", "P25": "FIA", "P26": "FIA",
-    "P27": "FIA", "P149": "FIA", "P152": "FIA",
-    "EP Computer Science": "FIA",
-    "ING. INDUSTRIAL": "FIA", "ING. SOFTWARE": "FIA", "SEG57": "FIA",
-    # FACIHED — Ciencias Humanas y Educación
-    "P07": "FACIHED", "P12": "FACIHED", "P14": "FACIHED",
-    "P143": "FACIHED", "P147": "FACIHED", "P17": "FACIHED",
-    "P19": "FACIHED", "P20": "FACIHED", "P99": "FACIHED",
-    "Psic.": "FACIHED",
-    # FACTEO — Teología
-    "P35": "FACTEO",
-    # EPG — Posgrado
-    "P58": "EPG", "P82": "EPG", "P85": "EPG", "P86": "EPG",
-    "P94": "EPG", "P104": "EPG", "P106": "EPG", "P120": "EPG",
-    "P132": "EPG", "P156": "EPG",
-    "SEG43": "EPG", "SEG04": "EPG", "SEG10": "EPG", "SEG11": "EPG",
-    "SEG12": "EPG", "SEG19": "EPG", "SEG22": "EPG", "SEG26": "EPG",
-    "SEG65": "EPG", "DIAGGEC": "EPG", "DIAGIAL": "EPG",
-    "Mgs.Edu.IDU.": "EPG", "Cui.Int": "EPG",
-}
+import json
+import os
 
-# Códigos de facultad reconocidos como válidos.
-# Si patron_faculty no está en este set se trata como ausente.
-VALID_FACULTY_CODES = {"FACTEO", "FCS", "FIA", "FCE", "FACIHED", "EPG", "CC"}
+from ..config import settings
+
+
+def _load_faculty_config() -> tuple[dict[str, str], set[str]]:
+    path = settings.faculty_config_path
+    if not path or not os.path.exists(path):
+        return {}, set()
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    program_to_faculty = dict(data.get("program_to_faculty", {}))
+    valid_faculty_codes = set(data.get("valid_faculty_codes", []))
+    return program_to_faculty, valid_faculty_codes
+
+
+PROGRAM_TO_FACULTY, VALID_FACULTY_CODES = _load_faculty_config()
 
 
 def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> str:
@@ -45,10 +38,18 @@ def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> s
     Devuelve la facultad efectiva:
     1. Si patron_faculty es un código válido → lo usa.
     2. Si no, busca patron_program en PROGRAM_TO_FACULTY.
-    3. Si tampoco → "Sin Facultad".
+    3. Si no hay whitelist configurada (producto agnóstico) y patron_faculty
+       viene informado → lo usa tal cual.
+    4. Si nada aplica → "Sin Facultad".
     """
     fac = (patron_faculty or "").strip()
-    if fac in VALID_FACULTY_CODES:
+    if fac and fac in VALID_FACULTY_CODES:
         return fac
     prog = (patron_program or "").strip()
-    return PROGRAM_TO_FACULTY.get(prog, "Sin Facultad")
+    mapped = PROGRAM_TO_FACULTY.get(prog)
+    if mapped:
+        return mapped
+    # Sin whitelist configurada: aceptar el valor informado tal cual.
+    if not VALID_FACULTY_CODES and fac:
+        return fac
+    return "Sin Facultad"
