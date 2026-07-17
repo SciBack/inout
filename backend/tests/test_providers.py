@@ -4,6 +4,8 @@ El canónico arranca agnóstico: sin config no hay ninguna fuente habilitada y e
 sistema degrada a "Sin identificar" en vez de romper.
 """
 
+import pytest
+
 from app.config import Settings
 from app.services.identity.providers import build_enabled_providers
 
@@ -62,6 +64,54 @@ class TestConfigLdap:
     def test_filtro_por_defecto_si_no_se_declara(self):
         ps = build_enabled_providers(settings(ldap_enabled=True))
         assert ps[0].user_filter == "(objectClass=person)"
+
+
+class TestRawExclude:
+    """Un sistema de aforo no necesita fotos ni credenciales, y no debe
+    custodiarlas. Se descartan al leer, antes de tocar el padrón."""
+
+    def _provider(self, **kw):
+        from app.services.identity.ldap_provider import LdapProvider
+
+        return LdapProvider(settings(ldap_enabled=True, ldap_base_dn="ou=x,dc=y", **kw))
+
+    def test_descarta_la_foto_y_deja_lo_demas(self):
+        raw = self._provider()._flatten(
+            {"uid": "9610165", "cn": "Ada", "jpegPhoto": b"\xff\xd8\xff" * 2000}
+        )
+        assert "jpegPhoto" not in raw
+        assert raw == {"uid": "9610165", "cn": "Ada"}
+
+    @pytest.mark.parametrize(
+        "attr", ["userPassword", "userCertificate", "thumbnailPhoto", "userPKCS12"]
+    )
+    def test_descarta_credenciales_y_binarios(self, attr):
+        raw = self._provider()._flatten({"uid": "1", attr: b"secreto"})
+        assert attr not in raw
+
+    def test_es_case_insensitive(self):
+        """El directorio puede servir 'jpegphoto' o 'JPEGPHOTO'."""
+        raw = self._provider()._flatten({"uid": "1", "JPEGPHOTO": b"x", "jpegphoto": b"y"})
+        assert list(raw) == ["uid"]
+
+    def test_la_lista_es_configurable(self):
+        raw = self._provider(ldap_raw_exclude="mobile,schacDateOfBirth")._flatten(
+            {"uid": "1", "mobile": "999", "schacDateOfBirth": "19780621", "cn": "Ada"}
+        )
+        assert raw == {"uid": "1", "cn": "Ada"}
+
+    def test_vaciar_la_lista_guarda_todo(self):
+        """Decisión explícita del cliente: sin exclusiones se guarda lo que
+        sirva el directorio."""
+        raw = self._provider(ldap_raw_exclude="")._flatten({"uid": "1", "jpegPhoto": b"x"})
+        assert "jpegPhoto" in raw
+
+    def test_no_rompe_el_aplanado_normal(self):
+        raw = self._provider()._flatten(
+            {"uid": ["9610165"], "eduPersonAffiliation": ["staff", "alum", "member"]}
+        )
+        assert raw["uid"] == "9610165"
+        assert raw["eduPersonAffiliation"] == ["staff", "alum", "member"]
 
 
 ALUMNI = (

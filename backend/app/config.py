@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # Permite que carné o documento resuelvan a la misma persona.
     ldap_id_attrs: str = ""
     ldap_page_size: int = 500
+    # Atributos que NUNCA se guardan en el padrón (coma-separados, case-insensitive).
+    # Un sistema de aforo no necesita fotos ni credenciales y no debe custodiarlas:
+    # se descartan al leer, así no llegan ni a `persons.raw`. Vaciar la variable
+    # guarda todo lo que sirva el directorio — decisión explícita del cliente.
+    ldap_raw_exclude: str = (
+        "jpegPhoto,thumbnailPhoto,photo,userCertificate,"
+        "userPassword,userSMIMECertificate,userPKCS12"
+    )
     # Ramas adicionales del MISMO directorio, como JSON. Un directorio puede
     # servir a su población en sub-árboles distintos (p. ej. activos y
     # egresados): cada rama declara su base_dn/filtro/prioridad y hereda host,

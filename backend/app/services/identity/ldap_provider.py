@@ -54,6 +54,9 @@ class LdapProvider:
         # UPeU: "(eduPersonAffiliation=member)" — excluye egresados y fósiles.
         self.user_filter = branch.get("user_filter") or cfg.ldap_user_filter or "(objectClass=person)"
         self.page_size = cfg.ldap_page_size
+        self.raw_exclude = {
+            a.strip().lower() for a in (cfg.ldap_raw_exclude or "").split(",") if a.strip()
+        }
         # Atributos contra los que se busca el valor escaneado. Una persona
         # puede presentar cualquiera de sus credenciales (carné o documento) y
         # debe resolver al mismo registro.
@@ -67,11 +70,18 @@ class LdapProvider:
                 return attr
         return _DEFAULT_ATTR_FOR_ID_TYPE.get(id_type)
 
-    @staticmethod
-    def _flatten(entry_attrs: dict) -> dict:
-        """Aplana valores LDAP (listas) a str; coacciona no-serializables."""
+    def _flatten(self, entry_attrs: dict) -> dict:
+        """Aplana valores LDAP (listas) a str; coacciona no-serializables.
+
+        Descarta los atributos de `raw_exclude` ANTES de construir el registro,
+        para que no lleguen a `persons.raw`. Son binarios y credenciales
+        (fotos, certificados, hashes) que el aforo no usa: guardarlos multiplica
+        el peso del padrón y nos haría custodios de datos que no necesitamos.
+        """
         raw = {}
         for key, val in entry_attrs.items():
+            if key.lower() in self.raw_exclude:
+                continue
             if isinstance(val, list):
                 val = val[0] if len(val) == 1 else [str(v) for v in val]
             if isinstance(val, (bytes, bytearray)):
