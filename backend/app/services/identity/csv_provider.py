@@ -37,11 +37,9 @@ class CsvProvider:
         return records
 
     async def fetch_all(self):
-        try:
-            return await asyncio.to_thread(self._records)
-        except Exception as e:
-            logger.warning(f"CsvProvider.fetch_all falló: {e}")
-            return []
+        # No se captura: un CSV ilegible o corrupto debe marcar la corrida en
+        # 'error', no reportar 'ok' con 0 registros. Ver nota en base.py.
+        return await asyncio.to_thread(self._records)
 
     async def lookup(
         self, id_type: str, id_value: str, sede_code: str = ""

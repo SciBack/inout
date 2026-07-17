@@ -38,8 +38,18 @@ class IdentityProvider(Protocol):
     """Interfaz que implementa cada adaptador de fuente de identidad.
 
     Los métodos son asíncronos porque el hot path del escaneo es async y
-    algunos proveedores (Koha REST) hacen I/O de red. Ningún método debe
-    lanzar hacia arriba: ante fallo devuelven [] / None / False.
+    algunos proveedores (Koha REST) hacen I/O de red.
+
+    Las dos rutas tratan el fallo distinto, a propósito:
+
+    - `lookup` / `health` (hot path del escaneo): NUNCA lanzan. Ante fallo
+      devuelven None / False y el aforo sigue contando, degradando a
+      "Sin identificar". No hay dónde reportar el error sin frenar el kiosko.
+    - `fetch_all` (sync del padrón): SÍ puede lanzar, y debe hacerlo si la
+      fuente falla o trunca. `sync_provider` lo captura y marca la corrida en
+      'error'. Devolver [] ante un fallo sería indistinguible de "la fuente no
+      tiene a nadie" y registraría la corrida como 'ok' con 0 registros — un
+      padrón silenciosamente incompleto es peor que un fallo declarado.
     """
 
     name: str
@@ -47,7 +57,11 @@ class IdentityProvider(Protocol):
     enabled: bool
 
     async def fetch_all(self) -> Iterable[PersonRecord]:
-        """Volcado completo para el sync del padrón."""
+        """Volcado completo para el sync del padrón.
+
+        Devuelve [] solo si la fuente legítimamente no tiene registros (o no
+        soporta volcado masivo). Lanza si falla o trunca.
+        """
         ...
 
     async def lookup(
