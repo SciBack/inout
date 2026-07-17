@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     # configurados el arranque no se rompe y el aforo degrada a "sin identificar".
     # Mapeo declarativo de atributos fuente→padrón por proveedor (JSON en /config).
     identity_map_path: str = ""
+    # JSON con category_map / category_labels / faculty_labels del dashboard.
+    labels_config_path: str = ""
 
     # Koha como proveedor de identidad (la config REST vive arriba en koha_*)
     koha_enabled: bool = False

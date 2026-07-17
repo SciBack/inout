@@ -12,19 +12,12 @@ from collections import defaultdict
 from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent
 from ..config import settings
 from ..services.faculty_map import resolve_faculty
+from ..services.labels import normalize_category, category_label, faculty_label
 
 router = APIRouter()
 
-CATEGORY_LABELS = {
-    "ESTUDI":  "Estudiantes",
-    "DOCEN":   "Docentes",
-    "VISITA":  "Visitantes",
-    "INVESTI": "Investigadores",
-    "STAFF":   "Personal biblioteca",
-    "ADMIN":   "Administrativos",
-}
-
-FACULTY_LABELS: dict[str, str] = {}
+# Los códigos de categoría/facultad son data de la institución: se cargan del
+# overlay vía services/labels.py (ver labels_config_path).
 
 
 def _lima_day_bounds() -> tuple[datetime, datetime, datetime, datetime]:
@@ -238,28 +231,37 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     typical_avg_stay_seconds = int(typical_stay_scalar) if typical_stay_scalar else None
 
     # ── Perfiles (categorías) hoy ────────────────────────────────────────────
-    category_rows = (
-        db.query(
-            PresenceLog.patron_category,
-            func.count(func.distinct(PresenceLog.cardnumber)).label("cnt"),
-        )
+    # Se agrupa por PERFIL CANÓNICO, no por el código crudo: el histórico y las
+    # fuentes nuevas usan familias de códigos distintas ("ESTUDI" vs "student")
+    # y agrupar por el crudo mostraría el mismo perfil repetido.
+    # Se traen los pares (categoría, carné) y se cuentan personas distintas por
+    # perfil ya normalizado — así una persona no se cuenta dos veces si tuvo
+    # eventos con códigos de distinta familia el mismo día.
+    category_pairs = (
+        db.query(PresenceLog.patron_category, PresenceLog.cardnumber)
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
             PresenceLog.timestamp >= hoy_ini,
             PresenceLog.timestamp < hoy_fin,
         )
-        .group_by(PresenceLog.patron_category)
+        .distinct()
         .all()
     )
 
+    cards_by_profile: dict[str, set] = {}
+    for raw_cat, card in category_pairs:
+        cards_by_profile.setdefault(normalize_category(raw_cat), set()).add(card)
+
     category_breakdown = [
         CategoryCount(
-            category=row.patron_category or "OTROS",
-            label=CATEGORY_LABELS.get(row.patron_category or "", row.patron_category or "Otros"),
-            count=row.cnt,
+            category=profile,
+            label=category_label(profile),
+            count=len(cards),
         )
-        for row in category_rows
+        for profile, cards in sorted(
+            cards_by_profile.items(), key=lambda kv: len(kv[1]), reverse=True
+        )
     ]
 
     # ── Género: aforo actual y total acumulado hoy ───────────────────────────
@@ -336,7 +338,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     sorted_facs = sorted(fac_counts.items(), key=lambda x: -x[1])[:5]
 
     faculty_breakdown = [
-        FacultyCount(faculty=fac, label=FACULTY_LABELS.get(fac, fac), count=cnt)
+        FacultyCount(faculty=fac, label=faculty_label(fac), count=cnt)
         for fac, cnt in sorted_facs
     ]
     if sin_fac > 0:
@@ -391,7 +393,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     faculty_timelines = [
         FacultyTimeline(
             faculty=fac,
-            label=FACULTY_LABELS.get(fac, fac),
+            label=faculty_label(fac),
             data=hours,
         )
         for fac, hours in fac_hours.items()
@@ -417,7 +419,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     faculty_events = [
         FacultyEvent(
             faculty=row.patron_faculty,
-            label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
+            label=faculty_label(row.patron_faculty),
             event_type=row.event_type,
             ts=row.timestamp.isoformat(),
         )

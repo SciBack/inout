@@ -27,6 +27,7 @@ services:
       DEFAULT_SEDE_CODE: ${DEFAULT_SEDE_CODE:-}
       # Proveedores de identidad (todos deshabilitados por defecto → agnóstico)
       IDENTITY_MAP_PATH: ${IDENTITY_MAP_PATH:-/config/identity_map.json}
+      LABELS_CONFIG_PATH: ${LABELS_CONFIG_PATH:-/config/labels.json}
       KOHA_ENABLED: ${KOHA_ENABLED:-false}
       KOHA_PRIORITY: ${KOHA_PRIORITY:-50}
       KOHA_DB_ENABLED: ${KOHA_DB_ENABLED:-false}
