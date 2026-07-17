@@ -33,8 +33,14 @@ class LdapProvider:
         self.bind_dn = cfg.ldap_bind_dn
         self.bind_pass = cfg.ldap_bind_pass
         self.base_dn = cfg.ldap_base_dn
+        # Filtro base: acota a la población viva/gobernada de la institución.
+        # UPeU: "(eduPersonAffiliation=member)" — excluye egresados y fósiles.
         self.user_filter = cfg.ldap_user_filter or "(objectClass=person)"
         self.page_size = cfg.ldap_page_size
+        # Atributos contra los que se busca el valor escaneado. Una persona
+        # puede presentar cualquiera de sus credenciales (carné o documento) y
+        # debe resolver al mismo registro.
+        self.id_attrs = [a.strip() for a in (cfg.ldap_id_attrs or "").split(",") if a.strip()]
 
     # ── helpers de mapeo ────────────────────────────────────────────────
     def _attr_for_id_type(self, id_type: str) -> str | None:
@@ -90,6 +96,16 @@ class LdapProvider:
                 rec = record_from_raw(self.name, raw, self.name)
                 if rec is not None:
                     records.append(rec)
+            # Guarda anti-truncado: el servidor puede cortar la búsqueda por
+            # sizelimit y devolver resultado PARCIAL sin error (resultCode 4).
+            # Un padrón silenciosamente incompleto es peor que un fallo: se
+            # trata como error para no sincronizar datos a medias.
+            result = getattr(conn, "result", None) or {}
+            if result.get("result") == 4:  # sizeLimitExceeded
+                raise RuntimeError(
+                    f"LDAP sizeLimitExceeded: la búsqueda se truncó en {len(records)} "
+                    f"entries. Subir el sizelimit del bind o paginar por rangos."
+                )
         finally:
             if conn is not None:
                 try:
@@ -109,8 +125,12 @@ class LdapProvider:
     async def lookup(
         self, id_type: str, id_value: str, sede_code: str = ""
     ) -> PersonRecord | None:
-        attr = self._attr_for_id_type(id_type)
-        if not attr:
+        # El valor escaneado puede ser cualquier credencial de la persona
+        # (carné o documento): se busca contra todos los id_attrs configurados
+        # y se acota al filtro de población viva. Si no hay id_attrs, se cae al
+        # comportamiento por id_type (producto agnóstico).
+        attrs = self.id_attrs or [a for a in [self._attr_for_id_type(id_type)] if a]
+        if not attrs:
             return None
         # Escapar el valor para evitar romper el filtro LDAP.
         try:
@@ -119,7 +139,9 @@ class LdapProvider:
             safe = escape_filter_chars(id_value)
         except Exception:
             safe = id_value
-        search_filter = f"(&{self.user_filter}({attr}={safe}))"
+        ors = "".join(f"({attr}={safe})" for attr in attrs)
+        by_id = ors if len(attrs) == 1 else f"(|{ors})"
+        search_filter = f"(&{self.user_filter}{by_id})"
         try:
             records = await asyncio.to_thread(self._search, search_filter)
         except Exception as e:

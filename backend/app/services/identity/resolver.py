@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...models import Person
 from .providers import build_enabled_providers
-from .repository import find_person_by_identifier, upsert_person
+from .repository import find_person_by_value, upsert_person
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,10 @@ async def resolve_person(
     if not id_value:
         return None, "unidentified"
 
-    # (1) Padrón local.
+    # (1) Padrón local: se busca por VALOR, no por tipo — la persona pudo
+    # presentar cualquiera de sus credenciales (carné o documento).
     try:
-        person = find_person_by_identifier(db, id_type, id_value)
+        person = find_person_by_value(db, id_value)
         if person is not None:
             return person, "local"
     except Exception:

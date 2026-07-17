@@ -52,8 +52,36 @@ def provider_map(provider: str) -> dict:
     return IDENTITY_MAP.get(provider, {}) or {}
 
 
+def _collapse(provider: str, field: str, val):
+    """Colapsa un valor multivalor a uno solo usando la precedencia declarada.
+
+    Ej.: eduPersonAffiliation ['faculty','student'] + precedence
+    ['faculty','staff','student'] → 'faculty'. Determinista a propósito: la
+    fuente puede no serlo (un híbrido resuelve distinto según qué origen ganó).
+    Sin precedencia declarada, toma el primer valor.
+    """
+    if not isinstance(val, list):
+        return val
+    order = provider_map(provider).get("precedence", {}).get(field)
+    if order:
+        for candidate in order:
+            if candidate in val:
+                return candidate
+    return val[0] if val else None
+
+
+def _remap_value(provider: str, field: str, val):
+    """Traduce el valor con value_maps (ej. schacGender ISO 5218: 1→M, 2→F).
+    Un valor fuera del mapa se descarta (None) en vez de propagarse crudo."""
+    vmap = provider_map(provider).get("value_maps", {}).get(field)
+    if not vmap:
+        return val
+    return vmap.get(str(val))
+
+
 def map_fields(provider: str, raw: dict) -> dict:
-    """Aplica el mapeo de campos fuente→padrón. Passthrough si no hay mapa."""
+    """Aplica el mapeo de campos fuente→padrón. Passthrough si no hay mapa.
+    Tras renombrar, colapsa multivalores por precedencia y traduce value_maps."""
     conf = provider_map(provider)
     field_map = conf.get("fields", {})
     out: dict = {}
@@ -68,6 +96,11 @@ def map_fields(provider: str, raw: dict) -> dict:
             val = raw.get(key)
             if val is not None and val != "":
                 out[key] = val
+
+    for field in list(out):
+        out[field] = _remap_value(provider, field, _collapse(provider, field, out[field]))
+        if out[field] is None:
+            del out[field]
     return out
 
 

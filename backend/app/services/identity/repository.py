@@ -33,6 +33,24 @@ def find_person_by_identifier(db: Session, id_type: str, id_value: str) -> Perso
     return db.query(Person).filter(Person.person_key == ident.person_key).first()
 
 
+def find_person_by_value(db: Session, id_value: str) -> Person | None:
+    """Resuelve una persona por el VALOR de cualquiera de sus credenciales.
+
+    La persona puede presentar cualquiera de sus identificadores (carné,
+    documento, ...) y debe resolver al mismo registro, sin que el lector tenga
+    que saber cuál presentó. Equivale a la resolución en cascada por
+    identificadores únicos que hacen los sistemas de biblioteca.
+    """
+    ident = (
+        db.query(PersonIdentifier)
+        .filter(PersonIdentifier.id_value == id_value)
+        .first()
+    )
+    if ident is None:
+        return None
+    return db.query(Person).filter(Person.person_key == ident.person_key).first()
+
+
 def _sync_identifiers(db: Session, person_key: str, identifiers: dict) -> None:
     """Asegura filas (id_type, id_value)→person_key sin duplicar la credencial."""
     for id_type, id_value in (identifiers or {}).items():

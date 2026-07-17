@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     ldap_bind_pass: str = ""
     ldap_base_dn: str = ""
     ldap_user_filter: str = ""
+    # Atributos LDAP contra los que se busca el valor escaneado (coma-separados).
+    # Permite que carné o documento resuelvan a la misma persona.
+    ldap_id_attrs: str = ""
     ldap_page_size: int = 500
 
     # CSV (volumen /config) — testing sin LDAP real y clientes sin directorio
