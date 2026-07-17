@@ -3,6 +3,11 @@
 # - lookup:    filtro por el atributo que mapea al id_type consultado.
 # Mapea atributos (eduPerson/SCHAC/AD) → padrón vía mapping.py.
 # Ante conexión caída devuelve [] / None y health()=False, sin lanzar.
+#
+# Una instancia = una RAMA del directorio. Un directorio puede servir a su
+# población en varias ramas (p. ej. activos y egresados en sub-árboles
+# distintos), cada una con su propio base_dn, filtro y prioridad, pero
+# compartiendo host, bind y mapeo de atributos. Ver `branch` en __init__.
 
 import asyncio
 import logging
@@ -25,17 +30,29 @@ _DEFAULT_ATTR_FOR_ID_TYPE = {
 
 
 class LdapProvider:
-    def __init__(self, cfg=settings):
-        self.name = "ldap"
-        self.priority = cfg.ldap_priority
+    def __init__(self, cfg=settings, branch: dict | None = None):
+        """`branch` describe una rama adicional del mismo directorio:
+        {"name", "base_dn", "user_filter", "priority", "map_key"}. Lo que no
+        declare se hereda de la config global (host, bind, id_attrs, page_size).
+
+        `name` identifica la INSTANCIA (traza los sync runs por rama); `map_key`
+        elige el sub-mapa del identity_map y, con él, el namespace del
+        person_key. Por defecto ambas ramas comparten map_key="ldap": son el
+        mismo directorio, así que la misma persona deriva la misma clave y
+        colapsa a una sola fila del padrón en vez de duplicarse.
+        """
+        branch = branch or {}
+        self.name = branch.get("name") or "ldap"
+        self.map_key = branch.get("map_key") or "ldap"
+        self.priority = branch.get("priority", cfg.ldap_priority)
         self.enabled = cfg.ldap_enabled
         self.host = cfg.ldap_host
         self.bind_dn = cfg.ldap_bind_dn
         self.bind_pass = cfg.ldap_bind_pass
-        self.base_dn = cfg.ldap_base_dn
+        self.base_dn = branch.get("base_dn") or cfg.ldap_base_dn
         # Filtro base: acota a la población viva/gobernada de la institución.
         # UPeU: "(eduPersonAffiliation=member)" — excluye egresados y fósiles.
-        self.user_filter = cfg.ldap_user_filter or "(objectClass=person)"
+        self.user_filter = branch.get("user_filter") or cfg.ldap_user_filter or "(objectClass=person)"
         self.page_size = cfg.ldap_page_size
         # Atributos contra los que se busca el valor escaneado. Una persona
         # puede presentar cualquiera de sus credenciales (carné o documento) y
@@ -44,7 +61,7 @@ class LdapProvider:
 
     # ── helpers de mapeo ────────────────────────────────────────────────
     def _attr_for_id_type(self, id_type: str) -> str | None:
-        id_map = provider_map(self.name).get("identifiers", {})
+        id_map = provider_map(self.map_key).get("identifiers", {})
         for attr, mapped_type in id_map.items():
             if mapped_type == id_type:
                 return attr
@@ -93,7 +110,9 @@ class LdapProvider:
                 if entry.get("type") != "searchResEntry":
                     continue
                 raw = self._flatten(entry.get("attributes", {}))
-                rec = record_from_raw(self.name, raw, self.name)
+                # map_key elige el mapeo y el namespace del person_key (común a
+                # todas las ramas); name registra de qué rama vino el dato.
+                rec = record_from_raw(self.map_key, raw, self.name)
                 if rec is not None:
                     records.append(rec)
             # Guarda anti-truncado: el servidor puede cortar la búsqueda por
@@ -116,11 +135,13 @@ class LdapProvider:
 
     # ── interfaz IdentityProvider ───────────────────────────────────────
     async def fetch_all(self):
-        try:
-            return await asyncio.to_thread(self._search, self.user_filter)
-        except Exception as e:
-            logger.warning(f"LdapProvider.fetch_all falló: {e}")
-            return []
+        # A propósito NO se captura: el sync necesita distinguir "la fuente no
+        # tiene a nadie" de "la fuente falló o truncó". Devolver [] ante un
+        # fallo hace que la corrida se registre como 'ok' con 0 registros y el
+        # operador crea que el padrón está completo. `sync_provider` captura y
+        # marca la corrida en 'error'. (El hot path del escaneo es `lookup`, y
+        # ese sí degrada en silencio.)
+        return await asyncio.to_thread(self._search, self.user_filter)
 
     async def lookup(
         self, id_type: str, id_value: str, sede_code: str = ""

@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # Permite que carné o documento resuelvan a la misma persona.
     ldap_id_attrs: str = ""
     ldap_page_size: int = 500
+    # Ramas adicionales del MISMO directorio, como JSON. Un directorio puede
+    # servir a su población en sub-árboles distintos (p. ej. activos y
+    # egresados): cada rama declara su base_dn/filtro/prioridad y hereda host,
+    # bind y mapeo. Vacío = una sola rama (ldap_base_dn).
+    #   [{"name": "ldap-alumni", "base_dn": "ou=alumni,dc=...",
+    #     "user_filter": "(&(objectClass=inetOrgPerson)(eduPersonAffiliation=alum))",
+    #     "priority": 35}]
+    ldap_branches: str = ""
 
     # CSV (volumen /config) — testing sin LDAP real y clientes sin directorio
     csv_enabled: bool = False
