@@ -36,17 +36,25 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     if not space:
         space_id = None
 
-    sede_code = settings.default_sede_code  # fallback (vacío → Koha global)
-    if space and space.sede_id:
-        sede = db.query(Sede).filter(Sede.id == space.sede_id).first()
-        if sede:
-            sede_code = sede.code
+    # Código que enruta a los proveedores multi-instancia (hoy: Koha por
+    # biblioteca). NO es el campus: una sede puede tener más de una biblioteca
+    # (Lima: BUL y CIA comparten sede_id), así que el código va en el Space,
+    # no en la Sede. Sin library_code (institución de una sola biblioteca por
+    # campus, o producto agnóstico sin overlay), cae al código de sede.
+    routing_code = settings.default_sede_code  # fallback (vacío → Koha global)
+    if space:
+        if space.library_code:
+            routing_code = space.library_code
+        elif space.sede_id:
+            sede = db.query(Sede).filter(Sede.id == space.sede_id).first()
+            if sede:
+                routing_code = sede.code
 
     # Resolver identidad vía el padrón local + proveedores (relleno perezoso).
     # NUNCA lanza: si nada responde/encuentra devuelve (None, "unidentified")
     # y el aforo se registra igual. Ya NO se lanza 404 por carnet desconocido.
     id_type = _infer_id_type(cardnumber)
-    person, origin = await resolve_person(db, id_type, cardnumber, sede_code)
+    person, origin = await resolve_person(db, id_type, cardnumber, routing_code)
 
     # Snapshot de datos para el evento y la respuesta.
     if person is not None:
