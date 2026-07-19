@@ -27,15 +27,28 @@ class KohaDbProvider:
     - lookup: por `cardnumber` (WHERE cardnumber = ...).
     - fetch_all: volcado completo del padrón (paginado) para el sync.
     - Todo el I/O bloqueante corre en asyncio.to_thread (hot path async).
+
+    Una institución puede tener más de una biblioteca (más de una BD Koha) —
+    p. ej. UPeU: BUL y CIA en el mismo campus Lima, BUT en Tarapoto, BUJ en
+    Juliaca. `branch` construye una instancia para una biblioteca específica;
+    sin `branch` (la instancia por defecto) usa la config global y responde a
+    cualquier código de enrutamiento — es el comportamiento histórico, para no
+    romper instituciones con una sola biblioteca.
     """
 
-    def __init__(self, cfg=settings):
-        self.name = "koha_db"
-        self.priority = cfg.koha_db_priority
+    def __init__(self, cfg=settings, branch: dict | None = None):
+        branch = branch or {}
+        self.name = branch.get("name") or "koha_db"
+        # None = instancia global/catch-all (compatibilidad histórica).
+        # Con código, solo responde si el enrutamiento pide ESA biblioteca —
+        # evita conectar a la BD equivocada y, más importante, evita que un
+        # cardnumber de otra biblioteca resuelva por coincidencia.
+        self.library_code = branch.get("library_code")
+        self.priority = branch.get("priority", cfg.koha_db_priority)
         self.enabled = cfg.koha_db_enabled
 
     def _connect(self, sede_code: str):
-        host, user, pw, name = settings.koha_db_for_sede(sede_code)
+        host, user, pw, name = settings.koha_db_for_sede(self.library_code or sede_code)
         if not host or not name:
             return None
         return pymysql.connect(
@@ -66,6 +79,12 @@ class KohaDbProvider:
     ) -> PersonRecord | None:
         if id_type != "cardnumber":
             return None
+        # Rama de biblioteca específica: solo responde a SU código. Sin esto,
+        # un escaneo en Tarapoto probaría también contra la BD de Lima/CIA —
+        # además de inútil, un cardnumber que coincida por casualidad entre
+        # bibliotecas resolvería a la persona equivocada.
+        if self.library_code and sede_code and sede_code != self.library_code:
+            return None
 
         def run():
             conn = self._connect(sede_code)
@@ -91,7 +110,7 @@ class KohaDbProvider:
     async def fetch_all(self):
         """Volcado completo del padrón, paginado (para el sync programado)."""
         def run():
-            conn = self._connect("")
+            conn = self._connect(self.library_code or "")
             if conn is None:
                 return []
             out = []
