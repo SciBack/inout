@@ -149,6 +149,7 @@ class SpaceCreate(BaseModel):
     close_time: Optional[time] = None
     description: Optional[str] = None
     address: Optional[str] = None
+    library_code: Optional[str] = None
 
 
 class SpaceUpdate(BaseModel):
@@ -161,6 +162,7 @@ class SpaceUpdate(BaseModel):
     close_time: Optional[time] = None
     description: Optional[str] = None
     address: Optional[str] = None
+    library_code: Optional[str] = None
 
 
 class SpaceResponse(BaseModel):
@@ -175,6 +177,7 @@ class SpaceResponse(BaseModel):
     close_time: Optional[time] = None
     description: Optional[str] = None
     address: Optional[str] = None
+    library_code: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:

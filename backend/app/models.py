@@ -29,6 +29,11 @@ class Space(Base):
     close_time = Column(Time, nullable=True)
     description = Column(Text, nullable=True)
     address = Column(String(200), nullable=True)
+    # Código de la instancia Koha que atiende este espacio (p. ej. "BUL", "CIA").
+    # Distinto de sede_id: un campus (sede) puede tener más de una biblioteca —
+    # dos Space con el mismo sede_id pero library_code distinto. NULL = el
+    # espacio no enruta por biblioteca (usa el Koha global o el de la sede).
+    library_code = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

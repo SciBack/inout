@@ -43,6 +43,9 @@ def _run_migrations():
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS close_time TIME",
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS address VARCHAR(200)",
+        # Código de instancia Koha (biblioteca), distinto de sede_id: una sede
+        # puede tener más de una biblioteca (p. ej. Lima: BUL y CIA).
+        "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS library_code VARCHAR(20)",
         "ALTER TABLE spaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
         # Columna sort2 de Koha (código programa/escuela)
         "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS patron_program VARCHAR(20)",
