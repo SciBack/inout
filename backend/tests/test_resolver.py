@@ -171,6 +171,35 @@ class TestElAforoNuncaSeDetiene:
         assert origen == "unidentified"
         assert p.lookups == []
 
+    def test_una_colision_de_identidad_no_tumba_el_escaneo(self, db, con_proveedores):
+        """Si la fuente trae a dos personas con el mismo documento, el upsert
+        rechaza la fusión — y el kiosko debe seguir contando, degradando a
+        'Sin identificar' en vez de registrar a alguien como otra persona."""
+        from app.services.identity.repository import upsert_person
+
+        upsert_person(
+            db,
+            PersonRecord(
+                person_key="ldap:14586255", full_name="Yasmani", source="ldap",
+                identifiers={"cardnumber": "323100145", "dni": "14586255"},
+            ),
+            source="ldap",
+        )
+        # El proveedor devuelve otra persona con el MISMO documento.
+        con_proveedores(
+            FakeProvider("ldap", 30, PersonRecord(
+                person_key="ldap:14586255", full_name="Otra", source="ldap",
+                identifiers={"cardnumber": "202211927", "dni": "14586255"},
+            ))
+        )
+        person, origen = asyncio.run(resolve_person(db, "cardnumber", "202211927"))
+        assert person is None
+        assert origen == "unidentified"
+        # Y Yasmani sigue intacto.
+        from app.models import Person
+
+        assert db.query(Person).count() == 1
+
     def test_propaga_la_sede_al_proveedor(self, db, con_proveedores):
         """Las fuentes multi-sede necesitan saber desde qué campus se escanea."""
         p = FakeProvider("ldap", 30, registro())

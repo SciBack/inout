@@ -5,9 +5,12 @@ Lo crítico aquí es la reconciliación: la misma persona vista por dos proveedo
 ser estable una vez asignado porque presence_log lo referencia.
 """
 
+import pytest
+
 from app.models import Person, PersonIdentifier
 from app.services.identity.base import PersonRecord
 from app.services.identity.repository import (
+    IdentityCollision,
     find_person_by_identifier,
     find_person_by_value,
     upsert_person,
@@ -128,6 +131,45 @@ class TestReconciliacionCrossProveedor:
         )
         assert db.query(Person).count() == 1
         assert db.query(Person).one().person_key == "ldap:201913085"
+
+    def test_no_fusiona_dos_personas_con_el_mismo_documento(self, db):
+        """Caso real (MidPoint 2026-07-18): un bug de deduplicación aguas arriba
+        asignó a una persona el documento de OTRA. Como el person_key se deriva
+        del documento, ambas colapsan a la misma clave.
+
+        Fusionarlas haría que una entre al aforo registrada como la otra, sin
+        traza. Se rechaza el upsert."""
+        upsert_person(
+            db,
+            rec("ldap:14586255", {"cardnumber": "323100145", "dni": "14586255"}, full_name="Yasmani"),
+            source="ldap",
+        )
+        # Otra persona, con el MISMO documento por el bug → misma clave derivada.
+        with pytest.raises(IdentityCollision):
+            upsert_person(
+                db,
+                rec("ldap:14586255", {"cardnumber": "202211927", "dni": "14586255"}, full_name="Otra"),
+                source="ldap",
+            )
+        p = db.query(Person).one()
+        assert p.full_name == "Yasmani"
+        assert find_person_by_value(db, "323100145").full_name == "Yasmani"
+        # La credencial de la otra persona NO quedó apuntando a Yasmani.
+        assert find_person_by_value(db, "202211927") is None
+
+    def test_el_cambio_legitimo_de_documento_sigue_reconciliando(self, db):
+        """La guarda no debe romper el caso que sí queremos: mismo carné,
+        documento corregido (los 24 de MidPoint con uid estable)."""
+        upsert_person(db, rec("ldap:02306947", {"cardnumber": "9610165", "dni": "02306947"}, full_name="Ada"), source="ldap")
+        upsert_person(db, rec("ldap:02416310", {"cardnumber": "9610165", "dni": "02416310"}, full_name="Ada"), source="ldap")
+        assert db.query(Person).count() == 1
+
+    def test_la_guarda_no_aplica_sin_carne_entrante(self, db):
+        """Una fuente que no trae carné (p. ej. un CSV con solo DNI) no puede
+        disparar la guarda: sin carné no hay con qué comparar."""
+        upsert_person(db, rec("k", {"cardnumber": "111", "dni": "1"}, full_name="Ada"), source="ldap")
+        upsert_person(db, rec("k", {"dni": "1"}, full_name="Ada"), source="csv")
+        assert db.query(Person).count() == 1
 
     def test_personas_distintas_no_se_mezclan(self, db):
         upsert_person(db, rec("ldap:1", {"dni": "1", "cardnumber": "10"}, full_name="Ada"), source="ldap")

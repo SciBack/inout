@@ -72,15 +72,75 @@ def _sync_identifiers(db: Session, person_key: str, identifiers: dict) -> None:
             existing.person_key = person_key
 
 
+class IdentityCollision(Exception):
+    """Dos personas distintas caen en el mismo person_key.
+
+    Ocurre cuando la fuente asigna a una persona un documento que ya es el de
+    otra (p. ej. por un bug de deduplicación aguas arriba): como el person_key
+    se deriva del documento, ambas colapsan a la misma clave y se fusionarían
+    en una sola fila.
+
+    Se lanza en vez de fusionar. Los dos consumidores ya la manejan: el sync la
+    cuenta como error de ese registro, y el escaneo degrada a "Sin identificar".
+    Contar a alguien como no identificado es un hueco de dato; contarlo como
+    OTRA PERSONA es un fallo de identidad, y en aforo además queda sin traza.
+    """
+
+
+def _conflicting_cardnumber(db: Session, person: Person, rec: PersonRecord) -> tuple | None:
+    """Devuelve (carné_existente, carné_entrante) si son personas distintas.
+
+    El carné es el identificador institucional: una persona tiene exactamente
+    uno. Dos registros que comparten person_key pero declaran carnés distintos
+    son dos humanos, no dos vistas del mismo.
+
+    No se compara el documento a propósito: que cambie con el carné estable es
+    justo el caso legítimo (corrección de DNI) que sí debe reconciliar.
+    """
+    entrante = (rec.identifiers or {}).get("cardnumber")
+    if not entrante:
+        return None
+    existente = (
+        db.query(PersonIdentifier)
+        .filter(
+            PersonIdentifier.person_key == person.person_key,
+            PersonIdentifier.id_type == "cardnumber",
+        )
+        .first()
+    )
+    if existente is None or existente.id_value == str(entrante):
+        return None
+    return (existente.id_value, str(entrante))
+
+
 def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
     """Upsert idempotente en `persons` por person_key + sincroniza credenciales.
 
     Hace commit y devuelve la fila persistida. Solo actualiza los campos que el
-    record trae informados (no borra data previa con None)."""
+    record trae informados (no borra data previa con None).
+
+    Lanza IdentityCollision si el registro entrante y la fila existente son
+    personas distintas (ver _conflicting_cardnumber)."""
     now = datetime.now(timezone.utc)
 
     # 1. Buscar por person_key.
     person = db.query(Person).filter(Person.person_key == rec.person_key).first()
+
+    # 1.bis Guarda de identidad: la clave coincide, pero ¿es la misma persona?
+    if person is not None:
+        choque = _conflicting_cardnumber(db, person, rec)
+        if choque:
+            existente, entrante = choque
+            logger.error(
+                "[identity] COLISIÓN person_key=%s: la fila existente tiene carné %s "
+                "y el registro entrante trae %s. Son personas distintas — se rechaza "
+                "el upsert en vez de fusionarlas. Origen probable: documento duplicado "
+                "en la fuente '%s'.",
+                rec.person_key, existente, entrante, source,
+            )
+            raise IdentityCollision(
+                f"person_key={rec.person_key} compartido por carné {existente} y {entrante}"
+            )
 
     # 2. Reconciliar por identificadores: si el person_key derivado cambió (p. ej.
     #    una fila que antes no tenía DNI y ahora sí, cambiando la clave de mayor
