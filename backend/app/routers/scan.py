@@ -69,8 +69,11 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         )
         person_key = person.person_key
     else:
+        # No está en el padrón ni en ninguna fuente. Se registra igual: InOut
+        # mide ocupación, no controla acceso — esta persona está físicamente
+        # dentro y para evacuación cuenta como cualquier otra.
         patron_name = "Sin identificar"
-        patron_category = ""
+        patron_category = settings.unidentified_category
         gender = ""
         faculty = None
         program = None
@@ -113,9 +116,15 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     db.refresh(log)
 
     duration = None
+    identified = person is not None
     if event_type == "entry":
-        greeting = "Bienvenida" if gender == "F" else "Bienvenido"
-        message = f"{greeting}, {first_name}" if first_name else greeting
+        if identified:
+            greeting = "Bienvenida" if gender == "F" else "Bienvenido"
+            message = f"{greeting}, {first_name}" if first_name else greeting
+        else:
+            # Se avisa que no figura en el padrón, pero el ingreso SÍ quedó
+            # registrado: el texto no debe sugerir que se le negó el acceso.
+            message = "No figuras en el padrón — ingreso registrado como visita"
     else:
         message = f"Hasta luego, {first_name}" if first_name else "Hasta luego"
         duration = _format_duration(last.timestamp) if last else None
@@ -140,6 +149,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         message=message,
         duration=duration,
         from_cache=(origin == "local"),
+        identified=identified,
     )
 
 

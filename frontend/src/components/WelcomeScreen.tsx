@@ -13,6 +13,9 @@ interface ScanResult {
   message: string
   duration: string | null
   timestamp: string
+  // false = no se encontró en ningún padrón. El ingreso SÍ quedó registrado:
+  // InOut mide ocupación, no controla acceso. La pantalla avisa, no rechaza.
+  identified?: boolean
 }
 
 interface Props {
@@ -25,6 +28,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   DOCEN: 'Docente',
   ADMIN: 'Administrativo',
   EXTERN: 'Externo',
+  visitor: 'Visita',
 }
 
 function speak(text: string) {
@@ -63,43 +67,54 @@ function ArrowDownIcon() {
 export function WelcomeScreen({ result, isVisible }: Props) {
   const { event_type, patron, message, duration } = result
   const isEntry = event_type === 'entry'
+  const isUnknown = result.identified === false
   const [photoError, setPhotoError] = useState(false)
 
   const firstName = patron.first_name || patron.firstname.split(' ')[0]
   const photoUrl = patron.patron_id ? `/api/patron-photo/${patron.patron_id}` : null
+  // Sin nombre no hay a quién saludar: se rotula el hecho (quedó como visita).
+  const displayName = firstName || (isUnknown ? 'VISITA' : patron.name)
 
   useEffect(() => {
     const hour = new Date().getHours()
     const timeGreet = hour < 12 ? 'buenos días' : hour < 19 ? 'buenas tardes' : 'buenas noches'
-    const audioText = isEntry
-      ? (patron.gender === 'F' ? `Bienvenida, ${timeGreet}` : `Bienvenido, ${timeGreet}`)
-      : timeGreet.charAt(0).toUpperCase() + timeGreet.slice(1)
+    const audioText = isUnknown
+      ? 'Registrado como visita'
+      : isEntry
+        ? (patron.gender === 'F' ? `Bienvenida, ${timeGreet}` : `Bienvenido, ${timeGreet}`)
+        : timeGreet.charAt(0).toUpperCase() + timeGreet.slice(1)
     speak(audioText)
     setPhotoError(false)
   }, [message])
 
   const categoryLabel = CATEGORY_LABELS[patron.category] || patron.category
 
-  // Entry = verde lima neón | Exit = violeta neón
-  const accentColor = isEntry
-    ? '#39ff14'
-    : '#bf5fff'
+  // Entry = verde lima neón | Exit = violeta neón | No identificado = ámbar.
+  // Ámbar y no rojo a propósito: el ingreso se registró, no se rechazó nada.
+  // InOut no controla acceso; el color avisa, no bloquea.
+  const accentColor = isUnknown
+    ? '#ffb020'
+    : isEntry
+      ? '#39ff14'
+      : '#bf5fff'
 
-  const accentGlow = isEntry
-    ? 'oklch(30% 0.14 148)'
-    : 'oklch(24% 0.12 295)'
+  const accentBorder = isUnknown
+    ? 'rgba(255,176,32,0.70)'
+    : isEntry
+      ? 'rgba(57,255,20,0.70)'
+      : 'rgba(191,95,255,0.70)'
 
-  const accentBorder = isEntry
-    ? 'rgba(57,255,20,0.70)'
-    : 'rgba(191,95,255,0.70)'
+  const accentBoxShadow = isUnknown
+    ? '0 0 0 3px rgba(255,176,32,0.45), 0 0 55px rgba(255,176,32,0.60)'
+    : isEntry
+      ? '0 0 0 3px rgba(57,255,20,0.45), 0 0 55px rgba(57,255,20,0.65)'
+      : '0 0 0 3px rgba(191,95,255,0.45), 0 0 55px rgba(191,95,255,0.65)'
 
-  const accentBoxShadow = isEntry
-    ? '0 0 0 3px rgba(57,255,20,0.45), 0 0 55px rgba(57,255,20,0.65)'
-    : '0 0 0 3px rgba(191,95,255,0.45), 0 0 55px rgba(191,95,255,0.65)'
-
-  const containerBg = isEntry
-    ? `radial-gradient(ellipse at 50% 35%, oklch(28% 0.16 148) 0%, oklch(9% 0.025 148) 55%, oklch(6% 0.012 232) 100%)`
-    : `radial-gradient(ellipse at 50% 35%, oklch(22% 0.14 295) 0%, oklch(9% 0.022 295) 55%, oklch(6% 0.012 232) 100%)`
+  const containerBg = isUnknown
+    ? `radial-gradient(ellipse at 50% 35%, oklch(30% 0.13 75) 0%, oklch(9% 0.025 75) 55%, oklch(6% 0.012 232) 100%)`
+    : isEntry
+      ? `radial-gradient(ellipse at 50% 35%, oklch(28% 0.16 148) 0%, oklch(9% 0.025 148) 55%, oklch(6% 0.012 232) 100%)`
+      : `radial-gradient(ellipse at 50% 35%, oklch(22% 0.14 295) 0%, oklch(9% 0.022 295) 55%, oklch(6% 0.012 232) 100%)`
 
   const animStyle: React.CSSProperties = isVisible
     ? { animation: 'welcomeIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards' }
@@ -109,7 +124,7 @@ export function WelcomeScreen({ result, isVisible }: Props) {
     ...s.badge,
     color: accentColor,
     border: `1px solid ${accentBorder}`,
-    background: isEntry
+    background: isUnknown ? 'rgba(255,176,32,0.14)' : isEntry
       ? 'rgba(57,255,20,0.14)'
       : 'rgba(191,95,255,0.14)',
   }
@@ -148,12 +163,14 @@ export function WelcomeScreen({ result, isVisible }: Props) {
             onError={() => setPhotoError(true)}
           />
         ) : (
-          <span style={initialsStyle}>{getInitials(patron.name)}</span>
+          <span style={initialsStyle}>
+            {isUnknown ? '?' : getInitials(patron.name)}
+          </span>
         )}
       </div>
 
       {/* Nombre */}
-      <h1 style={s.name}>{firstName.toUpperCase()}</h1>
+      <h1 style={s.name}>{displayName.toUpperCase()}</h1>
 
       {/* Categoría */}
       {categoryLabel && (

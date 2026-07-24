@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     koha_cia_api_user: str = ""
     koha_cia_api_pass: str = ""
 
+    # Categoría con la que se registra a quien no está en ningún padrón.
+    # InOut NO controla acceso (no hay molinete ni restricción): solo mide. Un
+    # desconocido ocupa el edificio igual, así que se cuenta — pero como visita,
+    # no con categoría vacía, que en el dashboard caía en "OTROS" junto con
+    # códigos legítimos sin mapear y volvía invisible el dato.
+    unidentified_category: str = "visitor"
+
     default_space_id: int = 1
     default_space_capacity: int = 150
     default_space_name: str = "Biblioteca"

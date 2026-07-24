@@ -32,6 +32,10 @@ class ScanResponse(BaseModel):
     message: str
     duration: Optional[str] = None  # solo en salida, solo visual
     from_cache: bool = False
+    # False = no se encontró en ningún padrón. El evento SÍ se registró (InOut
+    # mide ocupación, no controla acceso); el kiosko lo usa para avisarle a la
+    # persona, no para negarle nada.
+    identified: bool = True
 
 
 class PresenceEntry(BaseModel):
