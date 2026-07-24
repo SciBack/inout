@@ -642,11 +642,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* ── CUERPO: 3 columnas de igual altura — métricas | actividad
-          reciente | facultades. Cada una con su propio scroll interno. ── */}
+      {/* ── CUERPO: 2 columnas de igual altura — métricas (+ facultades
+          debajo) | actividad reciente. Cada una con su propio scroll. ── */}
       <div style={s.body}>
 
-        {/* COLUMNA 1: gauge + tarjetas estadísticas */}
+        {/* COLUMNA 1: gauge + tarjetas estadísticas + facultades */}
         <div style={s.colStats}>
 
           {/* Gauge compacto */}
@@ -721,6 +721,13 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
 
           {/* Visitantes de otro campus — no se muestra si viene vacío */}
           <CrossCampusCard breakdown={data.cross_campus_breakdown ?? []} />
+
+          {/* Barras por facultad — debajo de las métricas, dentro de esta
+              misma columna. */}
+          <div style={s.facultyInCol}>
+            <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
+            <FacultyBarChart rows={data.faculty_breakdown} />
+          </div>
 
         </div>
 
@@ -824,14 +831,6 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           </div>
         </div>
 
-        {/* COLUMNA 3: visitantes por facultad, altura completa con scroll propio */}
-        <div style={s.facultyInCol}>
-          <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
-          <div style={s.facultyScroll}>
-            <FacultyBarChart rows={data.faculty_breakdown} />
-          </div>
-        </div>
-
       </div>
 
     </div>
@@ -877,9 +876,9 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: FONT_BODY,
   },
 
-  // Cuerpo — 3 columnas de igual altura: métricas | actividad reciente |
-  // facultades (el lector de tarjeta vive aparte, en el panel derecho del
-  // kiosko — ver App.tsx). Cada columna tiene su propio scroll interno.
+  // Cuerpo — 2 columnas de igual altura: métricas (+ facultades debajo) |
+  // actividad reciente (el lector de tarjeta vive aparte, en el panel
+  // derecho del kiosko — ver App.tsx). Cada columna con scroll propio.
   body: {
     flex: '1 1 0',
     minHeight: 0,
@@ -951,11 +950,10 @@ const s: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
 
-  // Columna 3 — visitantes por facultad, altura completa con scroll propio.
+  // Barras de facultad — último bloque de la columna 1, fluye naturalmente
+  // debajo de las métricas (no es columna propia).
   facultyInCol: {
-    flex: '1 1 0',
-    minWidth: 0,
-    minHeight: 0,
+    flex: '0 0 auto',
     background: C.card,
     border: `1px solid ${C.border}`,
     borderRadius: 14,
@@ -963,12 +961,6 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(5px,0.7vh,9px)',
-    overflow: 'hidden',
-  },
-  facultyScroll: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: 'auto',
   },
   feedList: {
     flex: 1,
