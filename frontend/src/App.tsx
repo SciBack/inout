@@ -38,6 +38,14 @@ interface ScanResult {
   timestamp: string
 }
 
+interface SpaceInfo {
+  id: number
+  name: string
+  capacity: number
+  sede_code: string | null
+  sede_name: string | null
+}
+
 const WELCOME_DURATION = 5000
 const LEAVE_DURATION = 350
 
@@ -101,7 +109,7 @@ body { overflow: hidden; background: #0f172a; }
 export default function App() {
   if (isAdmin) return <AdminApp />
 
-  const spaceId = getSpaceId()
+  const urlSpaceId = getSpaceId()
 
   const [state, setState] = useState<AppState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
@@ -109,6 +117,46 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('')
   const [showError, setShowError] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // ── Red de contención: si nadie configuró ?space= ni localStorage,
+  // resolver contra GET /api/spaces (auto-selección si hay 1 solo, selector
+  // si hay 2+, error si no hay ninguno). También sirve para mostrar el
+  // nombre del edificio activo en el panel derecho, sin fetch adicional.
+  const [spaces, setSpaces] = useState<SpaceInfo[] | null>(null)
+  const [spacesFetchFailed, setSpacesFetchFailed] = useState(false)
+  const [autoSpaceId, setAutoSpaceId] = useState<number | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/spaces')
+      .then(res => {
+        if (!res.ok) throw new Error(`status ${res.status}`)
+        return res.json()
+      })
+      .then((data: SpaceInfo[]) => {
+        if (cancelled) return
+        setSpaces(data)
+        if (urlSpaceId === undefined && data.length === 1) {
+          localStorage.setItem('inout_space_id', String(data[0].id))
+          setAutoSpaceId(data[0].id)
+        }
+      })
+      .catch(() => { if (!cancelled) setSpacesFetchFailed(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  const spaceId = urlSpaceId ?? autoSpaceId
+  const activeSpace = spaces?.find(sp => sp.id === spaceId)
+
+  const changeBuilding = () => {
+    localStorage.removeItem('inout_space_id')
+    window.location.reload()
+  }
+
+  const selectBuilding = (id: number) => {
+    localStorage.setItem('inout_space_id', String(id))
+    window.location.reload()
+  }
 
   // Inyectar CSS global una sola vez
   useEffect(() => {
@@ -176,6 +224,18 @@ export default function App() {
 
   const showWelcome = state === 'welcome' && scanResult !== null
 
+  // ── Red de contención: sin espacio resuelto todavía ─────────────────────
+  if (spaceId === undefined) {
+    if (spacesFetchFailed || (spaces !== null && spaces.length === 0)) {
+      return <SpaceErrorScreen />
+    }
+    if (spaces !== null && spaces.length >= 2) {
+      return <SpaceSelectionScreen spaces={spaces} onSelect={selectBuilding} />
+    }
+    // Todavía cargando /api/spaces, o length===1 esperando a que se aplique el auto-select
+    return <SpaceLoadingScreen />
+  }
+
   return (
     <div className="kiosk-root" style={styles.root}>
       <div className="panel-left" style={styles.left}>
@@ -183,6 +243,13 @@ export default function App() {
       </div>
 
       <div className="panel-right" style={styles.right}>
+        {activeSpace && (
+          <span style={styles.buildingBadge}>{activeSpace.name.toUpperCase()}</span>
+        )}
+        <button style={styles.changeBuildingBtn} onClick={changeBuilding}>
+          Cambiar edificio
+        </button>
+
         <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
 
         {showWelcome && (
@@ -203,6 +270,154 @@ export default function App() {
       </div>
     </div>
   )
+}
+
+// ── Pantallas de resolución de espacio ──────────────────────────────────────
+function SpaceLoadingScreen() {
+  return (
+    <div style={spaceStyles.screen}>
+      <span style={spaceStyles.loadingText}>Cargando...</span>
+    </div>
+  )
+}
+
+function SpaceErrorScreen() {
+  return (
+    <div style={spaceStyles.screen}>
+      <div style={spaceStyles.card}>
+        <span style={spaceStyles.errorIcon}>⚠</span>
+        <h1 style={spaceStyles.title}>No hay edificios configurados</h1>
+        <p style={spaceStyles.subtitle}>Contactar al administrador</p>
+      </div>
+    </div>
+  )
+}
+
+function SpaceSelectionScreen({
+  spaces, onSelect,
+}: { spaces: SpaceInfo[]; onSelect: (id: number) => void }) {
+  // Agrupar preservando el orden que ya entrega la API (sede_code, name)
+  const groups: { key: string; label: string; items: SpaceInfo[] }[] = []
+  for (const sp of spaces) {
+    const key = sp.sede_code ?? '__sin_sede__'
+    const label = sp.sede_name ?? 'Otros'
+    let group = groups.find(g => g.key === key)
+    if (!group) {
+      group = { key, label, items: [] }
+      groups.push(group)
+    }
+    group.items.push(sp)
+  }
+
+  return (
+    <div style={spaceStyles.screen}>
+      <div style={spaceStyles.card}>
+        <h1 style={spaceStyles.title}>Selecciona tu edificio</h1>
+        <p style={spaceStyles.subtitle}>Este kiosko quedará configurado para el espacio elegido</p>
+
+        <div style={spaceStyles.groups}>
+          {groups.map(group => (
+            <div key={group.key} style={spaceStyles.group}>
+              <span style={spaceStyles.groupLabel}>{group.label}</span>
+              <div style={spaceStyles.groupItems}>
+                {group.items.map(sp => (
+                  <button
+                    key={sp.id}
+                    style={spaceStyles.spaceBtn}
+                    onClick={() => onSelect(sp.id)}
+                  >
+                    {sp.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const spaceStyles: Record<string, React.CSSProperties> = {
+  screen: {
+    width: '100vw',
+    height: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#0f172a',
+    padding: '2rem',
+  },
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.5rem',
+    maxWidth: '640px',
+    width: '100%',
+    textAlign: 'center',
+  },
+  title: {
+    fontSize: 'clamp(20px,2.6vh,32px)',
+    fontWeight: 700,
+    color: 'oklch(88% 0.010 222)',
+    fontFamily: "'Barlow', sans-serif",
+    letterSpacing: '0.02em',
+  },
+  subtitle: {
+    fontSize: 'clamp(13px,1.6vh,18px)',
+    color: 'oklch(50% 0.013 222)',
+    fontFamily: "'Barlow', sans-serif",
+    marginBottom: '1.5rem',
+  },
+  errorIcon: {
+    fontSize: 'clamp(32px,4vh,48px)',
+    color: 'oklch(66% 0.24 25)',
+    marginBottom: '0.5rem',
+  },
+  loadingText: {
+    fontSize: 'clamp(14px,1.6vh,18px)',
+    color: 'oklch(45% 0.013 222)',
+    fontFamily: "'Barlow', sans-serif",
+  },
+  groups: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+    width: '100%',
+  },
+  group: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.6rem',
+    alignItems: 'center',
+  },
+  groupLabel: {
+    fontSize: 'clamp(11px,1.3vh,14px)',
+    color: 'oklch(48% 0.014 222)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.14em',
+    fontFamily: "'Barlow', sans-serif",
+    fontWeight: 600,
+  },
+  groupItems: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.75rem',
+    justifyContent: 'center',
+  },
+  spaceBtn: {
+    padding: '0.9rem 1.6rem',
+    background: 'oklch(15% 0.024 229)',
+    border: '1px solid oklch(25% 0.028 228)',
+    borderRadius: '10px',
+    color: 'oklch(88% 0.010 222)',
+    fontSize: 'clamp(14px,1.7vh,19px)',
+    fontWeight: 600,
+    fontFamily: "'Barlow', sans-serif",
+    cursor: 'pointer',
+    transition: 'border-color 0.2s, background 0.2s',
+  },
 }
 
 function Clock() {
@@ -244,6 +459,33 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     borderLeft: '1px solid #1e293b',
     overflow: 'hidden',
+  },
+  buildingBadge: {
+    position: 'absolute',
+    top: '1rem',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: 'clamp(10px,1.1vh,13px)',
+    fontWeight: 700,
+    color: 'oklch(40% 0.013 222)',
+    letterSpacing: '0.14em',
+    fontFamily: "'Barlow', sans-serif",
+    userSelect: 'none',
+    zIndex: 5,
+  },
+  changeBuildingBtn: {
+    position: 'absolute',
+    top: '1rem',
+    right: '1rem',
+    background: 'transparent',
+    border: 'none',
+    color: 'oklch(32% 0.013 222)',
+    fontSize: 'clamp(10px,1.1vh,12px)',
+    fontFamily: "'Barlow', sans-serif",
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
+    padding: '0.3rem 0.5rem',
+    zIndex: 5,
   },
   errorOverlay: {
     position: 'absolute',

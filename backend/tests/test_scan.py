@@ -10,6 +10,7 @@ cuenta como cualquier otro.
 import asyncio
 
 import pytest
+from fastapi import HTTPException
 
 from app.models import PresenceLog, Space
 from app.services.identity.base import PersonRecord
@@ -100,3 +101,66 @@ class TestIdentificadoNoCambia:
         r = _scan(db, "111", monkeypatch, persona=p)
         assert r.identified is True
         assert "bienvenid" in r.message.lower()
+
+
+class TestResolucionDeEspacio:
+    """El backend ya no adivina el edificio con settings.default_space_id.
+
+    Si hay un único espacio activo, se resuelve solo (institución de un solo
+    edificio). Si hay más de uno, el kiosko debe indicar space_id. Un
+    space_id inválido o inactivo es rechazado explícitamente.
+    """
+
+    def test_un_solo_espacio_activo_no_exige_space_id(self, db, espacio, monkeypatch):
+        r = _scan(db, "999999", monkeypatch, persona=None)
+        assert r.event_type == "entry"
+        log = db.query(PresenceLog).one()
+        assert log.space_id == espacio.id
+
+    def test_dos_espacios_activos_sin_space_id_da_400(self, db, monkeypatch):
+        db.add(Space(id=1, name="CRAI Lima", capacity=100, active=True))
+        db.add(Space(id=2, name="CRAI Juliaca", capacity=80, active=True))
+        db.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            _scan(db, "999999", monkeypatch, persona=None)
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "space_id_requerido"
+
+    def test_space_id_de_espacio_inactivo_da_400(self, db, monkeypatch):
+        db.add(Space(id=1, name="CRAI Lima", capacity=100, active=False))
+        db.commit()
+
+        from app.routers import scan as scan_mod
+        from app.schemas import ScanRequest
+
+        async def fake_resolve(_db, id_type, id_value, sede_code=""):
+            return (None, "unidentified")
+
+        monkeypatch.setattr(scan_mod, "resolve_person", fake_resolve)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(scan_mod.scan(ScanRequest(cardnumber="999999", space_id=1), db))
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "space_id_invalido"
+
+    def test_space_id_inexistente_da_400(self, db, monkeypatch):
+        from app.routers import scan as scan_mod
+        from app.schemas import ScanRequest
+
+        async def fake_resolve(_db, id_type, id_value, sede_code=""):
+            return (None, "unidentified")
+
+        monkeypatch.setattr(scan_mod, "resolve_person", fake_resolve)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(scan_mod.scan(ScanRequest(cardnumber="999999", space_id=999), db))
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "space_id_invalido"
+
+    def test_cero_espacios_activos_da_400(self, db, monkeypatch):
+        db.add(Space(id=1, name="CRAI Lima", capacity=100, active=False))
+        db.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            _scan(db, "999999", monkeypatch, persona=None)
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "sin_espacios_activos"

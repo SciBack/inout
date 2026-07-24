@@ -15,6 +15,7 @@ interface Space {
   close_time: string | null
   active: boolean
   created_at: string | null
+  library_code: string | null
 }
 
 interface Props {
@@ -24,6 +25,7 @@ interface Props {
 const EMPTY_FORM = {
   sede_id: '', name: '', capacity: '', location: '', address: '',
   description: '', open_time: '07:00', close_time: '21:00', active: true,
+  library_code: '',
 }
 
 function fmtTime(t: string | null): string {
@@ -75,6 +77,7 @@ export function SpacesPage({ token }: Props) {
       open_time: sp.open_time ? sp.open_time.slice(0, 5) : '07:00',
       close_time: sp.close_time ? sp.close_time.slice(0, 5) : '21:00',
       active: sp.active,
+      library_code: sp.library_code || '',
     })
     setError('')
     setModalOpen(true)
@@ -94,6 +97,7 @@ export function SpacesPage({ token }: Props) {
       open_time: form.open_time || null,
       close_time: form.close_time || null,
       active: form.active,
+      library_code: form.library_code.trim() || null,
     }
     const url = editing ? `/api/admin/spaces/${editing.id}` : '/api/admin/spaces'
     const method = editing ? 'PUT' : 'POST'
@@ -207,6 +211,13 @@ export function SpacesPage({ token }: Props) {
                     <option key={sd.id} value={sd.id}>{sd.code} — {sd.name}</option>
                   ))}
                 </select>
+              </div>
+              <div style={{ ...s.formField, gridColumn: '1 / -1' }}>
+                <label style={s.label}>Código de biblioteca (Koha)</label>
+                <input style={s.input} value={form.library_code} onChange={f('library_code')} placeholder="Ej: BUL, CIA, BUT, BUJ" />
+                <span style={{ fontSize: '0.75rem', color: '#475569' }}>
+                  Opcional. Solo si el edificio tiene su propia base Koha (ej: BUL, CIA, BUT, BUJ).
+                </span>
               </div>
               <div style={s.formField}>
                 <label style={s.label}>Nombre *</label>

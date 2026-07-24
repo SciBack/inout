@@ -110,6 +110,18 @@ class DashboardStats(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Público — Spaces (kiosko, sin autenticación)
+# ---------------------------------------------------------------------------
+
+class PublicSpaceResponse(BaseModel):
+    id: int
+    name: str
+    capacity: int
+    sede_code: Optional[str] = None
+    sede_name: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # Admin — Sedes
 # ---------------------------------------------------------------------------
 

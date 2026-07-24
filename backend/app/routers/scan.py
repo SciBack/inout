@@ -30,11 +30,28 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     if not cardnumber:
         raise HTTPException(status_code=400, detail="cardnumber requerido")
 
-    # Resolver espacio y sede del kiosko (campus/edificio del INGRESO)
-    space_id = req.space_id or settings.default_space_id
-    space = db.query(Space).filter(Space.id == space_id).first()
-    if not space:
-        space_id = None
+    # Resolver espacio y sede del kiosko (campus/edificio del INGRESO). El
+    # backend ya no adivina el edificio con un default global: o el kiosko lo
+    # indica explícitamente, o se resuelve solo cuando hay un único espacio
+    # activo posible (institución de un solo edificio, sin configurar nada).
+    if req.space_id is not None:
+        space = (
+            db.query(Space)
+            .filter(Space.id == req.space_id, Space.active == True)  # noqa: E712
+            .first()
+        )
+        if not space:
+            raise HTTPException(status_code=400, detail="space_id_invalido")
+        space_id = space.id
+    else:
+        active_spaces = db.query(Space).filter(Space.active == True).all()  # noqa: E712
+        if len(active_spaces) == 0:
+            raise HTTPException(status_code=400, detail="sin_espacios_activos")
+        elif len(active_spaces) == 1:
+            space = active_spaces[0]
+            space_id = space.id
+        else:
+            raise HTTPException(status_code=400, detail="space_id_requerido")
 
     # Código que enruta a los proveedores multi-instancia (hoy: Koha por
     # biblioteca). NO es el campus: una sede puede tener más de una biblioteca

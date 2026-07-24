@@ -7,9 +7,9 @@ from zoneinfo import ZoneInfo
 LIMA = ZoneInfo("America/Lima")
 
 from ..database import get_db
-from ..models import PresenceLog, Space
+from ..models import PresenceLog, Space, Sede
 from collections import defaultdict
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse
 from ..config import settings
 from ..services.faculty_map import resolve_faculty
 from ..services.labels import normalize_category, category_label, faculty_label
@@ -18,6 +18,30 @@ router = APIRouter()
 
 # Los códigos de categoría/facultad son data de la institución: se cargan del
 # overlay vía services/labels.py (ver labels_config_path).
+
+
+@router.get("/spaces", response_model=list[PublicSpaceResponse])
+def get_spaces(db: Session = Depends(get_db)):
+    """Espacios activos para el selector del kiosko. Sin autenticación
+    (el kiosko público no puede loguearse). Contrato congelado — ver
+    tests/test_scan.py y tests de este endpoint antes de tocar la forma."""
+    rows = (
+        db.query(Space, Sede)
+        .outerjoin(Sede, Space.sede_id == Sede.id)
+        .filter(Space.active == True)  # noqa: E712
+        .order_by(Sede.code, Space.name)
+        .all()
+    )
+    return [
+        PublicSpaceResponse(
+            id=space.id,
+            name=space.name,
+            capacity=space.capacity,
+            sede_code=sede.code if sede else None,
+            sede_name=sede.name if sede else None,
+        )
+        for space, sede in rows
+    ]
 
 
 def _lima_day_bounds() -> tuple[datetime, datetime, datetime, datetime]:
