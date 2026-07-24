@@ -21,11 +21,11 @@ LDAP_MAP = {
             "eduPersonAffiliation": "category",
             "schacGender": "gender",
             "instFacultyCode": "faculty",
-            "instDocumentNumber": "dni",
+            "instDocumentNumber": "document_number",
         },
         "identifiers": {
             "uid": "cardnumber",
-            "instDocumentNumber": "dni",
+            "instDocumentNumber": "document_number",
         },
         "value_maps": {"gender": {"1": "M", "2": "F"}},
         "precedence": {"category": ["faculty", "staff", "student", "alum", "member"]},
@@ -100,7 +100,7 @@ class TestValueMaps:
 class TestIdentificadores:
     def test_extrae_los_declarados(self):
         out = map_identifiers("ldap", {"uid": "201913085", "instDocumentNumber": "40390492"})
-        assert out == {"cardnumber": "201913085", "dni": "40390492"}
+        assert out == {"cardnumber": "201913085", "document_number": "40390492"}
 
     def test_coacciona_a_str(self):
         assert map_identifiers("ldap", {"uid": 12345})["cardnumber"] == "12345"
@@ -120,7 +120,7 @@ class TestRecordFromRaw:
         )
         assert rec.person_key == "ldap:40390492"
         assert rec.full_name == "Ada"
-        assert rec.identifiers == {"cardnumber": "201913085", "dni": "40390492"}
+        assert rec.identifiers == {"cardnumber": "201913085", "document_number": "40390492"}
 
     def test_sin_dni_cae_al_carne(self):
         rec = record_from_raw("ldap", {"cn": "Ada", "uid": "201913085"}, source="ldap")

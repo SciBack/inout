@@ -71,7 +71,7 @@ def _run_migrations():
             program VARCHAR(20),
             escuela VARCHAR(100),
             role VARCHAR(50),
-            dni VARCHAR(20),
+            document_number VARCHAR(20),
             email VARCHAR(200),
             home_sede_code VARCHAR(20),
             home_building VARCHAR(100),
@@ -108,6 +108,34 @@ def _run_migrations():
             status VARCHAR(20)
         )
         """,
+        # "dni" era mal nombre: el campo guarda DNI, carné de extranjería o
+        # pasaporte indistintamente, no solo DNI peruano. Renombrado a
+        # document_number. DO block condicional (no un ALTER simple) porque
+        # esta migración corre en cada arranque: en instalaciones ya migradas
+        # la columna "dni" ya no existe, y un ALTER RENAME sin guarda
+        # reventaría al repetirse.
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='persons' AND column_name='dni')
+               AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='persons' AND column_name='document_number')
+            THEN
+                ALTER TABLE persons RENAME COLUMN dni TO document_number;
+            END IF;
+        END $$;
+        """,
+        # Alinea las filas viejas de person_identifiers con el id_type nuevo.
+        # No es cosmético: _sync_identifiers (repository.py) busca credenciales
+        # existentes por (id_type, id_value) juntos. Si el código nuevo escribe
+        # identifiers con clave "document_number" pero las filas viejas siguen
+        # con id_type='dni', no las reconoce como la misma fila y crea una
+        # DUPLICADA (no viola el unique constraint porque (id_type,id_value) es
+        # una combinación distinta) — mismo valor, dos filas, una basura
+        # acumulándose. Este UPDATE cierra esa ventana. Es un UPDATE con WHERE
+        # exacto sobre un valor tipo-enum, no sobre dato de usuario.
+        "UPDATE person_identifiers SET id_type = 'document_number' WHERE id_type = 'dni'",
     ]
     with engine.connect() as conn:
         for stmt in stmts:

@@ -54,7 +54,7 @@ def con_proveedores(monkeypatch):
 
 def registro(person_key="ldap:40390492", **kw):
     kw.setdefault("full_name", "Ada")
-    kw.setdefault("identifiers", {"cardnumber": "201913085", "dni": "40390492"})
+    kw.setdefault("identifiers", {"cardnumber": "201913085", "document_number": "40390492"})
     return PersonRecord(person_key=person_key, source="ldap", **kw)
 
 
@@ -75,7 +75,7 @@ class TestPadronLocalPrimero:
         upsert_person(db, registro(), source="ldap")
 
         _, origen_carne = asyncio.run(resolve_person(db, "cardnumber", "201913085"))
-        _, origen_dni = asyncio.run(resolve_person(db, "dni", "40390492"))
+        _, origen_dni = asyncio.run(resolve_person(db, "document_number", "40390492"))
 
         assert origen_carne == origen_dni == "local"
 
@@ -116,7 +116,7 @@ class TestRellenoPerezoso:
     def test_indexa_la_credencial_consultada(self, db, con_proveedores):
         """Aunque la fuente no la devuelva entre sus identifiers, la credencial
         escaneada debe quedar indexada o el próximo escaneo repetiría la red."""
-        con_proveedores(FakeProvider("ldap", 30, registro(identifiers={"dni": "40390492"})))
+        con_proveedores(FakeProvider("ldap", 30, registro(identifiers={"document_number": "40390492"})))
 
         asyncio.run(resolve_person(db, "cardnumber", "201913085"))
 
@@ -181,7 +181,7 @@ class TestElAforoNuncaSeDetiene:
             db,
             PersonRecord(
                 person_key="ldap:14586255", full_name="Yasmani", source="ldap",
-                identifiers={"cardnumber": "323100145", "dni": "14586255"},
+                identifiers={"cardnumber": "323100145", "document_number": "14586255"},
             ),
             source="ldap",
         )
@@ -189,7 +189,7 @@ class TestElAforoNuncaSeDetiene:
         con_proveedores(
             FakeProvider("ldap", 30, PersonRecord(
                 person_key="ldap:14586255", full_name="Otra", source="ldap",
-                identifiers={"cardnumber": "202211927", "dni": "14586255"},
+                identifiers={"cardnumber": "202211927", "document_number": "14586255"},
             ))
         )
         person, origen = asyncio.run(resolve_person(db, "cardnumber", "202211927"))

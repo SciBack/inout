@@ -29,11 +29,11 @@ from .base import PersonRecord
 # Campos asignables a PersonRecord (excluye person_key, que se resuelve aparte).
 ASSIGNABLE_FIELDS = {
     "full_name", "first_name", "gender", "category", "faculty", "program",
-    "escuela", "role", "dni", "email", "home_sede_code", "home_building",
+    "escuela", "role", "document_number", "email", "home_sede_code", "home_building",
 }
 
 # Tipos de credencial reconocidos para el passthrough sin mapa configurado.
-KNOWN_ID_TYPES = {"cardnumber", "uid", "samaccountname", "dni", "email"}
+KNOWN_ID_TYPES = {"cardnumber", "uid", "samaccountname", "document_number", "email"}
 
 
 def _load_identity_map() -> dict:
@@ -124,7 +124,7 @@ def map_identifiers(provider: str, raw: dict) -> dict:
 
 def _fallback_key(provider: str, identifiers: dict) -> str | None:
     """person_key derivado cuando la fuente no trae uno explícito."""
-    for id_type in ("dni", "cardnumber", "samaccountname", "uid", "email"):
+    for id_type in ("document_number", "cardnumber", "samaccountname", "uid", "email"):
         val = identifiers.get(id_type)
         if val:
             return f"{provider}:{val}"

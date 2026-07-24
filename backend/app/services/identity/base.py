@@ -21,7 +21,7 @@ class PersonRecord:
     program: str | None = None
     escuela: str | None = None
     role: str | None = None
-    dni: str | None = None
+    document_number: str | None = None
     email: str | None = None
     home_sede_code: str | None = None
     home_building: str | None = None
@@ -29,7 +29,7 @@ class PersonRecord:
     # Payload original del proveedor (para auditoría / debugging).
     raw: dict | None = None
     # Credenciales por las que se puede resolver a esta persona.
-    # {id_type: id_value}, p. ej. {"cardnumber": "12345", "dni": "70000000"}.
+    # {id_type: id_value}, p. ej. {"cardnumber": "12345", "document_number": "70000000"}.
     identifiers: dict[str, str] = field(default_factory=dict)
 
 

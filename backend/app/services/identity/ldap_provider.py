@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_ATTR_FOR_ID_TYPE = {
     "uid": "uid",
     "samaccountname": "sAMAccountName",
-    "dni": "employeeNumber",
+    "document_number": "employeeNumber",
     "cardnumber": "employeeNumber",
     "email": "mail",
 }

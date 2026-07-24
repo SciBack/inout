@@ -34,7 +34,7 @@ class FakeProvider:
 
 
 def registro(person_key, **kw):
-    kw.setdefault("identifiers", {"dni": person_key.split(":")[-1]})
+    kw.setdefault("identifiers", {"document_number": person_key.split(":")[-1]})
     return PersonRecord(person_key=person_key, source="fuente", **kw)
 
 
@@ -93,16 +93,16 @@ class TestUnRegistroMaloNoTumbaLaCorrida:
     def test_sigue_tras_un_registro_que_falla(self, db):
         primero = PersonRecord(
             person_key="ldap:1", full_name="Ada", source="fuente",
-            identifiers={"cardnumber": "111", "dni": "1"},
+            identifiers={"cardnumber": "111", "document_number": "1"},
         )
         # Misma clave (mismo documento) pero OTRO carné → son dos personas.
         malo = PersonRecord(
             person_key="ldap:1", full_name="Impostor", source="fuente",
-            identifiers={"cardnumber": "999", "dni": "1"},
+            identifiers={"cardnumber": "999", "document_number": "1"},
         )
         ultimo = PersonRecord(
             person_key="ldap:2", full_name="Grace", source="fuente",
-            identifiers={"cardnumber": "222", "dni": "2"},
+            identifiers={"cardnumber": "222", "document_number": "2"},
         )
         p = FakeProvider(records=[primero, malo, ultimo])
 

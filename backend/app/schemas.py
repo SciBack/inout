@@ -311,7 +311,7 @@ class PersonResponse(BaseModel):
     program: Optional[str] = None
     escuela: Optional[str] = None
     role: Optional[str] = None
-    dni: Optional[str] = None
+    document_number: Optional[str] = None
     email: Optional[str] = None
     home_sede_code: Optional[str] = None
     home_building: Optional[str] = None

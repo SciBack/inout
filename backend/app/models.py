@@ -84,7 +84,7 @@ class Person(Base):
     program = Column(String(20))        # código escuela/programa
     escuela = Column(String(100))       # nombre de la escuela/programa
     role = Column(String(50))           # rol/estamento (docente, alumno, etc.)
-    dni = Column(String(20))
+    document_number = Column(String(20))
     email = Column(String(200))
     home_sede_code = Column(String(20))  # campus de pertenencia
     home_building = Column(String(100))  # edificio de pertenencia
@@ -97,11 +97,11 @@ class Person(Base):
 
 class PersonIdentifier(Base):
     """Índice de credenciales → person_key. Resuelve el escaneo sea cual sea
-    la credencial leída (cardnumber, uid, samaccountname, dni, email)."""
+    la credencial leída (cardnumber, uid, samaccountname, document_number, email)."""
     __tablename__ = "person_identifiers"
 
     id = Column(Integer, primary_key=True, index=True)
-    id_type = Column(String(50), nullable=False)   # 'cardnumber' | 'uid' | 'samaccountname' | 'dni' | 'email'
+    id_type = Column(String(50), nullable=False)   # 'cardnumber' | 'uid' | 'samaccountname' | 'document_number' | 'email'
     id_value = Column(String(200), nullable=False, index=True)
     person_key = Column(String(100), nullable=False, index=True)
 
