@@ -103,6 +103,28 @@ class TestIdentificadoNoCambia:
         assert "bienvenid" in r.message.lower()
 
 
+class TestSnapshotHomeSede:
+    """patron_home_sede es un SNAPSHOT del campus de origen de la persona al
+    momento del evento (igual patrón que patron_category/patron_faculty)."""
+
+    def test_persona_identificada_guarda_su_home_sede_code(self, db, espacio, monkeypatch):
+        p = upsert_person(
+            db,
+            PersonRecord(person_key="ldap:1", full_name="Ada Lovelace", source="ldap",
+                         category="student", home_sede_code="JULIACA",
+                         identifiers={"cardnumber": "111"}),
+            source="ldap",
+        )
+        _scan(db, "111", monkeypatch, persona=p)
+        log = db.query(PresenceLog).one()
+        assert log.patron_home_sede == "JULIACA"
+
+    def test_persona_no_identificada_guarda_null(self, db, espacio, monkeypatch):
+        _scan(db, "999999", monkeypatch, persona=None)
+        log = db.query(PresenceLog).one()
+        assert log.patron_home_sede is None
+
+
 class TestResolucionDeEspacio:
     """El backend ya no adivina el edificio con settings.default_space_id.
 

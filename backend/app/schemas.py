@@ -81,6 +81,12 @@ class FacultyEvent(BaseModel):
     ts: str           # ISO timestamp — el frontend convierte a hora local
 
 
+class HomeSedeCount(BaseModel):
+    home_sede_code: Optional[str] = None   # null = "origen no registrado"
+    label: str                              # nombre de la sede, o "Origen no registrado"
+    count: int                              # visitantes ÚNICOS hoy (por cardnumber) con ese origen
+
+
 class DashboardStats(BaseModel):
     space_name: str
     capacity: int
@@ -107,6 +113,7 @@ class DashboardStats(BaseModel):
     hourly_entries: list[HourlyCount] = []
     faculty_timelines: list[FacultyTimeline] = []
     faculty_events: list[FacultyEvent] = []
+    cross_campus_breakdown: list[HomeSedeCount] = []
 
 
 # ---------------------------------------------------------------------------

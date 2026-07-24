@@ -85,6 +85,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
             name_parts[0].capitalize() if name_parts else ""
         )
         person_key = person.person_key
+        home_sede = person.home_sede_code
     else:
         # No está en el padrón ni en ninguna fuente. Se registra igual: InOut
         # mide ocupación, no controla acceso — esta persona está físicamente
@@ -96,6 +97,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         program = None
         first_name = ""
         person_key = None
+        home_sede = None
 
     # Determinar si es entrada o salida
     last = (
@@ -125,6 +127,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         patron_gender=gender or None,
         patron_faculty=faculty,
         patron_program=program,
+        patron_home_sede=home_sede,
         event_type=event_type,
         space_id=space_id,
     )

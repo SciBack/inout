@@ -9,7 +9,7 @@ LIMA = ZoneInfo("America/Lima")
 from ..database import get_db
 from ..models import PresenceLog, Space, Sede
 from collections import defaultdict
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse, HomeSedeCount
 from ..config import settings
 from ..services.faculty_map import resolve_faculty
 from ..services.labels import normalize_category, category_label, faculty_label
@@ -62,6 +62,62 @@ def _lima_day_bounds() -> tuple[datetime, datetime, datetime, datetime]:
     ayer_inicio = hoy_inicio - timedelta(days=1)
     ayer_fin    = hoy_inicio
     return hoy_inicio, hoy_fin, ayer_inicio, ayer_fin
+
+
+def _compute_cross_campus_breakdown(
+    db: Session, sid: int, hoy_ini: datetime, hoy_fin: datetime, own_sede_code: str | None
+) -> list[HomeSedeCount]:
+    """Visitantes cruzados hoy: gente cuyo campus de origen (patron_home_sede,
+    snapshot tomado en el momento del evento) no es el propio del space
+    consultado. Mismo patrón que category_breakdown: se agrupa por perfil
+    (aquí, patron_home_sede) y se cuentan cardnumbers ÚNICOS, no eventos.
+
+    Sin dependencias de funciones SQL específicas de Postgres (extract/
+    timezone) a propósito — así se puede probar directo contra SQLite.
+    """
+    home_sede_pairs = (
+        db.query(PresenceLog.patron_home_sede, PresenceLog.cardnumber)
+        .filter(
+            PresenceLog.event_type == "entry",
+            PresenceLog.space_id == sid,
+            PresenceLog.timestamp >= hoy_ini,
+            PresenceLog.timestamp < hoy_fin,
+        )
+        .distinct()
+        .all()
+    )
+
+    cards_by_home_sede: dict = {}
+    for home_sede, card in home_sede_pairs:
+        cards_by_home_sede.setdefault(home_sede, set()).add(card)
+
+    # El propio origen es uso local normal, no un "visitante cruzado" — se
+    # excluye SOLO si el space tiene sede propia definida (si no, no hay base
+    # de comparación y se muestran todos los orígenes tal cual). El grupo
+    # None ("origen no registrado") nunca se excluye, en ningún caso.
+    if own_sede_code is not None:
+        cards_by_home_sede.pop(own_sede_code, None)
+
+    known_codes = [code for code in cards_by_home_sede if code is not None]
+    sede_names = {}
+    if known_codes:
+        sede_names = {
+            s.code: s.name
+            for s in db.query(Sede).filter(Sede.code.in_(known_codes)).all()
+        }
+
+    return sorted(
+        (
+            HomeSedeCount(
+                home_sede_code=code,
+                label="Origen no registrado" if code is None else sede_names.get(code, code),
+                count=len(cards),
+            )
+            for code, cards in cards_by_home_sede.items()
+        ),
+        key=lambda h: h.count,
+        reverse=True,
+    )
 
 
 @router.get("/dashboard", response_model=DashboardStats)
@@ -450,6 +506,16 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         for row in raw_faculty_events
     ]
 
+    # ── Visitantes cruzados hoy (origen ≠ sede propia del space) ─────────────
+    own_sede_code = None
+    if space and space.sede_id:
+        own_sede = db.query(Sede).filter(Sede.id == space.sede_id).first()
+        own_sede_code = own_sede.code if own_sede else None
+
+    cross_campus_breakdown = _compute_cross_campus_breakdown(
+        db, sid, hoy_ini, hoy_fin, own_sede_code
+    )
+
     return DashboardStats(
         space_name=space_name,
         capacity=capacity,
@@ -476,4 +542,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         hourly_entries=hourly_entries,
         faculty_timelines=faculty_timelines,
         faculty_events=faculty_events,
+        cross_campus_breakdown=cross_campus_breakdown,
     )

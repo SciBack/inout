@@ -19,6 +19,7 @@ interface DashboardData {
   category_breakdown: { category: string; label: string; count: number }[]
   faculty_breakdown: { faculty: string; label: string; count: number }[]
   faculty_no_data: number
+  cross_campus_breakdown: { home_sede_code: string | null; label: string; count: number }[]
   recent_events: Array<{
     id: number
     cardnumber: string
@@ -79,6 +80,18 @@ const CATEGORY_COLORS: string[] = [
   'oklch(68% 0.18 295)',  // purple — Investigadores
   'oklch(70% 0.15 148)',  // green — Staff
   'oklch(65% 0.24 25)',   // red — otros
+]
+
+// Paleta para orígenes de campus cruzado. El código "Origen no registrado"
+// (patron_home_sede IS NULL) nunca usa esta paleta — se pinta con C.text3
+// para que se lea como dato faltante, no como una sede más.
+const CROSS_CAMPUS_COLORS: string[] = [
+  'oklch(73% 0.18 211)',  // cyan
+  'oklch(68% 0.17 244)',  // blue
+  'oklch(68% 0.18 295)',  // purple
+  'oklch(73% 0.17 76)',   // amber
+  'oklch(70% 0.15 148)',  // green
+  'oklch(65% 0.24 25)',   // red
 ]
 
 // ── Íconos estáticos — hoisted (no re-created per render) ───────────────────
@@ -303,6 +316,90 @@ const ProfilesCard = memo(function ProfilesCard({
                     width: `${pct}%`,
                     background: color,
                     borderRadius: 99,
+                    transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)',
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
+
+// ── CrossCampusCard ──────────────────────────────────────────────────────────
+// Visitantes que hoy pasaron por este espacio pero cuyo campus de origen
+// (patron_home_sede, snapshot al momento del evento) es distinto al de la
+// sede propia del space — o no está registrado. Si viene vacío (nadie de
+// otro campus hoy, y sin no-identificados) no se muestra: es lo normal.
+const CrossCampusCard = memo(function CrossCampusCard({
+  breakdown,
+}: { breakdown: { home_sede_code: string | null; label: string; count: number }[] }) {
+  if (breakdown.length === 0) return null
+
+  const total = breakdown.reduce((s, r) => s + r.count, 0)
+  const sorted = [...breakdown].sort((a, b) => b.count - a.count)
+  let namedIdx = 0
+
+  return (
+    <div style={{
+      flex: '0 0 auto',
+      background: C.card,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,20px)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 'clamp(6px,0.8vh,11px)',
+      overflow: 'hidden',
+    }}>
+      <span style={s.sectionLabel}>Visitantes de otro campus · hoy</span>
+
+      {total === 0 ? (
+        <span style={{ color: C.text3, fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.4vh,16px)' }}>
+          Sin visitantes de otro campus hoy
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(5px,0.7vh,9px)' }}>
+          {sorted.map((row) => {
+            const isUnknown = row.home_sede_code === null
+            const pct = total > 0 ? Math.round((row.count / total) * 100) : 0
+            const color = isUnknown ? C.text3 : CROSS_CAMPUS_COLORS[namedIdx++ % CROSS_CAMPUS_COLORS.length]
+            return (
+              <div key={row.home_sede_code ?? '__unknown__'} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{
+                    fontFamily: FONT_BODY,
+                    fontSize: 'clamp(11px,1.25vh,15px)',
+                    color: isUnknown ? C.text3 : C.text2,
+                    fontStyle: isUnknown ? 'italic' : 'normal',
+                    fontWeight: 500,
+                  }}>
+                    {row.label}
+                  </span>
+                  <span style={{
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: 'clamp(14px,1.8vh,22px)',
+                    color,
+                    letterSpacing: '0.03em',
+                    lineHeight: 1,
+                  }}>
+                    {row.count}
+                  </span>
+                </div>
+                <div style={{
+                  height: 'clamp(3px,0.4vh,5px)',
+                  background: C.border,
+                  borderRadius: 99,
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${pct}%`,
+                    background: color,
+                    borderRadius: 99,
+                    opacity: isUnknown ? 0.6 : 1,
                     transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)',
                   }} />
                 </div>
@@ -620,6 +717,9 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
             />
 
           </div>
+
+          {/* Visitantes de otro campus — no se muestra si viene vacío */}
+          <CrossCampusCard breakdown={data.cross_campus_breakdown ?? []} />
 
           {/* Barras por facultad — dentro de col izquierda */}
           <div style={s.facultyInCol}>

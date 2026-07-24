@@ -52,6 +52,9 @@ def _run_migrations():
         # FK lógica al padrón local (nullable — el aforo no depende de la identidad)
         "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS person_key VARCHAR(100)",
         "CREATE INDEX IF NOT EXISTS ix_presence_log_person_key ON presence_log (person_key)",
+        # Snapshot del campus de origen de la persona al momento del evento
+        # (visitantes cruzados entre campus). NULL = no identificado.
+        "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS patron_home_sede VARCHAR(20)",
         # Columnas de admin_users
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",

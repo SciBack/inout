@@ -47,6 +47,11 @@ class PresenceLog(Base):
     patron_gender = Column(String(1))   # 'M' | 'F' | None
     patron_faculty = Column(String(20)) # sort1 de Koha (facultad)
     patron_program = Column(String(20)) # sort2 de Koha (código escuela/programa)
+    # Snapshot del campus de ORIGEN de la persona (Person.home_sede_code) al
+    # momento del evento — NO una relación: si la persona se traslada de
+    # campus después, el histórico debe seguir reflejando de dónde era
+    # entonces. NULL para gente no identificada (no hay de dónde sacarlo).
+    patron_home_sede = Column(String(20), nullable=True)
     person_key = Column(String(100), nullable=True, index=True)  # FK lógica al padrón local (persons)
     event_type = Column(String(10), nullable=False)  # 'entry' | 'exit'
     space_id = Column(Integer, ForeignKey("spaces.id"))
