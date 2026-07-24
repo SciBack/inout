@@ -331,9 +331,11 @@ export default function App() {
 
   const changeBuilding = () => {
     localStorage.removeItem('inout_space_id')
-    // Ir a /kiosko explícitamente: si esto quedara en bare "/", sin espacio
-    // resuelto la raíz ahora muestra el dashboard público, no el selector.
-    window.location.href = '/kiosko'
+    // Volver al panel de inicio ("/"), no a /kiosko: ahí vive el panorama
+    // general Y el selector de edificio (picker en la topbar), así que este
+    // botón cumple ambas cosas — "volver al inicio" y "elegir otro
+    // edificio" — sin una pantalla intermedia dedicada solo a elegir.
+    window.location.href = '/'
   }
 
   const selectBuilding = (id: number) => {
@@ -509,7 +511,7 @@ export default function App() {
           <span style={styles.buildingBadge}>{activeSpace.name.toUpperCase()}</span>
         )}
         <button style={styles.changeBuildingBtn} onClick={changeBuilding}>
-          Cambiar edificio
+          ← Inicio
         </button>
 
         {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando

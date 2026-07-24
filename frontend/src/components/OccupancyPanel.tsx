@@ -151,7 +151,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: '150px', display: 'block' }}>
+    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: '96px', display: 'block' }}>
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -196,22 +196,22 @@ const StatCard = memo(function StatCard({
     <div style={{
       background: C.card,
       border: `1px solid ${C.border}`,
-      borderRadius: 14,
-      padding: 'clamp(14px,1.9vh,26px) clamp(16px,2vh,24px)',
+      borderRadius: 12,
+      padding: 'clamp(8px,1.0vh,14px) clamp(10px,1.2vh,16px)',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       alignItems: 'center',
       textAlign: 'center' as const,
-      gap: 4,
+      gap: 2,
       gridColumn: wide ? 'span 2' : undefined,
       overflow: 'hidden',
     }}>
       <span style={{
-        fontSize: 'clamp(11px,1.3vh,16px)',
+        fontSize: 'clamp(9.5px,1.05vh,13px)',
         color: C.text3,
         textTransform: 'uppercase' as const,
-        letterSpacing: '0.12em',
+        letterSpacing: '0.1em',
         fontFamily: FONT_BODY,
         fontWeight: 600,
       }}>
@@ -220,7 +220,7 @@ const StatCard = memo(function StatCard({
       <span
         ref={valueRef}
         style={{
-          fontSize: numSize ?? 'clamp(42px,6.0vh,78px)',
+          fontSize: numSize ?? 'clamp(26px,3.6vh,46px)',
           lineHeight: 1,
           fontFamily: FONT_DISPLAY,
           color,
@@ -232,11 +232,11 @@ const StatCard = memo(function StatCard({
       </span>
       {sub && (
         <span style={{
-          fontSize: 'clamp(12px,1.5vh,18px)',
+          fontSize: 'clamp(10px,1.15vh,14px)',
           color: subColor ?? C.text2,
           fontFamily: FONT_BODY,
           fontWeight: 500,
-          marginTop: 2,
+          marginTop: 1,
         }}>
           {sub}
         </span>
@@ -256,18 +256,18 @@ const ProfilesCard = memo(function ProfilesCard({
     <div style={{
       background: C.card,
       border: `1px solid ${C.border}`,
-      borderRadius: 14,
-      padding: 'clamp(14px,1.9vh,26px) clamp(16px,2vh,24px)',
+      borderRadius: 12,
+      padding: 'clamp(8px,1.0vh,14px) clamp(10px,1.2vh,16px)',
       display: 'flex',
       flexDirection: 'column',
-      gap: 'clamp(8px,1.0vh,14px)',
+      gap: 'clamp(5px,0.6vh,9px)',
       overflow: 'hidden',
     }}>
       <span style={{
-        fontSize: 'clamp(11px,1.3vh,16px)',
+        fontSize: 'clamp(9.5px,1.05vh,13px)',
         color: C.text3,
         textTransform: 'uppercase' as const,
-        letterSpacing: '0.12em',
+        letterSpacing: '0.1em',
         fontFamily: FONT_BODY,
         fontWeight: 600,
         flexShrink: 0,
@@ -276,20 +276,20 @@ const ProfilesCard = memo(function ProfilesCard({
       </span>
 
       {total === 0 ? (
-        <span style={{ color: C.text3, fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.4vh,16px)' }}>
+        <span style={{ color: C.text3, fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.2vh,14px)' }}>
           Sin registros aún
         </span>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(5px,0.7vh,9px)', flex: 1, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.5vh,7px)', flex: 1, justifyContent: 'center' }}>
           {sorted.map((row, i) => {
             const pct = total > 0 ? Math.round((row.count / total) * 100) : 0
             const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length]
             return (
-              <div key={row.category} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div key={row.category} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{
                     fontFamily: FONT_BODY,
-                    fontSize: 'clamp(11px,1.25vh,15px)',
+                    fontSize: 'clamp(10px,1.1vh,13px)',
                     color: C.text2,
                     fontWeight: 500,
                   }}>
@@ -297,7 +297,7 @@ const ProfilesCard = memo(function ProfilesCard({
                   </span>
                   <span style={{
                     fontFamily: FONT_DISPLAY,
-                    fontSize: 'clamp(14px,1.8vh,22px)',
+                    fontSize: 'clamp(12px,1.5vh,18px)',
                     color,
                     letterSpacing: '0.03em',
                     lineHeight: 1,
@@ -306,7 +306,7 @@ const ProfilesCard = memo(function ProfilesCard({
                   </span>
                 </div>
                 <div style={{
-                  height: 'clamp(3px,0.4vh,5px)',
+                  height: 'clamp(3px,0.35vh,4px)',
                   background: C.border,
                   borderRadius: 99,
                   overflow: 'hidden',
@@ -670,7 +670,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               color={C.cyan}
               sub={prevDaySub}
               subColor={C.text3}
-              numSize="clamp(52px,7.0vh,92px)"
+              numSize="clamp(32px,4.4vh,56px)"
             />
 
             {/* Perfiles hoy */}
@@ -701,7 +701,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               label="Prom. permanencia"
               value={avgStayStr}
               color={C.text1}
-              numSize="clamp(34px,4.8vh,64px)"
+              numSize="clamp(22px,3.0vh,38px)"
               sub={typicalStaySub}
               subColor={C.text3}
             />
@@ -711,7 +711,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               label="Hora punta"
               value={peakHourStr}
               color={C.amber}
-              numSize="clamp(34px,4.8vh,64px)"
+              numSize="clamp(22px,3.0vh,38px)"
               sub={typicalPeakSub}
               subColor={C.text3}
             />
@@ -896,21 +896,23 @@ const s: Record<string, React.CSSProperties> = {
     flex: '0 0 auto',
     background: C.card,
     border: `1px solid ${C.border}`,
-    borderRadius: 14,
-    padding: 'clamp(10px,1.2vh,16px) clamp(14px,1.8vh,20px)',
+    borderRadius: 12,
+    padding: 'clamp(6px,0.8vh,10px) clamp(12px,1.5vh,18px)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 'clamp(4px,0.5vh,7px)',
+    gap: 'clamp(2px,0.3vh,4px)',
   },
 
-  // Grid de tarjetas de estadísticas
+  // Grid de tarjetas de estadísticas — auto, no se estira: cada celda es un
+  // solo número, no necesita reclamar todo el alto disponible de la
+  // columna. El espacio que libera va al desglose por facultad de abajo,
+  // que sí tiene más datos reales que mostrar.
   statGrid: {
-    flex: '1 1 0',
-    minHeight: 0,
+    flex: '0 0 auto',
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: 'repeat(3, 1fr)',
+    gridTemplateRows: 'repeat(3, auto)',
     gap: 'clamp(5px,0.7vh,9px)',
   },
 
@@ -940,16 +942,20 @@ const s: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
 
-  // Barras de facultad dentro de col izquierda
+  // Barras de facultad dentro de col izquierda — absorbe el espacio que
+  // libera statGrid ahora que dejó de estirarse.
   facultyInCol: {
-    flex: '0 0 auto',
+    flex: '1 1 0',
+    minHeight: 0,
     background: C.card,
     border: `1px solid ${C.border}`,
     borderRadius: 14,
     padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,16px)',
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'center',
     gap: 'clamp(5px,0.7vh,9px)',
+    overflow: 'auto',
   },
   feedList: {
     flex: 1,
