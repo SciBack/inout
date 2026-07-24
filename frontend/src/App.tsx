@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
@@ -99,6 +99,10 @@ body { overflow: hidden; background: #0f172a; }
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-3px); }
 }
+@keyframes alertPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(1.08); }
+}
 @media (max-width: 767px) {
   .kiosk-root { flex-direction: column !important; }
   .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e293b !important; }
@@ -118,32 +122,111 @@ export default function App() {
   const [showError, setShowError] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // ── Estado de desconexión compartido ─────────────────────────────────────
+  // Mecanismo ÚNICO para "el fetch nunca completó" (timeout/abort, red caída,
+  // DNS, conexión rechazada), usado tanto por el escaneo (POST /api/scan)
+  // como por la resolución de espacio (GET /api/spaces). NO es para respuestas
+  // HTTP legítimas (400/404/429) — esas siguen su propio manejo de "error
+  // normal" más abajo. Mientras esté activo, un único poller de
+  // GET /api/health decide cuándo volvió la conexión.
+  // OJO: en desarrollo, React 18 StrictMode monta → desmonta → vuelve a
+  // montar cada efecto una vez (para detectar cleanups faltantes). Si este
+  // efecto solo pusiera `= false` en el cleanup sin volver a poner `= true`
+  // al montar, el segundo montaje quedaría con mountedRef.current en false
+  // PARA SIEMPRE — cualquier fetch en vuelo se descartaría en silencio y la
+  // UI se congela en "Cargando...". Por eso el mount también reafirma true.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+  const [connectionLost, setConnectionLost] = useState(false)
+
   // ── Red de contención: si nadie configuró ?space= ni localStorage,
   // resolver contra GET /api/spaces (auto-selección si hay 1 solo, selector
   // si hay 2+, error si no hay ninguno). También sirve para mostrar el
   // nombre del edificio activo en el panel derecho, sin fetch adicional.
   const [spaces, setSpaces] = useState<SpaceInfo[] | null>(null)
-  const [spacesFetchFailed, setSpacesFetchFailed] = useState(false)
   const [autoSpaceId, setAutoSpaceId] = useState<number | undefined>(undefined)
 
+  const fetchSpaces = useCallback(async () => {
+    // Primer paso: SOLO el fetch. Si esto lanza, la petición nunca completó
+    // (red caída, DNS, conexión rechazada) — es la misma desconexión que
+    // maneja el escaneo, mismo estado.
+    let res: Response
+    try {
+      res = await fetch('/api/spaces')
+    } catch {
+      if (mountedRef.current) setConnectionLost(true)
+      return
+    }
+
+    // El servidor SÍ respondió. Un status no-ok (500, etc.) es un problema
+    // del backend, NO desconexión — no lo confundimos con "sin conexión" ni
+    // seteamos connectionLost. Se queda "spaces" sin resolver y lo reintenta
+    // el efecto de abajo, sin mentir sobre la causa.
+    if (!res.ok) return
+
+    let data: SpaceInfo[]
+    try {
+      data = await res.json()
+    } catch {
+      // 200 con body inválido: mismo trato — problema de datos, no de red.
+      return
+    }
+
+    if (!mountedRef.current) return
+    setSpaces(data)
+    setConnectionLost(false)
+    if (urlSpaceId === undefined && data.length === 1) {
+      localStorage.setItem('inout_space_id', String(data[0].id))
+      setAutoSpaceId(data[0].id)
+    }
+  }, [urlSpaceId])
+
   useEffect(() => {
-    let cancelled = false
-    fetch('/api/spaces')
-      .then(res => {
-        if (!res.ok) throw new Error(`status ${res.status}`)
-        return res.json()
-      })
-      .then((data: SpaceInfo[]) => {
-        if (cancelled) return
-        setSpaces(data)
-        if (urlSpaceId === undefined && data.length === 1) {
-          localStorage.setItem('inout_space_id', String(data[0].id))
-          setAutoSpaceId(data[0].id)
-        }
-      })
-      .catch(() => { if (!cancelled) setSpacesFetchFailed(true) })
-    return () => { cancelled = true }
-  }, [])
+    fetchSpaces()
+  }, [fetchSpaces])
+
+  // Reintento propio para "el servidor respondió pero con error" (o un body
+  // inválido): NO pasa por connectionLost, así que necesita su propio timer
+  // para no quedarse colgado para siempre. Se auto-cancela apenas spaces se
+  // resuelve, o si un intento posterior sí falla por red (ahí toma la posta
+  // el poller de abajo).
+  useEffect(() => {
+    if (spaces !== null || connectionLost) return
+    const timeoutId = setTimeout(fetchSpaces, 10000)
+    return () => clearTimeout(timeoutId)
+  }, [spaces, connectionLost, fetchSpaces])
+
+  // Poller único de salud: mientras haya desconexión activa (venga del
+  // escaneo o de /api/spaces), sondear GET /api/health cada ~10s. Timeout
+  // corto propio (4s) en cada intento — con red lenta pero "viva" no
+  // queremos que cada sondeo cuelgue igual que colgaba el escaneo antes de
+  // este fix. Al recibir 200: limpiar la desconexión y, si /api/spaces
+  // nunca llegó a cargar (spaces === null), reintentarlo automáticamente.
+  useEffect(() => {
+    if (!connectionLost) return
+    const intervalId = setInterval(() => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 4000)
+      fetch('/api/health', { signal: controller.signal })
+        .then(res => {
+          clearTimeout(timeoutId)
+          if (!res.ok || !mountedRef.current) return
+          setConnectionLost(false)
+          if (spaces === null) {
+            fetchSpaces()
+          }
+        })
+        .catch(() => {
+          clearTimeout(timeoutId)
+          // sigue caído (o abortó por el timeout de 4s) — se reintenta en
+          // el próximo tick de 10s
+        })
+    }, 10000)
+    return () => clearInterval(intervalId)
+  }, [connectionLost, spaces, fetchSpaces])
 
   const spaceId = urlSpaceId ?? autoSpaceId
   const activeSpace = spaces?.find(sp => sp.id === spaceId)
@@ -192,33 +275,66 @@ export default function App() {
   }, [showError])
 
   const handleScan = async (cardnumber: string) => {
-    if (loading) return
+    if (loading || connectionLost) return
     setLoading(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+    // Primer try: SOLO el fetch en sí. Cualquier excepción acá significa que
+    // la petición nunca completó (timeout/abort, red caída, DNS, conexión
+    // rechazada) — es la única condición que cuenta como desconexión.
+    let res: Response
     try {
-      const res = await fetch('/api/scan', {
+      res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cardnumber, space_id: spaceId ?? null }),
+        signal: controller.signal,
       })
+    } catch {
+      clearTimeout(timeoutId)
+      if (mountedRef.current) {
+        setLoading(false)
+        setConnectionLost(true)
+      }
+      return
+    }
+    clearTimeout(timeoutId)
+
+    // Segundo try: el fetch YA completó (el servidor respondió). Cualquier
+    // problema de acá en adelante —incluido un body 200 mal formado— es un
+    // problema del backend, NUNCA desconexión.
+    try {
       if (res.ok) {
         const data = await res.json()
+        if (!mountedRef.current) return
         setScanResult(data)
         setIsLeaving(false)
         setState('welcome')
       } else if (res.status === 429) {
         // Debounce silencioso
       } else if (res.status === 404) {
-        setErrorMsg('Carnet no encontrado')
-        setShowError(true)
+        if (mountedRef.current) {
+          setErrorMsg('Carnet no encontrado')
+          setShowError(true)
+        }
       } else {
+        // El fetch SÍ completó y el servidor respondió (400/otros) — es el
+        // backend funcionando y diciendo que no, no una desconexión.
+        if (mountedRef.current) {
+          setErrorMsg('Error al procesar el carnet')
+          setShowError(true)
+        }
+      }
+    } catch {
+      // El body no se pudo parsear pese a que el fetch sí completó. No es
+      // desconexión: es un problema de datos, no de red.
+      if (mountedRef.current) {
         setErrorMsg('Error al procesar el carnet')
         setShowError(true)
       }
-    } catch {
-      setErrorMsg('Sin conexión con el servidor')
-      setShowError(true)
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }
 
@@ -226,8 +342,11 @@ export default function App() {
 
   // ── Red de contención: sin espacio resuelto todavía ─────────────────────
   if (spaceId === undefined) {
-    if (spacesFetchFailed || (spaces !== null && spaces.length === 0)) {
-      return <SpaceErrorScreen />
+    if (connectionLost) {
+      return <SpaceErrorScreen reason="connection" />
+    }
+    if (spaces !== null && spaces.length === 0) {
+      return <SpaceErrorScreen reason="empty" />
     }
     if (spaces !== null && spaces.length >= 2) {
       return <SpaceSelectionScreen spaces={spaces} onSelect={selectBuilding} />
@@ -250,7 +369,7 @@ export default function App() {
           Cambiar edificio
         </button>
 
-        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
+        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome' || connectionLost} />
 
         {showWelcome && (
           <WelcomeScreen result={scanResult!} isVisible={!isLeaving} />
@@ -264,6 +383,16 @@ export default function App() {
 
         {loading && state === 'idle' && (
           <div style={styles.loadingOverlay}>Procesando...</div>
+        )}
+
+        {connectionLost && (
+          <div style={styles.disconnectedOverlay}>
+            <span style={styles.disconnectedIcon}>⚠</span>
+            <span style={styles.disconnectedTitle}>Sin conexión con el servidor</span>
+            <span style={styles.disconnectedSubtitle}>
+              Los ingresos no se están registrando. Avisar a soporte.
+            </span>
+          </div>
         )}
 
         <Clock />
@@ -281,7 +410,23 @@ function SpaceLoadingScreen() {
   )
 }
 
-function SpaceErrorScreen() {
+function SpaceErrorScreen({ reason = 'empty' }: { reason?: 'empty' | 'connection' }) {
+  if (reason === 'connection') {
+    // /api/spaces no pudo completar el fetch (red caída) — NO es lo mismo
+    // que "0 espacios activos" (fetch que sí completó). El poller de
+    // /api/health reintenta /api/spaces solo, sin acción del usuario.
+    return (
+      <div style={spaceStyles.screen}>
+        <div style={spaceStyles.card}>
+          <span style={{ ...spaceStyles.errorIcon, animation: 'alertPulse 1.6s ease-in-out infinite' }}>⚠</span>
+          <h1 style={spaceStyles.title}>Sin conexión, reintentando...</h1>
+          <p style={spaceStyles.subtitle}>
+            No se pudo contactar al servidor. Esta pantalla se actualizará sola al reconectar.
+          </p>
+        </div>
+      </div>
+    )
+  }
   return (
     <div style={spaceStyles.screen}>
       <div style={spaceStyles.card}>
@@ -508,6 +653,41 @@ const styles: Record<string, React.CSSProperties> = {
     bottom: '5rem',
     fontSize: '1rem',
     color: '#475569',
+  },
+  // Alerta operativa persistente (no un toast): desconexión con el backend.
+  // Se queda arriba de todo (incluido errorOverlay) hasta que el poller de
+  // /api/health confirme que volvió la conexión.
+  disconnectedOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    background: 'rgba(15,23,42,0.97)',
+    border: '2px solid oklch(66% 0.19 55)',
+    zIndex: 40,
+    padding: '2rem',
+    textAlign: 'center',
+  },
+  disconnectedIcon: {
+    fontSize: 'clamp(28px,3.4vh,44px)',
+    color: 'oklch(72% 0.19 55)',
+    animation: 'alertPulse 1.6s ease-in-out infinite',
+  },
+  disconnectedTitle: {
+    fontSize: 'clamp(16px,2vh,22px)',
+    fontWeight: 700,
+    color: 'oklch(88% 0.03 55)',
+    fontFamily: "'Barlow', sans-serif",
+    letterSpacing: '0.02em',
+  },
+  disconnectedSubtitle: {
+    fontSize: 'clamp(12px,1.4vh,16px)',
+    color: 'oklch(62% 0.03 55)',
+    fontFamily: "'Barlow', sans-serif",
+    maxWidth: '420px',
   },
   clock: {
     position: 'absolute',
