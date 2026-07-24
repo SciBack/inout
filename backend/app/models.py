@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, Float, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -12,6 +12,11 @@ class Sede(Base):
     code = Column(String(20), unique=True, nullable=False)  # "BUL", "BUT", "BUJ", "CIA"
     city = Column(String(100))
     active = Column(Boolean, default=True)
+    # Coordenadas reales de la sede — dato de institución (NUNCA hardcodear en
+    # el canónico), null hasta que el admin las cargue. Alimentan el cálculo
+    # de amanecer/atardecer real (modo día/noche del kiosko) por sunTimes.ts.
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -56,6 +61,11 @@ class PresenceLog(Base):
     event_type = Column(String(10), nullable=False)  # 'entry' | 'exit'
     space_id = Column(Integer, ForeignKey("spaces.id"))
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    # Identificador generado por el kiosko (UUID) para escaneos reenviados
+    # desde la cola offline (Fase 4) — permite reenvío idempotente: reenviar
+    # el mismo evento dos veces no lo duplica. NULL para escaneos en vivo
+    # (nunca pasaron por la cola, no lo necesitan).
+    client_event_id = Column(String(64), nullable=True, unique=True)
 
 
 class AdminUser(Base):

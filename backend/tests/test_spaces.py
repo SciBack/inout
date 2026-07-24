@@ -37,7 +37,20 @@ class TestGetSpaces:
             "capacity": 847,
             "sede_code": "LIMA",
             "sede_name": "Lima",
+            "sede_latitude": None,
+            "sede_longitude": None,
         }
+
+    def test_expone_coordenadas_de_la_sede_para_el_modo_dia_noche(self, db):
+        sede = Sede(id=1, name="Lima", code="LIMA", latitude=-12.05, longitude=-77.05)
+        db.add(sede)
+        db.commit()
+        db.add(Space(id=1, name="CRAI Lima", capacity=847, active=True, sede_id=sede.id))
+        db.commit()
+
+        result = get_spaces(db)
+        assert result[0].sede_latitude == -12.05
+        assert result[0].sede_longitude == -77.05
 
     def test_space_sin_sede_no_se_descarta_y_va_con_null(self, db):
         db.add(Space(id=1, name="CRAI Huerfano", capacity=30, active=True, sede_id=None))

@@ -10,6 +10,12 @@ from typing import Optional
 class ScanRequest(BaseModel):
     cardnumber: str
     space_id: Optional[int] = None
+    # Fase 4 (cola offline): hora real de captura en el kiosko, no de reenvío.
+    # Ausente = comportamiento de hoy (server_default now()).
+    scanned_at: Optional[datetime] = None
+    # Identificador generado por el kiosko para reenvío idempotente: reenviar
+    # el mismo evento dos veces no debe duplicarlo. Ausente = escaneo en vivo.
+    client_event_id: Optional[str] = None
 
 
 class PatronInfo(BaseModel):
@@ -126,6 +132,41 @@ class PublicSpaceResponse(BaseModel):
     capacity: int
     sede_code: Optional[str] = None
     sede_name: Optional[str] = None
+    # Coordenadas de la SEDE (no del space): alimentan el cálculo de
+    # amanecer/atardecer real del kiosko (modo día/noche). None mientras el
+    # admin no las haya cargado — el kiosko cae a un modo por defecto.
+    sede_latitude: Optional[float] = None
+    sede_longitude: Optional[float] = None
+
+
+# ---------------------------------------------------------------------------
+# Público — Dashboard multi-edificio (página de inicio, sin autenticación)
+# ---------------------------------------------------------------------------
+
+class BuildingOverview(BaseModel):
+    id: int
+    name: str
+    sede_id: Optional[int] = None
+    sede_code: Optional[str] = None
+    sede_name: Optional[str] = None
+    capacity: int
+    current_occupancy: int
+    occupancy_percent: float
+    entries_today: int
+    exits_today: int
+
+
+class OverviewTotals(BaseModel):
+    capacity: int
+    current_occupancy: int
+    occupancy_percent: float
+    buildings: int
+
+
+class SpacesOverviewResponse(BaseModel):
+    as_of: datetime
+    totals: OverviewTotals
+    buildings: list[BuildingOverview]
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +178,8 @@ class SedeCreate(BaseModel):
     code: str
     city: Optional[str] = None
     active: bool = True
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class SedeUpdate(BaseModel):
@@ -144,6 +187,8 @@ class SedeUpdate(BaseModel):
     code: Optional[str] = None
     city: Optional[str] = None
     active: Optional[bool] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class SedeResponse(BaseModel):
@@ -152,6 +197,8 @@ class SedeResponse(BaseModel):
     code: str
     city: Optional[str] = None
     active: bool
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: Optional[datetime] = None
 
     class Config:

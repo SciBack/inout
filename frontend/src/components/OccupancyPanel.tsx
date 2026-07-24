@@ -36,18 +36,18 @@ interface DashboardData {
 
 // ── Paleta OKLCH ────────────────────────────────────────────────────────────
 const C = {
-  bg:     'oklch(7% 0.018 232)',
-  card:   'oklch(15% 0.024 229)',
-  border: 'oklch(25% 0.028 228)',
-  text1:  'oklch(88% 0.010 222)',
-  text2:  'oklch(78% 0.010 222)',
-  text3:  'oklch(62% 0.012 222)',
-  green:  'oklch(73% 0.21 148)',
-  amber:  'oklch(82% 0.17 76)',
-  red:    'oklch(66% 0.24 25)',
-  blue:   'oklch(68% 0.17 244)',
-  rose:   'oklch(73% 0.17 352)',
-  cyan:   'oklch(73% 0.18 211)',
+  bg:     'var(--c-bg)',
+  card:   'var(--c-bg-panel)',
+  border: 'var(--c-border)',
+  text1:  'var(--c-text1)',
+  text2:  'var(--c-text2)',
+  text3:  'var(--c-text3)',
+  green:  'var(--c-green)',
+  amber:  'var(--c-amber)',
+  red:    'var(--c-red)',
+  blue:   'var(--c-blue)',
+  rose:   'var(--c-rose)',
+  cyan:   'var(--c-cyan)',
 }
 
 const FONT_DISPLAY = "'Bebas Neue', 'Arial Narrow', impact, sans-serif"
@@ -754,7 +754,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                     position: 'relative',
                     background: isFirst
                       ? firstBg
-                      : idx % 2 === 0 ? 'transparent' : 'oklch(13% 0.018 228 / 0.5)',
+                      : idx % 2 === 0 ? 'transparent' : 'color-mix(in oklch, var(--c-border) 50%, transparent)',
                     borderLeft: isFirst
                       ? `3px solid ${accentColor}`
                       : '3px solid transparent',

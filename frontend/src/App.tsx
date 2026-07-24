@@ -3,9 +3,18 @@ import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
 import { AdminApp } from './components/admin/AdminApp'
+import { HomeDashboard } from './pages/HomeDashboard'
+import { useDayNightMode } from './hooks/useDayNightMode'
+import { enqueueOfflineScan, flushOfflineQueue, getPendingCount } from './utils/offlineQueue'
 
-// ── Routing: /admin → AdminApp ──────────────────────────────────────────────
+// ── Routing: /admin → AdminApp, /kiosko → flujo de kiosko explícito ─────────
+// La raíz "/" sin ?space= ni localStorage ya NO es la pantalla de selección
+// de edificio: es el dashboard público (ver más abajo). "/kiosko" preserva el
+// flujo de siempre para que un kiosko YA desplegado (bookmarked con ?space= o
+// resuelto por localStorage en bare "/") no cambie de comportamiento, y para
+// que el setup de un dispositivo NUEVO siga teniendo dónde elegir edificio.
 const isAdmin = window.location.pathname.startsWith('/admin')
+const isKiosko = window.location.pathname.startsWith('/kiosko')
 
 // ── Space ID desde URL param o localStorage ──────────────────────────────────
 function getSpaceId(): number | undefined {
@@ -44,14 +53,61 @@ interface SpaceInfo {
   capacity: number
   sede_code: string | null
   sede_name: string | null
+  sede_latitude: number | null
+  sede_longitude: number | null
 }
 
 const WELCOME_DURATION = 5000
 const LEAVE_DURATION = 350
 
+// Tokens de tema (modo noche = valores actuales del kiosko, sin cambios de
+// look; modo día = mismo hue, reflejado a fondo claro con menos chroma en los
+// extremos — ver reference/color-and-contrast.md del skill dataviz). El
+// atributo data-theme lo pone App() según useDayNightMode(); cualquier
+// componente puede consumir estas variables con var(--c-*) sin necesitar
+// props ni tocar este archivo.
+const THEME_CSS = `
+:root {
+  --c-bg: #0f172a;
+  --c-bg-panel: oklch(15% 0.024 229);
+  --c-border: oklch(25% 0.028 228);
+  --c-text1: oklch(88% 0.010 222);
+  --c-text2: oklch(78% 0.010 222);
+  --c-text3: oklch(62% 0.012 222);
+  --c-text4: oklch(40% 0.013 222);
+  --c-green: oklch(73% 0.21 148);
+  --c-amber: oklch(82% 0.17 76);
+  --c-red: oklch(66% 0.24 25);
+  --c-blue: oklch(68% 0.17 244);
+  --c-rose: oklch(73% 0.17 352);
+  --c-cyan: oklch(73% 0.18 211);
+  --c-alert-icon: oklch(72% 0.19 55);
+  --c-alert-title: oklch(88% 0.03 55);
+  --c-alert-subtitle: oklch(62% 0.03 55);
+}
+:root[data-theme="day"] {
+  --c-bg: oklch(97% 0.006 229);
+  --c-bg-panel: oklch(99% 0.004 229);
+  --c-border: oklch(88% 0.010 228);
+  --c-text1: oklch(22% 0.014 222);
+  --c-text2: oklch(36% 0.013 222);
+  --c-text3: oklch(52% 0.014 222);
+  --c-text4: oklch(66% 0.014 222);
+  --c-green: oklch(48% 0.16 148);
+  --c-amber: oklch(55% 0.15 76);
+  --c-red: oklch(52% 0.20 25);
+  --c-blue: oklch(45% 0.16 244);
+  --c-rose: oklch(50% 0.16 352);
+  --c-cyan: oklch(45% 0.15 211);
+  --c-alert-icon: oklch(52% 0.17 55);
+  --c-alert-title: oklch(30% 0.10 55);
+  --c-alert-subtitle: oklch(46% 0.08 55);
+}
+`
+
 const GLOBAL_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { overflow: hidden; background: #0f172a; }
+body { overflow: hidden; background: var(--c-bg); transition: background 400ms ease; }
 @keyframes feedSlideIn {
   from { opacity: 0; transform: translateY(-16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -105,7 +161,7 @@ body { overflow: hidden; background: #0f172a; }
 }
 @media (max-width: 767px) {
   .kiosk-root { flex-direction: column !important; }
-  .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e293b !important; }
+  .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--c-border) !important; }
   .panel-right { flex: 0 0 40vh !important; width: 100% !important; }
 }
 `
@@ -120,6 +176,7 @@ export default function App() {
   const [isLeaving, setIsLeaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [showError, setShowError] = useState(false)
+  const [queuedMsg, setQueuedMsg] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // ── Estado de desconexión compartido ─────────────────────────────────────
@@ -141,6 +198,26 @@ export default function App() {
     return () => { mountedRef.current = false }
   }, [])
   const [connectionLost, setConnectionLost] = useState(false)
+
+  // ── Fase 4: cola local de escaneos sin conexión (cero pérdida) ──────────
+  // Independiente de connectionLost a propósito: si el kiosko se recarga con
+  // ítems pendientes de una sesión anterior (crash, corte de luz) y la
+  // conexión YA volvió, esto los reenvía sin esperar a un nuevo ciclo de
+  // desconexión/reconexión que podría no volver a ocurrir nunca.
+  const [pendingCount, setPendingCount] = useState(() => getPendingCount())
+  const tryFlushQueue = useCallback(async () => {
+    if (getPendingCount() === 0) return
+    const { remaining } = await flushOfflineQueue()
+    if (mountedRef.current) setPendingCount(remaining)
+  }, [])
+  useEffect(() => {
+    tryFlushQueue()
+  }, [tryFlushQueue])
+  useEffect(() => {
+    if (pendingCount === 0) return
+    const intervalId = setInterval(tryFlushQueue, 15000)
+    return () => clearInterval(intervalId)
+  }, [pendingCount, tryFlushQueue])
 
   // ── Red de contención: si nadie configuró ?space= ni localStorage,
   // resolver contra GET /api/spaces (auto-selección si hay 1 solo, selector
@@ -211,9 +288,15 @@ export default function App() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 4000)
       fetch('/api/health', { signal: controller.signal })
-        .then(res => {
+        .then(async res => {
           clearTimeout(timeoutId)
           if (!res.ok || !mountedRef.current) return
+          // Vaciar la cola local ANTES de aceptar escaneos nuevos (Fase 4):
+          // si esto quedara para el intervalo periódico independiente de
+          // tryFlushQueue, un escaneo en vivo podría colarse antes de que
+          // los pendientes salgan en su orden cronológico.
+          await tryFlushQueue()
+          if (!mountedRef.current) return
           setConnectionLost(false)
           if (spaces === null) {
             fetchSpaces()
@@ -226,14 +309,24 @@ export default function App() {
         })
     }, 10000)
     return () => clearInterval(intervalId)
-  }, [connectionLost, spaces, fetchSpaces])
+  }, [connectionLost, spaces, fetchSpaces, tryFlushQueue])
 
   const spaceId = urlSpaceId ?? autoSpaceId
   const activeSpace = spaces?.find(sp => sp.id === spaceId)
 
+  // Modo día/noche real por ubicación de la sede. Sin coordenadas cargadas
+  // (admin no las configuró todavía) el hook cae a 'night' — mismo look
+  // oscuro que el kiosko siempre tuvo, cero regresión.
+  const dayNightMode = useDayNightMode(activeSpace?.sede_latitude ?? null, activeSpace?.sede_longitude ?? null)
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dayNightMode)
+  }, [dayNightMode])
+
   const changeBuilding = () => {
     localStorage.removeItem('inout_space_id')
-    window.location.reload()
+    // Ir a /kiosko explícitamente: si esto quedara en bare "/", sin espacio
+    // resuelto la raíz ahora muestra el dashboard público, no el selector.
+    window.location.href = '/kiosko'
   }
 
   const selectBuilding = (id: number) => {
@@ -247,7 +340,7 @@ export default function App() {
     if (existing) return
     const style = document.createElement('style')
     style.id = 'inout-global-css'
-    style.textContent = GLOBAL_CSS
+    style.textContent = THEME_CSS + GLOBAL_CSS
     document.head.appendChild(style)
   }, [])
 
@@ -274,8 +367,27 @@ export default function App() {
     }
   }, [showError])
 
+  // Aviso temporal de escaneo guardado sin conexión (Fase 4)
+  useEffect(() => {
+    if (queuedMsg) {
+      const t = setTimeout(() => setQueuedMsg(false), 2000)
+      return () => clearTimeout(t)
+    }
+  }, [queuedMsg])
+
   const handleScan = async (cardnumber: string) => {
-    if (loading || connectionLost) return
+    if (loading) return
+
+    // Ya se sabe que no hay conexión: encolar directo, sin intentar el fetch
+    // (Fase 4 — cero pérdida). No se puede saber si es entrada o salida, ni
+    // mostrar el nombre, hasta que el backend lo resuelva en el reenvío.
+    if (connectionLost) {
+      enqueueOfflineScan(cardnumber, spaceId)
+      setPendingCount(getPendingCount())
+      setQueuedMsg(true)
+      return
+    }
+
     setLoading(true)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -296,6 +408,11 @@ export default function App() {
       if (mountedRef.current) {
         setLoading(false)
         setConnectionLost(true)
+        // El escaneo que disparó esta desconexión no se pierde: se encola
+        // igual que cualquier otro mientras dure el corte.
+        enqueueOfflineScan(cardnumber, spaceId)
+        setPendingCount(getPendingCount())
+        setQueuedMsg(true)
       }
       return
     }
@@ -317,6 +434,20 @@ export default function App() {
         if (mountedRef.current) {
           setErrorMsg('Carnet no encontrado')
           setShowError(true)
+        }
+      } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+        // 502/503/504 son códigos que FastAPI NUNCA emite por sí mismo — solo
+        // los pone el proxy reverso (Nginx) cuando el proceso del backend no
+        // responde. El fetch sí "completó" (por eso no cayó en el catch de
+        // arriba), pero es la MISMA desconexión real que un fallo de red: el
+        // proxy sigue arriba, la app caída. Sin este caso, un contenedor
+        // caído con Nginx vivo perdía el escaneo en silencio — justo lo que
+        // la cola offline (Fase 4) existe para evitar.
+        if (mountedRef.current) {
+          setConnectionLost(true)
+          enqueueOfflineScan(cardnumber, spaceId)
+          setPendingCount(getPendingCount())
+          setQueuedMsg(true)
         }
       } else {
         // El fetch SÍ completó y el servidor respondió (400/otros) — es el
@@ -340,8 +471,13 @@ export default function App() {
 
   const showWelcome = state === 'welcome' && scanResult !== null
 
-  // ── Red de contención: sin espacio resuelto todavía ─────────────────────
+  // ── Sin espacio resuelto todavía ─────────────────────────────────────────
   if (spaceId === undefined) {
+    // Fuera de /kiosko: esto es una visita de navegador a la raíz pública,
+    // no un dispositivo kiosko sin configurar. Es el nuevo dashboard.
+    if (!isKiosko) {
+      return <HomeDashboard />
+    }
     if (connectionLost) {
       return <SpaceErrorScreen reason="connection" />
     }
@@ -369,7 +505,9 @@ export default function App() {
           Cambiar edificio
         </button>
 
-        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome' || connectionLost} />
+        {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
+            escaneos y los encola en vez de perderlos. */}
+        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
 
         {showWelcome && (
           <WelcomeScreen result={scanResult!} isVisible={!isLeaving} />
@@ -378,6 +516,14 @@ export default function App() {
         {showError && (
           <div style={styles.errorOverlay}>
             <span style={styles.errorText}>{errorMsg}</span>
+          </div>
+        )}
+
+        {queuedMsg && (
+          <div style={styles.errorOverlay}>
+            <span style={{ ...styles.errorText, color: 'var(--c-alert-title)' }}>
+              Guardado — sin conexión
+            </span>
           </div>
         )}
 
@@ -390,7 +536,9 @@ export default function App() {
             <span style={styles.disconnectedIcon}>⚠</span>
             <span style={styles.disconnectedTitle}>Sin conexión con el servidor</span>
             <span style={styles.disconnectedSubtitle}>
-              Los ingresos no se están registrando. Avisar a soporte.
+              Los ingresos se están guardando en este dispositivo y se
+              enviarán solos al reconectar — nada se pierde.
+              {pendingCount > 0 && ` ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'}.`}
             </span>
           </div>
         )}
@@ -490,7 +638,7 @@ const spaceStyles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0f172a',
+    background: 'var(--c-bg)',
     padding: '2rem',
   },
   card: {
@@ -505,24 +653,24 @@ const spaceStyles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 'clamp(20px,2.6vh,32px)',
     fontWeight: 700,
-    color: 'oklch(88% 0.010 222)',
+    color: 'var(--c-text1)',
     fontFamily: "'Barlow', sans-serif",
     letterSpacing: '0.02em',
   },
   subtitle: {
     fontSize: 'clamp(13px,1.6vh,18px)',
-    color: 'oklch(50% 0.013 222)',
+    color: 'var(--c-text3)',
     fontFamily: "'Barlow', sans-serif",
     marginBottom: '1.5rem',
   },
   errorIcon: {
     fontSize: 'clamp(32px,4vh,48px)',
-    color: 'oklch(66% 0.24 25)',
+    color: 'var(--c-red)',
     marginBottom: '0.5rem',
   },
   loadingText: {
     fontSize: 'clamp(14px,1.6vh,18px)',
-    color: 'oklch(45% 0.013 222)',
+    color: 'var(--c-text3)',
     fontFamily: "'Barlow', sans-serif",
   },
   groups: {
@@ -539,7 +687,7 @@ const spaceStyles: Record<string, React.CSSProperties> = {
   },
   groupLabel: {
     fontSize: 'clamp(11px,1.3vh,14px)',
-    color: 'oklch(48% 0.014 222)',
+    color: 'var(--c-text3)',
     textTransform: 'uppercase',
     letterSpacing: '0.14em',
     fontFamily: "'Barlow', sans-serif",
@@ -553,10 +701,10 @@ const spaceStyles: Record<string, React.CSSProperties> = {
   },
   spaceBtn: {
     padding: '0.9rem 1.6rem',
-    background: 'oklch(15% 0.024 229)',
-    border: '1px solid oklch(25% 0.028 228)',
+    background: 'var(--c-bg-panel)',
+    border: '1px solid var(--c-border)',
     borderRadius: '10px',
-    color: 'oklch(88% 0.010 222)',
+    color: 'var(--c-text1)',
     fontSize: 'clamp(14px,1.7vh,19px)',
     fontWeight: 600,
     fontFamily: "'Barlow', sans-serif",
@@ -589,7 +737,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100vw',
     height: '100vh',
     overflow: 'hidden',
-    background: '#0f172a',
+    background: 'var(--c-bg)',
   },
   left: {
     flex: '0 0 58.3%',
@@ -602,7 +750,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    borderLeft: '1px solid #1e293b',
+    borderLeft: '1px solid var(--c-border)',
     overflow: 'hidden',
   },
   buildingBadge: {
@@ -612,7 +760,7 @@ const styles: Record<string, React.CSSProperties> = {
     transform: 'translateX(-50%)',
     fontSize: 'clamp(10px,1.1vh,13px)',
     fontWeight: 700,
-    color: 'oklch(40% 0.013 222)',
+    color: 'var(--c-text4)',
     letterSpacing: '0.14em',
     fontFamily: "'Barlow', sans-serif",
     userSelect: 'none',
@@ -624,7 +772,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: '1rem',
     background: 'transparent',
     border: 'none',
-    color: 'oklch(32% 0.013 222)',
+    color: 'var(--c-text4)',
     fontSize: 'clamp(10px,1.1vh,12px)',
     fontFamily: "'Barlow', sans-serif",
     letterSpacing: '0.04em',
@@ -644,7 +792,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   errorText: {
     fontSize: '1.25rem',
-    color: '#ef4444',
+    color: 'var(--c-red)',
     fontWeight: 600,
     textAlign: 'center',
   },
@@ -652,7 +800,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'absolute',
     bottom: '5rem',
     fontSize: '1rem',
-    color: '#475569',
+    color: 'var(--c-text4)',
   },
   // Alerta operativa persistente (no un toast): desconexión con el backend.
   // Se queda arriba de todo (incluido errorOverlay) hasta que el poller de
@@ -666,26 +814,26 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '0.75rem',
     background: 'rgba(15,23,42,0.97)',
-    border: '2px solid oklch(66% 0.19 55)',
+    border: '2px solid var(--c-alert-icon)',
     zIndex: 40,
     padding: '2rem',
     textAlign: 'center',
   },
   disconnectedIcon: {
     fontSize: 'clamp(28px,3.4vh,44px)',
-    color: 'oklch(72% 0.19 55)',
+    color: 'var(--c-alert-icon)',
     animation: 'alertPulse 1.6s ease-in-out infinite',
   },
   disconnectedTitle: {
     fontSize: 'clamp(16px,2vh,22px)',
     fontWeight: 700,
-    color: 'oklch(88% 0.03 55)',
+    color: 'var(--c-alert-title)',
     fontFamily: "'Barlow', sans-serif",
     letterSpacing: '0.02em',
   },
   disconnectedSubtitle: {
     fontSize: 'clamp(12px,1.4vh,16px)',
-    color: 'oklch(62% 0.03 55)',
+    color: 'var(--c-alert-subtitle)',
     fontFamily: "'Barlow', sans-serif",
     maxWidth: '420px',
   },
@@ -700,7 +848,7 @@ const styles: Record<string, React.CSSProperties> = {
   clockTime: {
     fontSize: 'clamp(28px,3.5vh,44px)' as unknown as undefined,
     fontWeight: 400,
-    color: 'oklch(48% 0.016 222)',
+    color: 'var(--c-text3)',
     fontVariantNumeric: 'tabular-nums',
     letterSpacing: '0.04em',
     fontFamily: "'Bebas Neue', cursive",
@@ -708,7 +856,7 @@ const styles: Record<string, React.CSSProperties> = {
   } as React.CSSProperties,
   clockDate: {
     fontSize: 'clamp(13px,1.5vh,18px)' as unknown as undefined,
-    color: 'oklch(36% 0.013 222)',
+    color: 'var(--c-text4)',
     textTransform: 'capitalize',
     fontFamily: "'Barlow', sans-serif",
     fontWeight: 400,

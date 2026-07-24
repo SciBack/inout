@@ -9,7 +9,7 @@ LIMA = ZoneInfo("America/Lima")
 from ..database import get_db
 from ..models import PresenceLog, Space, Sede
 from collections import defaultdict
-from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse, HomeSedeCount
+from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse, HomeSedeCount, SpacesOverviewResponse, BuildingOverview, OverviewTotals
 from ..config import settings
 from ..services.faculty_map import resolve_faculty
 from ..services.labels import normalize_category, category_label, faculty_label
@@ -39,9 +39,86 @@ def get_spaces(db: Session = Depends(get_db)):
             capacity=space.capacity,
             sede_code=sede.code if sede else None,
             sede_name=sede.name if sede else None,
+            sede_latitude=sede.latitude if sede else None,
+            sede_longitude=sede.longitude if sede else None,
         )
         for space, sede in rows
     ]
+
+
+@router.get("/spaces/overview", response_model=SpacesOverviewResponse)
+def get_spaces_overview(db: Session = Depends(get_db)):
+    """Ocupación de TODOS los edificios activos a la vez, para el dashboard
+    público de inicio. Sin autenticación (misma superficie pública que
+    /spaces). Una sola pasada agregada por SQL — nunca N+1 aunque haya 100
+    edificios: una query de spaces+sedes, una query agrupada de presence_log
+    de hoy por (space_id, event_type)."""
+    hoy_ini, hoy_fin, _, _ = _lima_day_bounds()
+
+    rows = (
+        db.query(Space, Sede)
+        .outerjoin(Sede, Space.sede_id == Sede.id)
+        .filter(Space.active == True)  # noqa: E712
+        .order_by(Sede.code, Space.name)
+        .all()
+    )
+
+    counts_by_space = (
+        db.query(
+            PresenceLog.space_id,
+            PresenceLog.event_type,
+            func.count(PresenceLog.id).label("cnt"),
+        )
+        .filter(
+            PresenceLog.timestamp >= hoy_ini,
+            PresenceLog.timestamp < hoy_fin,
+        )
+        .group_by(PresenceLog.space_id, PresenceLog.event_type)
+        .all()
+    )
+    entries_by_space: dict[int, int] = defaultdict(int)
+    exits_by_space: dict[int, int] = defaultdict(int)
+    for space_id, event_type, cnt in counts_by_space:
+        if event_type == "entry":
+            entries_by_space[space_id] = cnt
+        elif event_type == "exit":
+            exits_by_space[space_id] = cnt
+
+    buildings: list[BuildingOverview] = []
+    total_capacity = 0
+    total_occupancy = 0
+    for space, sede in rows:
+        entries = entries_by_space.get(space.id, 0)
+        exits = exits_by_space.get(space.id, 0)
+        occupancy = max(0, entries - exits)
+        capacity = space.capacity
+        buildings.append(
+            BuildingOverview(
+                id=space.id,
+                name=space.name,
+                sede_id=sede.id if sede else None,
+                sede_code=sede.code if sede else None,
+                sede_name=sede.name if sede else None,
+                capacity=capacity,
+                current_occupancy=occupancy,
+                occupancy_percent=min(100.0, round((occupancy / capacity) * 100, 1)) if capacity > 0 else 0.0,
+                entries_today=entries,
+                exits_today=exits,
+            )
+        )
+        total_capacity += capacity
+        total_occupancy += occupancy
+
+    return SpacesOverviewResponse(
+        as_of=datetime.now(LIMA),
+        totals=OverviewTotals(
+            capacity=total_capacity,
+            current_occupancy=total_occupancy,
+            occupancy_percent=min(100.0, round((total_occupancy / total_capacity) * 100, 1)) if total_capacity > 0 else 0.0,
+            buildings=len(buildings),
+        ),
+        buildings=buildings,
+    )
 
 
 def _lima_day_bounds() -> tuple[datetime, datetime, datetime, datetime]:

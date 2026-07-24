@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ..database import get_db
 from ..models import PresenceLog, Space, Sede
@@ -12,6 +12,46 @@ from ..config import settings
 router = APIRouter()
 
 DEBOUNCE_SECONDS = 8
+
+# Fase 4 (cola offline): ventana de tolerancia para scanned_at. Un kiosko
+# puede reenviar con unos segundos de adelanto por deriva de reloj; más allá
+# de esto es sospechoso. Hacia atrás se tolera hasta 24h — lo que puede
+# acumular la cola local antes de recuperar conexión — más viejo que eso
+# huele a reloj roto y NO debe corromper el histórico.
+SCANNED_AT_MAX_FUTURE_SECONDS = 60
+SCANNED_AT_MAX_AGE_HOURS = 24
+
+
+def _response_from_existing_log(log: PresenceLog) -> ScanResponse:
+    """Reconstruye la respuesta a partir de una fila ya insertada.
+
+    Camino de reintento idempotente (client_event_id repetido): el cliente
+    tuvo un insert exitoso pero perdió la respuesta (corte de red justo tras
+    el POST). Se le devuelve 200 con lo que YA quedó guardado, sin volver a
+    resolver identidad ni insertar de nuevo.
+    """
+    first_name = (log.patron_name or "").split()[0] if log.patron_name else ""
+    patron = PatronInfo(
+        cardnumber=log.cardnumber,
+        name=log.patron_name or "",
+        firstname=first_name,
+        first_name=first_name,
+        surname="",
+        gender=log.patron_gender or "",
+        category=log.patron_category or "",
+        patron_id=None,
+        faculty=log.patron_faculty or "",
+        program=log.patron_program or "",
+    )
+    return ScanResponse(
+        event_type=log.event_type,
+        patron=patron,
+        timestamp=log.timestamp,
+        message="Evento ya registrado",
+        duration=None,
+        from_cache=False,
+        identified=log.person_key is not None,
+    )
 
 
 def _infer_id_type(value: str) -> str:
@@ -29,6 +69,32 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     cardnumber = req.cardnumber.strip()
     if not cardnumber:
         raise HTTPException(status_code=400, detail="cardnumber requerido")
+
+    # Fase 4 (cola offline): la hora del evento la manda el kiosko (hora real
+    # de captura, no de reenvío). Ausente = comportamiento de hoy (now()).
+    now = datetime.now(timezone.utc)
+    if req.scanned_at is not None:
+        scanned_at = req.scanned_at
+        if scanned_at.tzinfo is None:
+            scanned_at = scanned_at.replace(tzinfo=timezone.utc)
+        if scanned_at > now + timedelta(seconds=SCANNED_AT_MAX_FUTURE_SECONDS):
+            raise HTTPException(status_code=400, detail="scanned_at_invalido")
+        if scanned_at < now - timedelta(hours=SCANNED_AT_MAX_AGE_HOURS):
+            raise HTTPException(status_code=400, detail="scanned_at_invalido")
+        event_ts = scanned_at
+    else:
+        event_ts = now
+
+    # Idempotencia por client_event_id: un reintento de red del cliente tras
+    # un insert exitoso pero respuesta perdida no debe duplicar el evento.
+    if req.client_event_id is not None:
+        existing = (
+            db.query(PresenceLog)
+            .filter(PresenceLog.client_event_id == req.client_event_id)
+            .first()
+        )
+        if existing is not None:
+            return _response_from_existing_log(existing)
 
     # Resolver espacio y sede del kiosko (campus/edificio del INGRESO). El
     # backend ya no adivina el edificio con un default global: o el kiosko lo
@@ -107,12 +173,16 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         .first()
     )
 
-    # Debounce: ignorar si el último evento fue hace menos de DEBOUNCE_SECONDS
+    # Debounce: ignorar si el último evento fue hace menos de DEBOUNCE_SECONDS.
+    # Compara contra la hora DEL EVENTO (event_ts), no contra el reloj de la
+    # máquina: dos eventos encolados con segundos de diferencia real, reenviados
+    # juntos fuera de orden real de llegada, siguen comparándose por su hora
+    # real de captura en vez de colisionar contra el instante del reenvío.
     if last:
         last_ts = last.timestamp
         if last_ts.tzinfo is None:
             last_ts = last_ts.replace(tzinfo=timezone.utc)
-        elapsed = (datetime.now(timezone.utc) - last_ts).total_seconds()
+        elapsed = (event_ts - last_ts).total_seconds()
         if elapsed < DEBOUNCE_SECONDS:
             raise HTTPException(status_code=429, detail="duplicate_scan")
 
@@ -130,6 +200,8 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         patron_home_sede=home_sede,
         event_type=event_type,
         space_id=space_id,
+        timestamp=event_ts,
+        client_event_id=req.client_event_id,
     )
     db.add(log)
     db.commit()
@@ -147,7 +219,10 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
             message = "No figuras en el padrón — ingreso registrado como visita"
     else:
         message = f"Hasta luego, {first_name}" if first_name else "Hasta luego"
-        duration = _format_duration(last.timestamp) if last else None
+        # Referencia = event_ts, no el reloj real: un evento de salida
+        # reenviado desde la cola con su hora original de captura debe medir
+        # la permanencia contra ESA hora, no contra el instante del reenvío.
+        duration = _format_duration(last.timestamp, reference=event_ts) if last else None
 
     patron = PatronInfo(
         cardnumber=cardnumber,
@@ -165,7 +240,7 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     return ScanResponse(
         event_type=event_type,
         patron=patron,
-        timestamp=log.timestamp or datetime.now(timezone.utc),
+        timestamp=log.timestamp or event_ts,
         message=message,
         duration=duration,
         from_cache=(origin == "local"),
@@ -173,9 +248,11 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     )
 
 
-def _format_duration(entry_ts: datetime) -> str | None:
+def _format_duration(entry_ts: datetime, reference: datetime | None = None) -> str | None:
     try:
-        now = datetime.now(timezone.utc)
+        now = reference if reference is not None else datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
         if entry_ts.tzinfo is None:
             entry_ts = entry_ts.replace(tzinfo=timezone.utc)
         total = int((now - entry_ts).total_seconds())

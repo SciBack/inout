@@ -8,6 +8,7 @@ cuenta como cualquier otro.
 """
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -25,7 +26,8 @@ def espacio(db):
     return sp
 
 
-def _scan(db, cardnumber, monkeypatch, persona=None):
+def _scan(db, cardnumber, monkeypatch, persona=None, scanned_at=None, client_event_id=None,
+          space_id=None):
     """Llama al endpoint de escaneo con la resolución de identidad simulada."""
     from app.routers import scan as scan_mod
     from app.schemas import ScanRequest
@@ -34,7 +36,13 @@ def _scan(db, cardnumber, monkeypatch, persona=None):
         return (persona, "local" if persona else "unidentified")
 
     monkeypatch.setattr(scan_mod, "resolve_person", fake_resolve)
-    return asyncio.run(scan_mod.scan(ScanRequest(cardnumber=cardnumber), db))
+    req = ScanRequest(
+        cardnumber=cardnumber,
+        space_id=space_id,
+        scanned_at=scanned_at,
+        client_event_id=client_event_id,
+    )
+    return asyncio.run(scan_mod.scan(req, db))
 
 
 class TestDesconocidoSeRegistraIgual:
@@ -186,3 +194,105 @@ class TestResolucionDeEspacio:
             _scan(db, "999999", monkeypatch, persona=None)
         assert exc.value.status_code == 400
         assert exc.value.detail == "sin_espacios_activos"
+
+
+class TestContratoDeHora:
+    """Fase 4: la hora del evento la manda el kiosko (scanned_at), no el
+    reloj del servidor. Resuelve que un evento encolado y reenviado más
+    tarde no se registre con la hora del reenvío."""
+
+    def test_scanned_at_provisto_se_usa_como_timestamp(self, db, espacio, monkeypatch):
+        hace_media_hora = datetime.now(timezone.utc) - timedelta(minutes=30)
+        r = _scan(db, "999999", monkeypatch, persona=None, scanned_at=hace_media_hora)
+        log = db.query(PresenceLog).one()
+        ts = log.timestamp
+        if ts.tzinfo is None:  # SQLite no persiste tzinfo, Postgres sí
+            ts = ts.replace(tzinfo=timezone.utc)
+        assert ts == hace_media_hora
+        assert r.timestamp.replace(tzinfo=timezone.utc) == hace_media_hora
+
+    def test_scanned_at_ausente_se_comporta_como_hoy(self, db, espacio, monkeypatch):
+        antes = datetime.now(timezone.utc)
+        _scan(db, "999999", monkeypatch, persona=None)
+        despues = datetime.now(timezone.utc)
+        log = db.query(PresenceLog).one()
+        ts = log.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        assert antes <= ts <= despues
+
+    def test_scanned_at_en_el_futuro_es_rechazado(self, db, espacio, monkeypatch):
+        muy_futuro = datetime.now(timezone.utc) + timedelta(minutes=5)
+        with pytest.raises(HTTPException) as exc:
+            _scan(db, "999999", monkeypatch, persona=None, scanned_at=muy_futuro)
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "scanned_at_invalido"
+
+    def test_scanned_at_con_mas_de_24h_de_antiguedad_es_rechazado(self, db, espacio, monkeypatch):
+        muy_viejo = datetime.now(timezone.utc) - timedelta(hours=25)
+        with pytest.raises(HTTPException) as exc:
+            _scan(db, "999999", monkeypatch, persona=None, scanned_at=muy_viejo)
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "scanned_at_invalido"
+
+    def test_scanned_at_dentro_de_la_ventana_no_se_rechaza(self, db, espacio, monkeypatch):
+        """Un pequeño adelanto de reloj (< 60s) o una antigüedad menor a 24h
+        no deben ser rechazados — es el rango normal de una cola offline."""
+        casi_al_limite = datetime.now(timezone.utc) - timedelta(hours=23, minutes=59)
+        r = _scan(db, "999999", monkeypatch, persona=None, scanned_at=casi_al_limite)
+        assert r.event_type == "entry"
+
+
+class TestAntirreboteConHoraDeEvento:
+    """El anti-rebote debe comparar contra la hora DEL EVENTO, no contra el
+    reloj de la máquina en el momento del reenvío. Dos eventos encolados con
+    pocos segundos de diferencia real, reenviados juntos, deben seguir
+    debounce-eándose como si hubieran llegado en tiempo real."""
+
+    def test_dos_eventos_encolados_segundos_aparte_se_debouncean_por_su_hora_real(
+        self, db, espacio, monkeypatch
+    ):
+        base = datetime.now(timezone.utc) - timedelta(hours=2)
+        primero = base
+        segundo = base + timedelta(seconds=3)  # dentro de DEBOUNCE_SECONDS=8
+
+        _scan(db, "111", monkeypatch, persona=None, scanned_at=primero)
+        with pytest.raises(HTTPException) as exc:
+            _scan(db, "111", monkeypatch, persona=None, scanned_at=segundo)
+        assert exc.value.status_code == 429
+        assert exc.value.detail == "duplicate_scan"
+        # Sigue habiendo un solo evento: el segundo fue rechazado, no colado.
+        assert db.query(PresenceLog).count() == 1
+
+    def test_dos_eventos_encolados_suficientemente_separados_no_se_debouncean(
+        self, db, espacio, monkeypatch
+    ):
+        base = datetime.now(timezone.utc) - timedelta(hours=2)
+        primero = base
+        segundo = base + timedelta(seconds=30)  # fuera de DEBOUNCE_SECONDS=8
+
+        _scan(db, "111", monkeypatch, persona=None, scanned_at=primero)
+        r = _scan(db, "111", monkeypatch, persona=None, scanned_at=segundo)
+        assert r.event_type == "exit"
+        assert db.query(PresenceLog).count() == 2
+
+
+class TestIdempotenciaPorClientEventId:
+    """Un reintento de red del cliente (insert exitoso pero respuesta
+    perdida) no debe duplicar el evento en presence_log."""
+
+    def test_client_event_id_repetido_no_duplica_la_fila(self, db, espacio, monkeypatch):
+        r1 = _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-abc-1")
+        r2 = _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-abc-1")
+        assert db.query(PresenceLog).count() == 1
+        assert r1.event_type == "entry"
+        # El reintento devuelve 200 (no lanza), reconstruido de la fila existente.
+        assert r2.event_type == "entry"
+
+    def test_client_event_id_nuevo_si_inserta(self, db, espacio, monkeypatch):
+        import app.routers.scan as scan_mod
+
+        monkeypatch.setattr(scan_mod, "DEBOUNCE_SECONDS", 0)
+        _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-1")
+        _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-2")
+        assert db.query(PresenceLog).count() == 2

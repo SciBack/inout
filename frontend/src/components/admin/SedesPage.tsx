@@ -6,11 +6,13 @@ interface Sede {
   code: string
   city: string | null
   active: boolean
+  latitude: number | null
+  longitude: number | null
 }
 
 interface Props { token: string }
 
-const EMPTY = { name: '', code: '', city: '', active: true }
+const EMPTY = { name: '', code: '', city: '', active: true, latitude: '', longitude: '' }
 
 export function SedesPage({ token }: Props) {
   const [sedes, setSedes] = useState<Sede[]>([])
@@ -38,14 +40,28 @@ export function SedesPage({ token }: Props) {
 
   const openEdit = (s: Sede) => {
     setEditing(s)
-    setForm({ name: s.name, code: s.code, city: s.city || '', active: s.active })
+    setForm({
+      name: s.name,
+      code: s.code,
+      city: s.city || '',
+      active: s.active,
+      latitude: s.latitude !== null ? String(s.latitude) : '',
+      longitude: s.longitude !== null ? String(s.longitude) : '',
+    })
     setError(''); setModalOpen(true)
   }
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.code.trim()) { setError('Nombre y código son obligatorios'); return }
     setSaving(true); setError('')
-    const body = { name: form.name.trim(), code: form.code.trim().toUpperCase(), city: form.city || null, active: form.active }
+    const body = {
+      name: form.name.trim(),
+      code: form.code.trim().toUpperCase(),
+      city: form.city || null,
+      active: form.active,
+      latitude: form.latitude !== '' ? Number(form.latitude) : null,
+      longitude: form.longitude !== '' ? Number(form.longitude) : null,
+    }
     const url = editing ? `/api/admin/sedes/${editing.id}` : '/api/admin/sedes'
     const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers, body: JSON.stringify(body) })
     if (res.ok) { setModalOpen(false); load() }
@@ -121,6 +137,19 @@ export function SedesPage({ token }: Props) {
               <div style={{ ...s.formField, gridColumn: '1 / -1' }}>
                 <label style={s.label}>Ciudad</label>
                 <input style={s.input} value={form.city} onChange={f('city')} placeholder="Ej: Lima" />
+              </div>
+              <div style={s.formField}>
+                <label style={s.label}>Latitud</label>
+                <input style={s.input} type="number" step="any" value={form.latitude} onChange={f('latitude')} placeholder="Ej: -12.0464" />
+              </div>
+              <div style={s.formField}>
+                <label style={s.label}>Longitud</label>
+                <input style={s.input} type="number" step="any" value={form.longitude} onChange={f('longitude')} placeholder="Ej: -77.0428" />
+              </div>
+              <div style={{ ...s.formField, gridColumn: '1 / -1' }}>
+                <span style={{ fontSize: '0.75rem', color: '#475569' }}>
+                  Coordenadas GPS reales de la sede — habilitan el modo día/noche automático del kiosko.
+                </span>
               </div>
             </div>
             {editing && (

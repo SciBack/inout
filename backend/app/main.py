@@ -136,6 +136,23 @@ def _run_migrations():
         # acumulándose. Este UPDATE cierra esa ventana. Es un UPDATE con WHERE
         # exacto sobre un valor tipo-enum, no sobre dato de usuario.
         "UPDATE person_identifiers SET id_type = 'document_number' WHERE id_type = 'dni'",
+        # Coordenadas de sede (modo día/noche real por ubicación geográfica).
+        "ALTER TABLE sedes ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION",
+        "ALTER TABLE sedes ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION",
+        # Identificador de cliente para reenvío idempotente de la cola offline
+        # del kiosko (Fase 4): reenviar el mismo evento dos veces no lo duplica.
+        "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS client_event_id VARCHAR(64)",
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'uq_presence_log_client_event_id'
+            ) THEN
+                ALTER TABLE presence_log
+                ADD CONSTRAINT uq_presence_log_client_event_id UNIQUE (client_event_id);
+            END IF;
+        END $$;
+        """,
     ]
     with engine.connect() as conn:
         for stmt in stmts:
