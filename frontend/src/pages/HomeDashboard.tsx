@@ -27,6 +27,7 @@ interface OverviewResponse {
 
 const REFRESH_MS = 30000
 const RETRY_MS = 8000
+const SPACE_ID_KEY = 'inout_space_id'
 
 type SortMode = 'occupancy' | 'alpha'
 
@@ -51,6 +52,12 @@ export function HomeDashboard(): JSX.Element {
   const [error, setError] = useState(false)
   const [query, setQuery] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('occupancy')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [activeSpaceId, setActiveSpaceId] = useState<number | null>(() => {
+    const stored = localStorage.getItem(SPACE_ID_KEY)
+    return stored ? Number(stored) : null
+  })
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   const mountedRef = useRef(true)
   useEffect(() => {
@@ -86,6 +93,49 @@ export function HomeDashboard(): JSX.Element {
   }, [])
 
   const goToKiosko = () => { window.location.href = '/kiosko' }
+
+  const selectBuilding = (id: number) => {
+    localStorage.setItem(SPACE_ID_KEY, String(id))
+    window.location.href = '/kiosko'
+  }
+
+  // Cerrar el selector de edificio con click afuera o Escape.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setPickerOpen(false) }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [pickerOpen])
+
+  const activeBuilding = data?.buildings.find(b => b.id === activeSpaceId)
+
+  // Agrupación por campus para el selector — TODOS los edificios, sin el
+  // filtro de búsqueda del listado principal (son propósitos distintos).
+  const pickerGroups = useMemo(() => {
+    if (!data) return []
+    const byKey = new Map<string, { key: string; label: string; items: BuildingOverview[] }>()
+    for (const b of data.buildings) {
+      const key = b.sede_id !== null ? `sede-${b.sede_id}` : '__sin_sede__'
+      const label = b.sede_name ?? 'Otros'
+      let g = byKey.get(key)
+      if (!g) { g = { key, label, items: [] }; byKey.set(key, g) }
+      g.items.push(b)
+    }
+    const list = Array.from(byKey.values())
+    list.sort((a, b) => {
+      if (a.label === 'Otros') return 1
+      if (b.label === 'Otros') return -1
+      return a.label.localeCompare(b.label, 'es')
+    })
+    return list
+  }, [data])
 
   // ── Filtro + agrupación por campus + orden ──────────────────────────────
   const groups = useMemo(() => {
@@ -148,9 +198,51 @@ export function HomeDashboard(): JSX.Element {
 
       <div className="hd-topbar">
         <span className="hd-brand">InOut · Ocupación en vivo</span>
-        <button className="hd-kiosk-link" onClick={goToKiosko}>
-          Configurar este kiosko
-        </button>
+
+        <div className="hd-topbar-actions">
+          {hasBuildings && (
+            <div className="hd-picker" ref={pickerRef}>
+              <button
+                className="hd-picker-trigger"
+                onClick={() => setPickerOpen(v => !v)}
+                aria-expanded={pickerOpen}
+                aria-haspopup="true"
+              >
+                <span className="hd-picker-dot" aria-hidden="true" />
+                {activeBuilding ? activeBuilding.name : 'Elegir edificio'}
+                <span className="hd-picker-chevron" aria-hidden="true">⌄</span>
+              </button>
+
+              {pickerOpen && (
+                <div className="hd-picker-menu" role="menu">
+                  <span className="hd-picker-hint">Configurar este dispositivo como kiosko de…</span>
+                  {pickerGroups.map(group => (
+                    <div className="hd-picker-group" key={group.key}>
+                      {pickerGroups.length > 1 && (
+                        <span className="hd-picker-group-label">{group.label}</span>
+                      )}
+                      {group.items.map(b => (
+                        <button
+                          key={b.id}
+                          className="hd-picker-item"
+                          data-active={b.id === activeSpaceId}
+                          role="menuitem"
+                          onClick={() => selectBuilding(b.id)}
+                        >
+                          {b.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <a className="hd-admin-link" href="/admin" title="Administración">
+            <span aria-hidden="true">⚙</span> Admin
+          </a>
+        </div>
       </div>
 
       {/* ── Sin datos todavía, sin error: primera carga ── */}
@@ -346,20 +438,112 @@ const CSS = `
   text-transform: uppercase;
   color: var(--c-text3);
 }
-.hd-kiosk-link {
+.hd-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Selector de edificio (popover) ── */
+.hd-picker { position: relative; }
+.hd-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--c-bg-panel);
+  border: 1px solid var(--c-border);
+  border-radius: 9px;
+  padding: 6px 11px;
+  color: var(--c-text2);
+  font-family: 'Barlow', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+}
+.hd-picker-trigger:hover { border-color: var(--c-text4); color: var(--c-text1); }
+.hd-picker-trigger:active { transform: scale(0.97); }
+.hd-picker-trigger:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+.hd-picker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-green);
+  flex-shrink: 0;
+}
+.hd-picker-chevron { color: var(--c-text4); font-size: 11px; margin-left: 1px; }
+
+.hd-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--c-bg-panel);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  transform-origin: top right;
+  animation: hdPickerIn 160ms cubic-bezier(0.23,1,0.32,1) forwards;
+  z-index: 20;
+}
+@keyframes hdPickerIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.hd-picker-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--c-text4);
+  padding: 4px 8px 8px;
+}
+.hd-picker-group + .hd-picker-group { margin-top: 6px; }
+.hd-picker-group-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text4);
+  padding: 4px 8px 2px;
+}
+.hd-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: none;
   border: none;
+  border-radius: 7px;
+  padding: 7px 8px;
+  color: var(--c-text2);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 130ms ease-out, color 130ms ease-out;
+}
+.hd-picker-item:hover { background: var(--c-border); color: var(--c-text1); }
+.hd-picker-item:focus-visible { outline: 2px solid var(--c-blue); outline-offset: -2px; }
+.hd-picker-item[data-active="true"] { color: var(--c-blue); font-weight: 600; }
+
+/* ── Link a administración ── */
+.hd-admin-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--c-text4);
   font-family: 'Barlow', sans-serif;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 9px;
   transition: color 160ms ease-out, background 160ms ease-out;
 }
-.hd-kiosk-link:hover { color: var(--c-text2); background: var(--c-bg-panel); }
-.hd-kiosk-link:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+.hd-admin-link:hover { color: var(--c-text2); background: var(--c-bg-panel); }
+.hd-admin-link:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
 
 /* ── Totals band ── */
 .hd-totals {
@@ -442,25 +626,27 @@ const CSS = `
   margin-bottom: clamp(16px, 2vh, 24px);
 }
 
-/* ── Controls ── */
+/* ── Controls ──
+   Utilitarios secundarios (filtrar/ordenar la lista de abajo), no acciones
+   principales del dashboard — deliberadamente pequeños y discretos. */
 .hd-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: clamp(20px, 3vh, 28px);
+  margin-bottom: clamp(16px, 2.4vh, 22px);
 }
 .hd-search {
-  flex: 1 1 240px;
-  min-width: 180px;
-  max-width: 420px;
+  flex: 0 1 220px;
+  min-width: 140px;
+  max-width: 280px;
   background: var(--c-bg-panel);
   border: 1px solid var(--c-border);
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 8px;
+  padding: 6px 10px;
   color: var(--c-text1);
   font-family: 'Barlow', sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: border-color 160ms ease-out;
 }
@@ -469,20 +655,20 @@ const CSS = `
 
 .hd-sort {
   display: flex;
-  gap: 3px;
+  gap: 2px;
   background: var(--c-bg-panel);
   border: 1px solid var(--c-border);
-  border-radius: 10px;
-  padding: 3px;
+  border-radius: 8px;
+  padding: 2px;
 }
 .hd-sort-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 7px 13px;
-  border-radius: 7px;
+  padding: 5px 10px;
+  border-radius: 6px;
   font-family: 'Barlow', sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--c-text3);
   transition: background 160ms ease-out, color 160ms ease-out;
