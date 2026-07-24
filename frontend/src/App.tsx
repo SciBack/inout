@@ -501,22 +501,33 @@ export default function App() {
   }
 
   return (
-    <div className="kiosk-root" style={styles.root}>
-      <div className="panel-left" style={styles.left}>
-        <OccupancyPanel spaceId={spaceId} />
+    <div style={styles.outer}>
+      <div className="kiosk-breadcrumb" style={styles.breadcrumb}>
+        <button style={styles.breadcrumbBack} onClick={changeBuilding}>
+          ← Elegir otro edificio
+        </button>
+        {activeSpace && (
+          <span style={styles.breadcrumbPath}>
+            {activeSpace.sede_name && (
+              <>
+                <span style={styles.breadcrumbSede}>{activeSpace.sede_name}</span>
+                <span style={styles.breadcrumbSep} aria-hidden="true">›</span>
+              </>
+            )}
+            <span style={styles.breadcrumbBuilding}>{activeSpace.name}</span>
+          </span>
+        )}
       </div>
 
-      <div className="panel-right" style={styles.right}>
-        {activeSpace && (
-          <span style={styles.buildingBadge}>{activeSpace.name.toUpperCase()}</span>
-        )}
-        <button style={styles.changeBuildingBtn} onClick={changeBuilding}>
-          ← Inicio
-        </button>
+      <div className="kiosk-root" style={styles.root}>
+        <div className="panel-left" style={styles.left}>
+          <OccupancyPanel spaceId={spaceId} />
+        </div>
 
-        {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
-            escaneos y los encola en vez de perderlos. */}
-        <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
+        <div className="panel-right" style={styles.right}>
+          {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
+              escaneos y los encola en vez de perderlos. */}
+          <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
 
         {showWelcome && (
           <WelcomeScreen result={scanResult!} isVisible={!isLeaving} />
@@ -553,6 +564,7 @@ export default function App() {
         )}
 
         <Clock />
+        </div>
       </div>
     </div>
   )
@@ -741,10 +753,57 @@ function Clock() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: {
+  outer: {
     display: 'flex',
+    flexDirection: 'column',
     width: '100vw',
     height: '100vh',
+    overflow: 'hidden',
+    background: 'var(--c-bg)',
+  },
+  breadcrumb: {
+    flex: '0 0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.85rem',
+    padding: 'clamp(0.55rem,1vh,0.85rem) clamp(0.9rem,1.6vw,1.4rem)',
+    borderBottom: '1px solid var(--c-border)',
+  },
+  breadcrumbBack: {
+    flexShrink: 0,
+    background: 'var(--c-bg-panel)',
+    border: '1px solid var(--c-border)',
+    borderRadius: '9px',
+    color: 'var(--c-text2)',
+    fontFamily: "'Barlow', sans-serif",
+    fontSize: 'clamp(11px,1.2vh,13px)',
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: 'clamp(0.4rem,0.7vh,0.55rem) clamp(0.7rem,1vw,0.9rem)',
+  },
+  breadcrumbPath: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontFamily: "'Barlow', sans-serif",
+    fontSize: 'clamp(11px,1.2vh,13px)',
+    letterSpacing: '0.02em',
+    userSelect: 'none',
+    minWidth: 0,
+  },
+  breadcrumbSede: { color: 'var(--c-text3)' },
+  breadcrumbSep: { color: 'var(--c-text4)' },
+  breadcrumbBuilding: {
+    color: 'var(--c-text1)',
+    fontWeight: 700,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  root: {
+    display: 'flex',
+    flex: '1 1 0',
+    minHeight: 0,
     overflow: 'hidden',
     background: 'var(--c-bg)',
   },
@@ -761,33 +820,6 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     borderLeft: '1px solid var(--c-border)',
     overflow: 'hidden',
-  },
-  buildingBadge: {
-    position: 'absolute',
-    top: '1rem',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    fontSize: 'clamp(10px,1.1vh,13px)',
-    fontWeight: 700,
-    color: 'var(--c-text4)',
-    letterSpacing: '0.14em',
-    fontFamily: "'Barlow', sans-serif",
-    userSelect: 'none',
-    zIndex: 5,
-  },
-  changeBuildingBtn: {
-    position: 'absolute',
-    top: '1rem',
-    right: '1rem',
-    background: 'transparent',
-    border: 'none',
-    color: 'var(--c-text4)',
-    fontSize: 'clamp(10px,1.1vh,12px)',
-    fontFamily: "'Barlow', sans-serif",
-    letterSpacing: '0.04em',
-    cursor: 'pointer',
-    padding: '0.3rem 0.5rem',
-    zIndex: 5,
   },
   errorOverlay: {
     position: 'absolute',

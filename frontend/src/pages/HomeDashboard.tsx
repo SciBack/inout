@@ -25,17 +25,30 @@ interface OverviewResponse {
   buildings: BuildingOverview[]
 }
 
+interface CampusGroup {
+  key: string
+  label: string
+  items: BuildingOverview[]
+  capacity: number
+  occupancy: number
+  occupancyPercent: number
+}
+
 const REFRESH_MS = 30000
 const RETRY_MS = 8000
 const SPACE_ID_KEY = 'inout_space_id'
-
-type SortMode = 'occupancy' | 'alpha'
 
 // Umbrales de estado — mismo criterio en toda la app: <50 verde, 50–80 ámbar, >80 rojo.
 function statusColor(pct: number): string {
   if (pct > 80) return 'var(--c-red)'
   if (pct >= 50) return 'var(--c-amber)'
   return 'var(--c-green)'
+}
+
+function statusLabel(pct: number): string {
+  if (pct > 80) return 'Alto'
+  if (pct >= 50) return 'Moderado'
+  return 'Normal'
 }
 
 function fmtInt(n: number): string {
@@ -46,7 +59,7 @@ function fmtPct(n: number): string {
   return `${Math.round(n)}%`
 }
 
-// ── Íconos del header — hoisted, heredan color vía currentColor ────────────
+// ── Íconos — hoisted, heredan color vía currentColor ────────────────────────
 const ICON_BUILDING = (
   <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
     <rect x="4" y="3" width="12" height="15" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
@@ -69,17 +82,38 @@ const ICON_CHEVRON = (
   </svg>
 )
 
+const ICON_PIN = (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M10 18s6-5.4 6-10a6 6 0 1 0-12 0c0 4.6 6 10 6 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="10" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const ICON_ARROW_LEFT = (
+  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M12.5 4.5 6 10l6.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+const ICON_ARROW_RIGHT = (
+  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 // ── HomeDashboard ────────────────────────────────────────────────────────────
 export function HomeDashboard(): JSX.Element {
   const [data, setData] = useState<OverviewResponse | null>(null)
   const [error, setError] = useState(false)
-  const [query, setQuery] = useState('')
-  const [sortMode, setSortMode] = useState<SortMode>('occupancy')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(() => {
     const stored = localStorage.getItem(SPACE_ID_KEY)
     return stored ? Number(stored) : null
   })
+  // Flujo guiado de selección: paso 1 (campus === null) → paso 2 (campus
+  // elegido, se listan sus edificios) → confirmar edificio (barra inferior).
+  const [selectedCampus, setSelectedCampus] = useState<string | null>(null)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
   const mountedRef = useRef(true)
@@ -122,7 +156,7 @@ export function HomeDashboard(): JSX.Element {
     window.location.href = '/kiosko'
   }
 
-  // Cerrar el selector de edificio con click afuera o Escape.
+  // Cerrar el selector rápido de edificio (topbar) con click afuera o Escape.
   useEffect(() => {
     if (!pickerOpen) return
     const onPointerDown = (e: PointerEvent) => {
@@ -139,19 +173,25 @@ export function HomeDashboard(): JSX.Element {
 
   const activeBuilding = data?.buildings.find(b => b.id === activeSpaceId)
 
-  // Agrupación por campus para el selector — TODOS los edificios, sin el
-  // filtro de búsqueda del listado principal (son propósitos distintos).
-  const pickerGroups = useMemo(() => {
+  // Agrupación por campus — fuente única para el selector rápido de la
+  // topbar y para el flujo guiado de 2 pasos del cuerpo de la página.
+  const campusGroups: CampusGroup[] = useMemo(() => {
     if (!data) return []
-    const byKey = new Map<string, { key: string; label: string; items: BuildingOverview[] }>()
+    const byKey = new Map<string, CampusGroup>()
     for (const b of data.buildings) {
       const key = b.sede_id !== null ? `sede-${b.sede_id}` : '__sin_sede__'
       const label = b.sede_name ?? 'Otros'
       let g = byKey.get(key)
-      if (!g) { g = { key, label, items: [] }; byKey.set(key, g) }
+      if (!g) { g = { key, label, items: [], capacity: 0, occupancy: 0, occupancyPercent: 0 }; byKey.set(key, g) }
       g.items.push(b)
+      g.capacity += b.capacity
+      g.occupancy += b.current_occupancy
     }
     const list = Array.from(byKey.values())
+    for (const g of list) {
+      g.occupancyPercent = g.capacity > 0 ? (g.occupancy / g.capacity) * 100 : 0
+      g.items.sort((a, b) => b.occupancy_percent - a.occupancy_percent || a.name.localeCompare(b.name, 'es'))
+    }
     list.sort((a, b) => {
       if (a.label === 'Otros') return 1
       if (b.label === 'Otros') return -1
@@ -160,60 +200,35 @@ export function HomeDashboard(): JSX.Element {
     return list
   }, [data])
 
-  // ── Filtro + agrupación por campus + orden ──────────────────────────────
-  const groups = useMemo(() => {
-    if (!data) return []
-    const q = query.trim().toLowerCase()
-    const filtered = q
-      ? data.buildings.filter(b =>
-          b.name.toLowerCase().includes(q) || (b.sede_name ?? '').toLowerCase().includes(q))
-      : data.buildings
+  const currentGroup = campusGroups.find(g => g.key === selectedCampus) ?? null
+  // Si el campus elegido desapareció de los datos (sede eliminada en vivo),
+  // cae con gracia al paso 1 en vez de quedar en una pantalla vacía.
+  useEffect(() => {
+    if (selectedCampus !== null && !currentGroup) setSelectedCampus(null)
+  }, [selectedCampus, currentGroup])
 
-    const byKey = new Map<string, { key: string; label: string; items: BuildingOverview[] }>()
-    for (const b of filtered) {
-      const key = b.sede_id !== null ? `sede-${b.sede_id}` : '__sin_sede__'
-      const label = b.sede_name ?? 'Otros'
-      let g = byKey.get(key)
-      if (!g) { g = { key, label, items: [] }; byKey.set(key, g) }
-      g.items.push(b)
-    }
+  const confirmingBuilding = data?.buildings.find(b => b.id === confirmingId) ?? null
 
-    const sortItems = (items: BuildingOverview[]) => {
-      const arr = [...items]
-      if (sortMode === 'alpha') {
-        arr.sort((a, b) => a.name.localeCompare(b.name, 'es'))
-      } else {
-        arr.sort((a, b) => b.occupancy_percent - a.occupancy_percent || a.name.localeCompare(b.name, 'es'))
-      }
-      return arr
-    }
+  const pickCampus = (key: string) => { setSelectedCampus(key); setConfirmingId(null) }
+  const backToCampuses = () => { setSelectedCampus(null); setConfirmingId(null) }
 
-    const list = Array.from(byKey.values()).map(g => ({ ...g, items: sortItems(g.items) }))
-    list.sort((a, b) => {
-      if (a.label === 'Otros') return 1
-      if (b.label === 'Otros') return -1
-      return a.label.localeCompare(b.label, 'es')
-    })
-    return list
-  }, [data, query, sortMode])
-
-  // Orden estable de entrada (stagger) — asignado una sola vez por edificio,
-  // nunca recalculado cuando cambia el sort/orden, así el toggle no re-dispara
-  // la animación de montaje.
-  const mountOrderRef = useRef(new Map<number, number>())
+  // Orden estable de entrada (stagger) — asignado una sola vez por tarjeta,
+  // para que no se re-dispare la animación al refrescar datos cada 30s.
+  const mountOrderRef = useRef(new Map<string, number>())
   const nextIdxRef = useRef(0)
-  const mountDelay = (id: number): number => {
-    let idx = mountOrderRef.current.get(id)
+  const mountDelay = (key: string): number => {
+    let idx = mountOrderRef.current.get(key)
     if (idx === undefined) {
       idx = nextIdxRef.current++
-      mountOrderRef.current.set(id, idx)
+      mountOrderRef.current.set(key, idx)
     }
     return Math.min(idx, 10) * 30
   }
 
-  const showGroupHeaders = groups.length > 1
-  const totalMatches = groups.reduce((sum, g) => sum + g.items.length, 0)
   const hasBuildings = (data?.buildings.length ?? 0) > 0
+  const entriesToday = useMemo(() => data?.buildings.reduce((s, b) => s + b.entries_today, 0) ?? 0, [data])
+  const exitsToday = useMemo(() => data?.buildings.reduce((s, b) => s + b.exits_today, 0) ?? 0, [data])
+  const alertBuildings = useMemo(() => data?.buildings.filter(b => b.occupancy_percent > 80) ?? [], [data])
 
   return (
     <div className="hd-page">
@@ -239,9 +254,9 @@ export function HomeDashboard(): JSX.Element {
               {pickerOpen && (
                 <div className="hd-picker-menu" role="menu">
                   <span className="hd-picker-hint">Configurar este dispositivo como kiosko de…</span>
-                  {pickerGroups.map(group => (
+                  {campusGroups.map(group => (
                     <div className="hd-picker-group" key={group.key}>
-                      {pickerGroups.length > 1 && (
+                      {campusGroups.length > 1 && (
                         <span className="hd-picker-group-label">{group.label}</span>
                       )}
                       {group.items.map(b => (
@@ -297,7 +312,12 @@ export function HomeDashboard(): JSX.Element {
             </div>
           )}
 
-          <TotalsBand totals={data.totals} asOf={data.as_of} />
+          <MetricsStrip
+            totals={data.totals}
+            entriesToday={entriesToday}
+            exitsToday={exitsToday}
+            alertBuildings={alertBuildings}
+          />
 
           {!hasBuildings ? (
             <div className="hd-state">
@@ -312,107 +332,161 @@ export function HomeDashboard(): JSX.Element {
                 Configurar este kiosko
               </button>
             </div>
+          ) : !currentGroup ? (
+            <>
+              <h1 className="hd-section-title">Selecciona tu campus</h1>
+              <p className="hd-section-sub">Elige la sede para continuar al control de acceso del edificio</p>
+              <div className="hd-campus-grid">
+                {campusGroups.map(group => (
+                  <CampusCard
+                    key={group.key}
+                    group={group}
+                    delayMs={mountDelay(group.key)}
+                    onClick={() => pickCampus(group.key)}
+                  />
+                ))}
+              </div>
+            </>
           ) : (
             <>
-              <div className="hd-controls">
-                <input
-                  className="hd-search"
-                  type="text"
-                  placeholder="Buscar edificio o campus…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  aria-label="Buscar edificio o campus"
-                />
-                <div className="hd-sort" role="group" aria-label="Ordenar por">
-                  <button
-                    className="hd-sort-btn"
-                    data-active={sortMode === 'occupancy'}
-                    onClick={() => setSortMode('occupancy')}
-                  >
-                    % Ocupación
-                  </button>
-                  <button
-                    className="hd-sort-btn"
-                    data-active={sortMode === 'alpha'}
-                    onClick={() => setSortMode('alpha')}
-                  >
-                    A–Z
-                  </button>
+              <div className="hd-step-header">
+                <button className="hd-back-btn" onClick={backToCampuses}>
+                  {ICON_ARROW_LEFT} Cambiar campus
+                </button>
+                <div>
+                  <h1 className="hd-section-title">Selecciona el edificio · {currentGroup.label}</h1>
+                  <p className="hd-section-sub">Toca un edificio para continuar al control de acceso</p>
                 </div>
               </div>
-
-              {totalMatches === 0 ? (
-                <div className="hd-state hd-state-compact">
-                  <span className="hd-state-title">Sin resultados para “{query}”</span>
-                  <span className="hd-state-sub">Probá con otro nombre de edificio o campus.</span>
-                  <button className="hd-state-action" onClick={() => setQuery('')}>
-                    Limpiar búsqueda
-                  </button>
-                </div>
-              ) : (
-                groups.map(group => (
-                  <section className="hd-group" key={group.key}>
-                    {showGroupHeaders && (
-                      <h2 className="hd-group-label">
-                        {group.label}
-                        <span className="hd-group-count">{group.items.length}</span>
-                      </h2>
-                    )}
-                    <div className="hd-grid">
-                      {group.items.map(b => (
-                        <BuildingCard key={b.id} building={b} delayMs={mountDelay(b.id)} />
-                      ))}
-                    </div>
-                  </section>
-                ))
-              )}
+              <div className="hd-grid">
+                {currentGroup.items.map(b => (
+                  <BuildingCard
+                    key={b.id}
+                    building={b}
+                    selected={b.id === confirmingId}
+                    delayMs={mountDelay(`${currentGroup.key}-${b.id}`)}
+                    onClick={() => setConfirmingId(b.id)}
+                  />
+                ))}
+              </div>
             </>
           )}
         </>
+      )}
+
+      {confirmingBuilding && (
+        <div className="hd-confirm-bar" role="status">
+          <span className="hd-confirm-text">
+            <strong>{confirmingBuilding.name}</strong> · {fmtPct(confirmingBuilding.occupancy_percent)} de aforo
+          </span>
+          <button className="hd-confirm-btn" onClick={() => selectBuilding(confirmingBuilding.id)}>
+            Ingresar al control de acceso {ICON_ARROW_RIGHT}
+          </button>
+        </div>
       )}
     </div>
   )
 }
 
-// ── TotalsBand ───────────────────────────────────────────────────────────────
-function TotalsBand({
-  totals, asOf,
-}: { totals: OverviewResponse['totals']; asOf: string }) {
-  const color = statusColor(totals.occupancy_percent)
-  const barWidth = Math.min(100, Math.max(0, totals.occupancy_percent))
-  const asOfTime = new Date(asOf).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+// ── MetricsStrip — panorama general pequeño, "de yapa" ─────────────────────
+function MetricsStrip({
+  totals, entriesToday, exitsToday, alertBuildings,
+}: {
+  totals: OverviewResponse['totals']
+  entriesToday: number
+  exitsToday: number
+  alertBuildings: BuildingOverview[]
+}) {
+  const occColor = statusColor(totals.occupancy_percent)
+  const alertColor = alertBuildings.length > 0 ? 'var(--c-red)' : 'var(--c-text1)'
 
   return (
-    <div className="hd-totals">
-      <div className="hd-totals-main">
-        <span className="hd-totals-number" style={{ color }}>{fmtInt(totals.current_occupancy)}</span>
-        <span className="hd-totals-of">/ {fmtInt(totals.capacity)} personas</span>
-      </div>
-      <div className="hd-totals-side">
-        <span className="hd-totals-pct" style={{ color }}>{fmtPct(totals.occupancy_percent)}</span>
-        <span className="hd-totals-label">
-          ocupación combinada · {totals.buildings} {totals.buildings === 1 ? 'edificio' : 'edificios'}
-        </span>
-      </div>
-      <div className="hd-totals-bar-wrap">
-        <div className="hd-totals-bar">
-          <div className="hd-totals-bar-fill" style={{ width: `${barWidth}%`, background: color }} />
+    <div className="hd-metrics-strip">
+      <div className="hd-metric-card">
+        <span className="hd-metric-label">Ocupación global</span>
+        <div className="hd-metric-value-row">
+          <span className="hd-metric-value" style={{ color: occColor }}>{fmtPct(totals.occupancy_percent)}</span>
+          <span className="hd-metric-sub">{fmtInt(totals.current_occupancy)} / {fmtInt(totals.capacity)} personas</span>
+        </div>
+        <div className="hd-metric-bar">
+          <div className="hd-metric-bar-fill" style={{ width: `${Math.min(100, totals.occupancy_percent)}%`, background: occColor }} />
         </div>
       </div>
-      <span className="hd-totals-asof">Actualizado {asOfTime}</span>
+
+      <div className="hd-metric-card">
+        <span className="hd-metric-label">Ingresos hoy</span>
+        <span className="hd-metric-value" style={{ color: 'var(--c-blue)' }}>{fmtInt(entriesToday)}</span>
+        <span className="hd-metric-sub">en los {totals.buildings} {totals.buildings === 1 ? 'edificio activo' : 'edificios activos'}</span>
+      </div>
+
+      <div className="hd-metric-card">
+        <span className="hd-metric-label">Salidas hoy</span>
+        <span className="hd-metric-value">{fmtInt(exitsToday)}</span>
+        <span className="hd-metric-sub">balance neto: {fmtInt(totals.current_occupancy)} dentro</span>
+      </div>
+
+      <div className="hd-metric-card">
+        <span className="hd-metric-label">Edificios en alerta</span>
+        <span className="hd-metric-value" style={{ color: alertColor }}>{alertBuildings.length}</span>
+        <span className="hd-metric-sub">
+          {alertBuildings.length > 0
+            ? `de ${totals.buildings} · >80% de aforo`
+            : `de ${totals.buildings} · todo normal`}
+        </span>
+        {alertBuildings[0] && (
+          <span className="hd-metric-alert-name">{alertBuildings[0].name}</span>
+        )}
+      </div>
     </div>
   )
 }
 
-// ── BuildingCard ─────────────────────────────────────────────────────────────
+// ── CampusCard — paso 1 del selector guiado ─────────────────────────────────
+function CampusCard({
+  group, delayMs, onClick,
+}: { group: CampusGroup; delayMs: number; onClick: () => void }) {
+  const color = statusColor(group.occupancyPercent)
+  const barWidth = Math.min(100, Math.max(0, group.occupancyPercent))
+
+  return (
+    <button className="hd-campus-card" style={{ animationDelay: `${delayMs}ms` }} onClick={onClick}>
+      <div className="hd-campus-card-header">
+        <span className="hd-campus-card-icon">{ICON_PIN}</span>
+        <span className="hd-campus-card-name">{group.label}</span>
+        <span className="hd-campus-card-badge" style={{ color, background: `color-mix(in oklch, ${color} 16%, transparent)` }}>
+          {statusLabel(group.occupancyPercent)}
+        </span>
+      </div>
+
+      <div className="hd-campus-card-pct" style={{ color }}>{fmtPct(group.occupancyPercent)}</div>
+      <span className="hd-campus-card-pct-label">ocupación promedio</span>
+
+      <div className="hd-meter">
+        <div className="hd-meter-fill" style={{ width: `${barWidth}%`, background: color }} />
+      </div>
+
+      <div className="hd-campus-card-footer">
+        <span>{group.items.length} {group.items.length === 1 ? 'edificio' : 'edificios'}</span>
+        <span>{fmtInt(group.occupancy)} / {fmtInt(group.capacity)} personas</span>
+      </div>
+    </button>
+  )
+}
+
+// ── BuildingCard — paso 2 del selector guiado ───────────────────────────────
 function BuildingCard({
-  building, delayMs,
-}: { building: BuildingOverview; delayMs: number }) {
+  building, delayMs, selected, onClick,
+}: { building: BuildingOverview; delayMs: number; selected: boolean; onClick: () => void }) {
   const color = statusColor(building.occupancy_percent)
   const barWidth = Math.min(100, Math.max(0, building.occupancy_percent))
 
   return (
-    <article className="hd-card" style={{ animationDelay: `${delayMs}ms` }}>
+    <button
+      className="hd-card"
+      data-selected={selected}
+      style={{ animationDelay: `${delayMs}ms` }}
+      onClick={onClick}
+    >
       <div className="hd-card-header">
         <span className="hd-card-name">{building.name}</span>
         <span className="hd-card-pct" style={{ color }}>{fmtPct(building.occupancy_percent)}</span>
@@ -431,7 +505,7 @@ function BuildingCard({
         <span className="hd-flow-item"><span aria-hidden="true">↑</span> {fmtInt(building.entries_today)} hoy</span>
         <span className="hd-flow-item"><span aria-hidden="true">↓</span> {fmtInt(building.exits_today)} hoy</span>
       </div>
-    </article>
+    </button>
   )
 }
 
@@ -444,7 +518,7 @@ const CSS = `
   background: var(--c-bg);
   color: var(--c-text1);
   font-family: 'Barlow', system-ui, sans-serif;
-  padding: clamp(20px, 3vw, 40px) clamp(16px, 4vw, 56px) clamp(48px, 6vw, 80px);
+  padding: clamp(20px, 3vw, 40px) clamp(16px, 4vw, 56px) clamp(96px, 10vw, 120px);
 }
 .hd-page * { box-sizing: border-box; }
 
@@ -471,8 +545,7 @@ const CSS = `
   gap: 10px;
 }
 
-/* ── Selector de edificio (popover) — la acción principal del header, con
-   mayor peso visual que Admin: fondo propio, borde marcado, ícono a color. ── */
+/* ── Selector rápido de edificio (popover) ── */
 .hd-picker { position: relative; }
 .hd-picker-trigger {
   display: flex;
@@ -556,7 +629,7 @@ const CSS = `
 .hd-picker-item:focus-visible { outline: 2px solid var(--c-blue); outline-offset: -2px; }
 .hd-picker-item[data-active="true"] { color: var(--c-blue); font-weight: 600; }
 
-/* ── Link a administración — visible pero secundario frente al selector ── */
+/* ── Link a administración ── */
 .hd-admin-link {
   display: flex;
   align-items: center;
@@ -576,70 +649,64 @@ const CSS = `
 .hd-admin-link:active { transform: scale(0.97); }
 .hd-admin-link:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
 
-/* ── Totals band ── */
-.hd-totals {
+/* ── Franja de métricas generales — pequeña, secundaria, "de yapa" ── */
+.hd-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: clamp(10px, 1.4vw, 16px);
+  margin-bottom: clamp(24px, 3.5vh, 40px);
+}
+.hd-metric-card {
   border: 1px solid var(--c-border);
   background: var(--c-bg-panel);
-  border-radius: 16px;
-  padding: clamp(20px, 3vh, 32px) clamp(20px, 3vw, 36px);
-  margin-bottom: clamp(24px, 3.5vh, 40px);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 6px clamp(16px, 3vw, 40px);
-}
-.hd-totals-main {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.hd-totals-number {
-  font-family: 'Bebas Neue', 'Arial Narrow', impact, sans-serif;
-  font-size: clamp(44px, 7vw, 88px);
-  line-height: 0.9;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-.hd-totals-of {
-  font-size: clamp(15px, 2vw, 22px);
-  color: var(--c-text3);
-  font-weight: 500;
-}
-.hd-totals-side {
-  margin-left: auto;
-  text-align: right;
+  border-radius: 14px;
+  padding: clamp(14px, 1.8vh, 18px) clamp(16px, 2vw, 20px);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
-.hd-totals-pct {
-  font-family: 'Bebas Neue', 'Arial Narrow', impact, sans-serif;
-  font-size: clamp(26px, 3.4vw, 38px);
-  line-height: 1;
-  letter-spacing: 0.01em;
-}
-.hd-totals-label {
-  font-size: 13px;
+.hd-metric-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--c-text3);
 }
-.hd-totals-bar-wrap { flex-basis: 100%; }
-.hd-totals-bar {
-  height: 8px;
+.hd-metric-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hd-metric-value {
+  font-family: 'Bebas Neue', 'Arial Narrow', impact, sans-serif;
+  font-size: clamp(28px, 3.2vw, 36px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text1);
+}
+.hd-metric-sub {
+  font-size: 12.5px;
+  color: var(--c-text3);
+}
+.hd-metric-bar {
+  height: 5px;
   border-radius: 99px;
   background: var(--c-border);
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 4px;
 }
-.hd-totals-bar-fill {
+.hd-metric-bar-fill {
   height: 100%;
   border-radius: 99px;
   transition: width 700ms cubic-bezier(0.22,1,0.36,1), background 400ms ease-out;
 }
-.hd-totals-asof {
-  flex-basis: 100%;
-  font-size: 12px;
-  color: var(--c-text4);
-  margin-top: -2px;
+.hd-metric-alert-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-red);
+  margin-top: 2px;
 }
 
 /* ── Error banner (no bloqueante) ── */
@@ -657,98 +724,139 @@ const CSS = `
   margin-bottom: clamp(16px, 2vh, 24px);
 }
 
-/* ── Controls ──
-   Utilitarios secundarios (filtrar/ordenar la lista de abajo), no acciones
-   principales del dashboard — deliberadamente pequeños y discretos. */
-.hd-controls {
+/* ── Encabezados de sección / paso ── */
+.hd-section-title {
+  font-size: clamp(18px, 2.2vw, 24px);
+  font-weight: 700;
+  color: var(--c-text1);
+  margin: 0 0 4px;
+}
+.hd-section-sub {
+  font-size: 14px;
+  color: var(--c-text3);
+  margin: 0 0 clamp(16px, 2.2vh, 22px);
+}
+.hd-step-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  margin-bottom: clamp(16px, 2.4vh, 22px);
+  gap: clamp(12px, 2vw, 20px);
+  margin-bottom: clamp(16px, 2.2vh, 22px);
 }
-.hd-search {
-  flex: 0 1 220px;
-  min-width: 140px;
-  max-width: 280px;
-  background: var(--c-bg-panel);
-  border: 1px solid var(--c-border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: var(--c-text1);
-  font-family: 'Barlow', sans-serif;
-  font-size: 13px;
-  outline: none;
-  transition: border-color 160ms ease-out;
-}
-.hd-search::placeholder { color: var(--c-text4); }
-.hd-search:focus { border-color: var(--c-blue); }
-
-.hd-sort {
+.hd-step-header .hd-section-title,
+.hd-step-header .hd-section-sub { margin-bottom: 0; }
+.hd-back-btn {
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
   background: var(--c-bg-panel);
   border: 1px solid var(--c-border);
-  border-radius: 8px;
-  padding: 2px;
-}
-.hd-sort-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 6px;
+  border-radius: 10px;
+  padding: 9px 14px;
+  color: var(--c-text2);
   font-family: 'Barlow', sans-serif;
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--c-text3);
-  transition: background 160ms ease-out, color 160ms ease-out;
+  cursor: pointer;
+  transition: border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
 }
-.hd-sort-btn:hover { color: var(--c-text1); }
-.hd-sort-btn:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
-.hd-sort-btn[data-active="true"] {
-  background: var(--c-border);
+.hd-back-btn:hover { border-color: var(--c-blue); color: var(--c-text1); }
+.hd-back-btn:active { transform: scale(0.97); }
+.hd-back-btn:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+
+/* ── Paso 1: grid de campus ── */
+.hd-campus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(14px, 1.8vw, 22px);
+}
+.hd-campus-card {
+  text-align: left;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-panel);
+  border-radius: 16px;
+  padding: clamp(18px, 2.2vw, 26px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  animation: hdCardIn 380ms cubic-bezier(0.23,1,0.32,1) forwards;
+  transition: border-color 160ms ease-out, transform 160ms ease-out;
+}
+.hd-campus-card:hover { border-color: var(--c-blue); }
+.hd-campus-card:active { transform: scale(0.98); }
+.hd-campus-card:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+.hd-campus-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hd-campus-card-icon { display: flex; color: var(--c-text3); flex-shrink: 0; }
+.hd-campus-card-name {
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 700;
   color: var(--c-text1);
+  flex: 1;
+}
+.hd-campus-card-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.hd-campus-card-pct {
+  font-family: 'Bebas Neue', 'Arial Narrow', impact, sans-serif;
+  font-size: clamp(38px, 5vw, 52px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.hd-campus-card-pct-label {
+  font-size: 13px;
+  color: var(--c-text3);
+  margin-top: -8px;
+}
+.hd-campus-card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--c-text3);
+  margin-top: 2px;
 }
 
-/* ── Groups / grid ── */
-.hd-group + .hd-group { margin-top: clamp(28px, 4vh, 44px); }
-.hd-group-label {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--c-text3);
-  margin: 0 0 14px;
-}
-.hd-group-count {
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: var(--c-text4);
-}
+/* ── Groups / grid (paso 2) ── */
 .hd-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: clamp(12px, 1.6vw, 20px);
 }
 
-/* ── Card ── */
+/* ── Card de edificio (paso 2) — ahora es un <button> seleccionable ── */
 .hd-card {
-  border: 1px solid var(--c-border);
+  text-align: left;
+  border: 1.5px solid var(--c-border);
   background: var(--c-bg-panel);
   border-radius: 14px;
   padding: clamp(16px, 2vw, 22px);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
   opacity: 0;
   transform: translateY(10px) scale(0.98);
   animation: hdCardIn 380ms cubic-bezier(0.23,1,0.32,1) forwards;
+  transition: border-color 160ms ease-out, transform 160ms ease-out;
 }
+.hd-card:hover { border-color: var(--c-blue); }
+.hd-card:active { transform: scale(0.98); }
+.hd-card:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+.hd-card[data-selected="true"] { border-color: var(--c-blue); background: color-mix(in oklch, var(--c-blue) 8%, var(--c-bg-panel)); }
 @keyframes hdCardIn {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
@@ -810,6 +918,54 @@ const CSS = `
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Barra de confirmación flotante ── */
+.hd-confirm-bar {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(20px, 4vh, 36px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2vw, 22px);
+  background: oklch(20% 0.03 230);
+  border: 1px solid oklch(32% 0.03 230);
+  border-radius: 999px;
+  padding: 10px 12px 10px 22px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+  z-index: 30;
+  animation: hdConfirmIn 220ms cubic-bezier(0.23,1,0.32,1) forwards;
+  max-width: calc(100vw - 32px);
+}
+@keyframes hdConfirmIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.hd-confirm-text {
+  color: oklch(90% 0.01 230);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.hd-confirm-text strong { font-weight: 700; }
+.hd-confirm-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--c-blue);
+  border: none;
+  border-radius: 999px;
+  padding: 11px 20px;
+  color: white;
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 160ms ease-out, transform 160ms ease-out;
+}
+.hd-confirm-btn:hover { filter: brightness(1.1); }
+.hd-confirm-btn:active { transform: scale(0.97); }
+.hd-confirm-btn:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+
 /* ── Estados vacío / error ── */
 .hd-state {
   min-height: 46vh;
@@ -821,7 +977,6 @@ const CSS = `
   gap: 10px;
   padding: 40px 20px;
 }
-.hd-state-compact { min-height: 20vh; padding: 32px 20px; }
 .hd-state-title {
   font-size: clamp(17px, 2.2vw, 21px);
   font-weight: 700;
@@ -851,7 +1006,8 @@ const CSS = `
 .hd-state-action:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .hd-card { animation: none; opacity: 1; transform: none; }
-  .hd-totals-bar-fill, .hd-meter-fill { transition: none; }
+  .hd-card, .hd-campus-card { animation: none; opacity: 1; transform: none; }
+  .hd-confirm-bar { animation: none; }
+  .hd-totals-bar-fill, .hd-meter-fill, .hd-metric-bar-fill { transition: none; }
 }
 `
