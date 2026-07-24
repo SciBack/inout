@@ -642,9 +642,12 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <span style={s.dateLabel}>{todayCapitalized}</span>
       </div>
 
-      {/* ── CUERPO: una sola columna con scroll — gauge, stats, feed de
-          actividad y facultades apilados verticalmente. ── */}
+      {/* ── CUERPO: 3 columnas de igual altura — métricas | actividad
+          reciente | facultades. Cada una con su propio scroll interno. ── */}
       <div style={s.body}>
+
+        {/* COLUMNA 1: gauge + tarjetas estadísticas */}
+        <div style={s.colStats}>
 
           {/* Gauge compacto */}
           <div style={s.gaugeCard}>
@@ -719,10 +722,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           {/* Visitantes de otro campus — no se muestra si viene vacío */}
           <CrossCampusCard breakdown={data.cross_campus_breakdown ?? []} />
 
-          {/* Actividad reciente — apilada debajo de las métricas, con su
-              propio scroll interno para no desbordar la columna. */}
-          <div style={s.feedSection}>
-            <span style={s.sectionLabel}>Actividad reciente</span>
+        </div>
+
+        {/* COLUMNA 2: actividad reciente, altura completa con scroll propio */}
+        <div style={s.feedSection}>
+          <span style={s.sectionLabel}>Actividad reciente</span>
           <div style={s.feedList}>
             {data.recent_events.map((ev, idx) => {
               const isEntry = ev.event_type === 'entry'
@@ -818,13 +822,15 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               )
             })}
           </div>
-          </div>
+        </div>
 
-          {/* Barras por facultad */}
-          <div style={s.facultyInCol}>
-            <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
+        {/* COLUMNA 3: visitantes por facultad, altura completa con scroll propio */}
+        <div style={s.facultyInCol}>
+          <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
+          <div style={s.facultyScroll}>
             <FacultyBarChart rows={data.faculty_breakdown} />
           </div>
+        </div>
 
       </div>
 
@@ -871,11 +877,22 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: FONT_BODY,
   },
 
-  // Cuerpo — una sola columna con scroll: gauge, stats, feed de actividad y
-  // facultades apilados verticalmente (el lector de tarjeta vive aparte, en
-  // el panel derecho del kiosko — ver App.tsx).
+  // Cuerpo — 3 columnas de igual altura: métricas | actividad reciente |
+  // facultades (el lector de tarjeta vive aparte, en el panel derecho del
+  // kiosko — ver App.tsx). Cada columna tiene su propio scroll interno.
   body: {
     flex: '1 1 0',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 'clamp(9px,1.1vh,14px)',
+  },
+
+  // Columna 1 — gauge + tarjetas estadísticas. Contenido de altura fija,
+  // no necesita llenar la columna entera.
+  colStats: {
+    flex: '1 1 0',
+    minWidth: 0,
     minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
@@ -898,8 +915,7 @@ const s: Record<string, React.CSSProperties> = {
 
   // Grid de tarjetas de estadísticas — auto, no se estira: cada celda es un
   // solo número, no necesita reclamar todo el alto disponible de la
-  // columna. El espacio que libera va al desglose por facultad de abajo,
-  // que sí tiene más datos reales que mostrar.
+  // columna.
   statGrid: {
     flex: '0 0 auto',
     display: 'grid',
@@ -920,12 +936,11 @@ const s: Record<string, React.CSSProperties> = {
     alignSelf: 'flex-start',
   },
 
-  // Actividad reciente — bloque apilado con altura acotada y scroll propio,
-  // para no desbordar el scroll general de la columna.
+  // Columna 2 — actividad reciente, altura completa con scroll propio.
   feedSection: {
-    flex: '0 0 auto',
+    flex: '1 1 0',
+    minWidth: 0,
     minHeight: 0,
-    maxHeight: 'clamp(200px, 28vh, 340px)',
     background: C.card,
     border: `1px solid ${C.border}`,
     borderRadius: 14,
@@ -936,9 +951,11 @@ const s: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
 
-  // Barras de facultad — último bloque de la columna, fluye naturalmente.
+  // Columna 3 — visitantes por facultad, altura completa con scroll propio.
   facultyInCol: {
-    flex: '0 0 auto',
+    flex: '1 1 0',
+    minWidth: 0,
+    minHeight: 0,
     background: C.card,
     border: `1px solid ${C.border}`,
     borderRadius: 14,
@@ -946,6 +963,12 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(5px,0.7vh,9px)',
+    overflow: 'hidden',
+  },
+  facultyScroll: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
   },
   feedList: {
     flex: 1,
