@@ -46,6 +46,29 @@ function fmtPct(n: number): string {
   return `${Math.round(n)}%`
 }
 
+// ── Íconos del header — hoisted, heredan color vía currentColor ────────────
+const ICON_BUILDING = (
+  <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <rect x="4" y="3" width="12" height="15" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M7.2 6.6h1.4M11.4 6.6h1.4M7.2 10h1.4M11.4 10h1.4M7.2 13.4h1.4M11.4 13.4h1.4"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+const ICON_GEAR = (
+  <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <circle cx="10" cy="10" r="2.7" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10 3.3v2.1M10 14.6v2.1M16.7 10h-2.1M5.4 10H3.3M14.7 5.3l-1.5 1.5M6.8 13.2l-1.5 1.5M14.7 14.7l-1.5-1.5M6.8 6.8L5.3 5.3"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+const ICON_CHEVRON = (
+  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M5.5 8 L10 12.5 L14.5 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 // ── HomeDashboard ────────────────────────────────────────────────────────────
 export function HomeDashboard(): JSX.Element {
   const [data, setData] = useState<OverviewResponse | null>(null)
@@ -208,9 +231,9 @@ export function HomeDashboard(): JSX.Element {
                 aria-expanded={pickerOpen}
                 aria-haspopup="true"
               >
-                <span className="hd-picker-dot" aria-hidden="true" />
+                {ICON_BUILDING}
                 {activeBuilding ? activeBuilding.name : 'Elegir edificio'}
-                <span className="hd-picker-chevron" aria-hidden="true">⌄</span>
+                <span className="hd-picker-chevron">{ICON_CHEVRON}</span>
               </button>
 
               {pickerOpen && (
@@ -240,7 +263,8 @@ export function HomeDashboard(): JSX.Element {
           )}
 
           <a className="hd-admin-link" href="/admin" title="Administración">
-            <span aria-hidden="true">⚙</span> Admin
+            {ICON_GEAR}
+            Admin
           </a>
         </div>
       </div>
@@ -428,50 +452,54 @@ const CSS = `
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: clamp(20px, 3vh, 32px);
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: clamp(14px, 2vh, 20px);
+  margin-bottom: clamp(22px, 3.2vh, 36px);
+  border-bottom: 1px solid var(--c-border);
 }
 .hd-brand {
-  font-size: 12px;
+  font-size: clamp(13px, 1.6vw, 16px);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--c-text3);
 }
 .hd-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* ── Selector de edificio (popover) ── */
+/* ── Selector de edificio (popover) — la acción principal del header, con
+   mayor peso visual que Admin: fondo propio, borde marcado, ícono a color. ── */
 .hd-picker { position: relative; }
 .hd-picker-trigger {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
   background: var(--c-bg-panel);
-  border: 1px solid var(--c-border);
-  border-radius: 9px;
-  padding: 6px 11px;
-  color: var(--c-text2);
+  border: 1.5px solid var(--c-border);
+  border-radius: 11px;
+  padding: 10px 16px;
+  color: var(--c-text1);
   font-family: 'Barlow', sans-serif;
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+  transition: border-color 160ms ease-out, background 160ms ease-out, transform 160ms ease-out;
 }
-.hd-picker-trigger:hover { border-color: var(--c-text4); color: var(--c-text1); }
+.hd-picker-trigger svg { color: var(--c-blue); flex-shrink: 0; }
+.hd-picker-trigger:hover { border-color: var(--c-blue); background: var(--c-bg); }
 .hd-picker-trigger:active { transform: scale(0.97); }
 .hd-picker-trigger:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
-.hd-picker-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--c-green);
-  flex-shrink: 0;
+.hd-picker-chevron {
+  display: flex;
+  color: var(--c-text3);
+  margin-left: 1px;
+  transition: transform 160ms ease-out;
 }
-.hd-picker-chevron { color: var(--c-text4); font-size: 11px; margin-left: 1px; }
+.hd-picker-trigger[aria-expanded="true"] .hd-picker-chevron { transform: rotate(180deg); }
 
 .hd-picker-menu {
   position: absolute;
@@ -528,21 +556,24 @@ const CSS = `
 .hd-picker-item:focus-visible { outline: 2px solid var(--c-blue); outline-offset: -2px; }
 .hd-picker-item[data-active="true"] { color: var(--c-blue); font-weight: 600; }
 
-/* ── Link a administración ── */
+/* ── Link a administración — visible pero secundario frente al selector ── */
 .hd-admin-link {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--c-text4);
+  gap: 8px;
+  color: var(--c-text2);
   font-family: 'Barlow', sans-serif;
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 600;
   text-decoration: none;
-  padding: 6px 10px;
-  border-radius: 9px;
-  transition: color 160ms ease-out, background 160ms ease-out;
+  padding: 10px 15px;
+  border-radius: 11px;
+  border: 1.5px solid transparent;
+  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out;
 }
-.hd-admin-link:hover { color: var(--c-text2); background: var(--c-bg-panel); }
+.hd-admin-link svg { flex-shrink: 0; }
+.hd-admin-link:hover { color: var(--c-text1); background: var(--c-bg-panel); border-color: var(--c-border); }
+.hd-admin-link:active { transform: scale(0.97); }
 .hd-admin-link:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
 
 /* ── Totals band ── */
