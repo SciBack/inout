@@ -314,20 +314,20 @@ export default function App() {
   const spaceId = urlSpaceId ?? autoSpaceId
   const activeSpace = spaces?.find(sp => sp.id === spaceId)
 
-  // Modo día/noche real por ubicación de la sede. En el kiosko de un
-  // edificio usa la sede de ESE espacio; en el dashboard público (sin
-  // espacio resuelto — HomeDashboard, que abarca todas las sedes) cae a la
-  // primera sede con coordenadas cargadas, ya que el tema es una sola
-  // variable global (--c-*) y todos los campus comparten huso horario —
-  // la diferencia de amanecer/atardecer entre sedes es de minutos,
-  // irrelevante para un cambio de tema visual. Sin ninguna sede con
-  // coordenadas todavía, el hook cae a 'night' — mismo look oscuro que el
-  // kiosko siempre tuvo, cero regresión.
-  const themeSpace = activeSpace ?? spaces?.find(sp => sp.sede_latitude !== null && sp.sede_longitude !== null)
-  const dayNightMode = useDayNightMode(themeSpace?.sede_latitude ?? null, themeSpace?.sede_longitude ?? null)
+  // El panel de inicio (dashboard público, sin espacio propio — abarca
+  // todas las sedes) es siempre modo claro fijo: no es un kiosko con luz
+  // ambiental real en la entrada de un edificio, es un panorama pensado
+  // para verse en horario de oficina. El kiosko de un edificio sí sigue el
+  // ciclo día/noche real de SU sede (ver useDayNightMode), para no
+  // deslumbrar de noche en el lobby. Sin coordenadas cargadas en esa sede,
+  // el hook cae a 'night' — mismo look oscuro que el kiosko siempre tuvo,
+  // cero regresión.
+  const showingHomeDashboard = spaceId === undefined && !isKiosko
+  const dayNightMode = useDayNightMode(activeSpace?.sede_latitude ?? null, activeSpace?.sede_longitude ?? null)
+  const theme = showingHomeDashboard ? 'day' : dayNightMode
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', dayNightMode)
-  }, [dayNightMode])
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   const changeBuilding = () => {
     localStorage.removeItem('inout_space_id')
