@@ -78,6 +78,85 @@ class TestFalloDeclarado:
         assert run.provider == "ldap-alumni"
 
 
+class TestUnRegistroMaloNoTumbaLaCorrida:
+    """Bug de producción (visto 2026-07-23): el sync de ou=people quedaba en
+    'running' con 0/0/0 TODOS los días, mientras alumni sincronizaba bien.
+
+    Causa: si el upsert de UN registro falla, la transacción de PostgreSQL
+    queda abortada. Sin rollback, cada operación siguiente falla también y el
+    commit final —el que guarda el estado de la corrida— revienta. El registro
+    queda congelado en 'running' y el padrón nunca se replica.
+
+    Un registro malo debe costar ESE registro, no la corrida entera.
+    """
+
+    def test_sigue_tras_un_registro_que_falla(self, db):
+        primero = PersonRecord(
+            person_key="ldap:1", full_name="Ada", source="fuente",
+            identifiers={"cardnumber": "111", "dni": "1"},
+        )
+        # Misma clave (mismo documento) pero OTRO carné → son dos personas.
+        malo = PersonRecord(
+            person_key="ldap:1", full_name="Impostor", source="fuente",
+            identifiers={"cardnumber": "999", "dni": "1"},
+        )
+        ultimo = PersonRecord(
+            person_key="ldap:2", full_name="Grace", source="fuente",
+            identifiers={"cardnumber": "222", "dni": "2"},
+        )
+        p = FakeProvider(records=[primero, malo, ultimo])
+
+        run = asyncio.run(sync_provider(db, p))
+
+        # La corrida TERMINA (no queda 'running') y contabiliza el fallo.
+        assert run.status == "error"
+        assert run.errors == 1
+        # Y los registros buenos posteriores al malo sí entraron.
+        assert run.created == 2
+
+    def test_el_registro_de_la_corrida_nunca_queda_en_running(self, db):
+        malo = PersonRecord(
+            person_key="ldap:x", full_name="A", source="fuente", identifiers={},
+        )
+        run = asyncio.run(sync_provider(db, FakeProvider(records=[malo])))
+        assert run.status != "running", "la corrida quedó colgada en 'running'"
+        assert run.finished_at is not None
+
+    def test_hace_rollback_tras_un_registro_fallido(self, db, monkeypatch):
+        """La guarda real contra el bug de producción.
+
+        SQLite NO reproduce el fallo (tolera seguir operando tras un error);
+        PostgreSQL aborta la transacción entera. Verificado contra PostgreSQL
+        real: sin este rollback la corrida quedaba en 'running' con 0/0/0 y
+        todos los registros posteriores al malo se perdían.
+
+        Como el test corre en SQLite, se verifica el CONTRATO —que se llame
+        rollback— en vez del síntoma, que aquí no se manifestaría.
+        """
+        from app.services.identity import repository
+
+        llamadas = {"rollback": 0}
+        original = db.rollback
+        monkeypatch.setattr(
+            db, "rollback",
+            lambda: (llamadas.__setitem__("rollback", llamadas["rollback"] + 1), original())[1],
+        )
+
+        def upsert_que_falla(_db, rec, source):
+            raise RuntimeError("simula un error de SQL (dato que no entra en su columna)")
+
+        monkeypatch.setattr("app.services.sync.upsert_person", upsert_que_falla)
+
+        run = asyncio.run(sync_provider(db, FakeProvider(records=[registro("ldap:1")])))
+
+        assert llamadas["rollback"] >= 1, (
+            "sync_provider no hizo rollback tras un registro fallido: en PostgreSQL "
+            "la transacción queda abortada y la corrida entera se pierde"
+        )
+        assert run.status == "error"
+        assert run.errors == 1
+
+
 class TestFetchAllPropagaElFallo:
     """El sync es la capa que tiene dónde registrar el error; el proveedor no
     debe tragárselo y devolver [] (eso se lee como 'ok, 0 registros')."""

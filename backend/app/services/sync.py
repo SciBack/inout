@@ -74,6 +74,15 @@ async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSync
                     created += 1
             except Exception:
                 errors += 1
+                # Rollback obligatorio: en PostgreSQL un error de SQL aborta la
+                # transacción entera, y sin esto TODO lo que sigue falla —
+                # incluido el commit final que guarda el estado de la corrida,
+                # que quedaría congelada en 'running' y el padrón sin replicar.
+                # Un registro malo debe costar ese registro, no la corrida.
+                try:
+                    db.rollback()
+                except Exception:
+                    logger.exception("[sync] proveedor=%s: rollback falló", provider.name)
                 logger.exception(
                     "[sync] proveedor=%s: error al upsertar record person_key=%s",
                     provider.name, getattr(rec, "person_key", "?"),
