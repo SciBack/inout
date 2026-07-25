@@ -69,6 +69,12 @@ class FacultyCount(BaseModel):
     count: int
 
 
+class ProgramCount(BaseModel):
+    program: str
+    label: str
+    count: int
+
+
 class HourlyCount(BaseModel):
     hour: int
     count: int
@@ -319,14 +325,26 @@ class GenderBreakdown(BaseModel):
     female: int
 
 
+class StatsFilters(BaseModel):
+    """Filtros efectivamente aplicados — el frontend los usa para reflejar el
+    ámbito activo (breadcrumb, chips) sin tener que reconstruirlo él mismo."""
+    sede_id: Optional[int] = None
+    space_id: Optional[int] = None
+    category: Optional[str] = None
+    faculty: Optional[str] = None
+    program: Optional[str] = None
+
+
 class AnnualStatsResponse(BaseModel):
-    space_name: str
+    scope_label: str  # "Todo el sistema" | "Lima" | "CRAI Lima"
     year: int
     monthly: list[MonthlyStatRow]
     totals: StatsTotals
     category_breakdown: list[CategoryCount]
     faculty_breakdown: list[FacultyCount]
+    program_breakdown: list[ProgramCount]
     gender_breakdown: GenderBreakdown
+    filters: StatsFilters
 
 
 class DailyStatRow(BaseModel):
@@ -338,9 +356,21 @@ class DailyStatRow(BaseModel):
 
 
 class MonthlyStatsResponse(BaseModel):
-    space_name: str
+    scope_label: str
     year_month: str
     daily: list[DailyStatRow]
+    filters: StatsFilters
+
+
+class StatsFilterOptions(BaseModel):
+    """Catálogo para poblar los selects de filtro — independiente de qué haya
+    en el rango de fechas actual, así las opciones no 'desaparecen' al mover
+    el filtro de fecha."""
+    sedes: list[SedeResponse]
+    spaces: list[SpaceResponse]
+    categories: list[CategoryCount]  # perfil canónico conocido por el overlay; count siempre 0 (catálogo, no medición)
+    faculties: list[str]
+    programs: list[str]
 
 
 # ---------------------------------------------------------------------------

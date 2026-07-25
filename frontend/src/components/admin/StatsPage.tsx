@@ -4,23 +4,95 @@ interface Sede { id: number; name: string; code: string }
 interface Space { id: number; sede_id: number | null; sede: Sede | null; name: string; active: boolean }
 interface MonthRow { month: number; month_name: string; unique_visitors: number; entries: number; exits: number; days_with_activity: number }
 interface Totals { unique_visitors: number; entries: number; exits: number; days_with_activity: number }
-interface BreakdownItem { category?: string; faculty?: string; label: string; count: number }
+interface BreakdownItem { category?: string; faculty?: string; program?: string; label: string; count: number }
 interface GenderBreakdown { male: number; female: number }
+interface StatsFilters {
+  sede_id: number | null; space_id: number | null
+  category: string | null; faculty: string | null; program: string | null
+}
 interface AnnualReport {
-  space_name: string; year: number
+  scope_label: string; year: number
   monthly: MonthRow[]; totals: Totals
   category_breakdown: BreakdownItem[]
   faculty_breakdown: BreakdownItem[]
+  program_breakdown: BreakdownItem[]
   gender_breakdown: GenderBreakdown
+  filters: StatsFilters
 }
 interface DayRow { date: string; day_name: string; unique_visitors: number; entries: number; exits: number }
-interface MonthlyReport { space_name: string; year_month: string; daily: DayRow[] }
+interface MonthlyReport { scope_label: string; year_month: string; daily: DayRow[]; filters: StatsFilters }
+interface FilterOptions {
+  sedes: Sede[]
+  spaces: Space[]
+  categories: { category: string; label: string; count: number }[]
+  faculties: string[]
+  programs: string[]
+}
 
 interface Props { token: string }
 
+// ── Exportar CSV — a partir de lo ya cargado en pantalla, sin ida y vuelta
+// al backend. BOM (﻿) al inicio: sin esto Excel malinterpreta los
+// acentos/ñ de un CSV UTF-8 como si fuera otra codificación.
+function csvCell(val: string | number): string {
+  const str = String(val)
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+}
+
+function downloadCSV(filename: string, rows: (string | number)[][]) {
+  const csv = rows.map(row => row.map(csvCell).join(',')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function exportAnnualCSV(annual: AnnualReport) {
+  const rows: (string | number)[][] = [
+    [`Reporte anual — ${annual.scope_label} — ${annual.year}`], [],
+    ['Mes', 'Visitantes únicos', 'Ingresos', 'Egresos', 'Días con actividad'],
+    ...annual.monthly.map(r => [r.month_name, r.unique_visitors, r.entries, r.exits, r.days_with_activity]),
+    ['TOTAL', annual.totals.unique_visitors, annual.totals.entries, annual.totals.exits, annual.totals.days_with_activity],
+    [],
+    ['Por tipo de usuario'], ['Categoría', 'Visitantes'],
+    ...annual.category_breakdown.map(c => [c.label, c.count]),
+    [],
+    ['Por facultad'], ['Facultad', 'Visitantes'],
+    ...annual.faculty_breakdown.map(f => [f.label, f.count]),
+    [],
+    ['Por programa académico'], ['Programa', 'Visitantes'],
+    ...annual.program_breakdown.map(p => [p.label, p.count]),
+    [],
+    ['Por género (ingresos)'], ['Género', 'Ingresos'],
+    ['Hombres', annual.gender_breakdown.male],
+    ['Mujeres', annual.gender_breakdown.female],
+  ]
+  downloadCSV(`inout-anual-${annual.year}.csv`, rows)
+}
+
+function exportMonthlyCSV(monthly: MonthlyReport) {
+  const rows: (string | number)[][] = [
+    [`Reporte mensual — ${monthly.scope_label} — ${monthly.year_month}`], [],
+    ['Fecha', 'Día', 'Visitantes únicos', 'Ingresos', 'Egresos'],
+    ...monthly.daily.map(d => [d.date, d.day_name, d.unique_visitors, d.entries, d.exits]),
+  ]
+  downloadCSV(`inout-mensual-${monthly.year_month}.csv`, rows)
+}
+
 export function StatsPage({ token }: Props) {
-  const [spaces, setSpaces] = useState<Space[]>([])
-  const [spaceId, setSpaceId] = useState<number | null>(null)
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
+  // Ámbito codificado en un solo valor: 'all' | 'sede:<id>' | 'space:<id>' —
+  // un select con optgroups (Todo el sistema / por campus / sus edificios)
+  // es más directo en un panel admin denso que un flujo de 2 pasos.
+  const [scope, setScope] = useState('all')
+  const [category, setCategory] = useState('')
+  const [faculty, setFaculty] = useState('')
+  const [program, setProgram] = useState('')
   const [view, setView] = useState<'annual' | 'monthly'>('annual')
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(() => {
@@ -34,29 +106,34 @@ export function StatsPage({ token }: Props) {
   const headers = { Authorization: `Bearer ${token}` }
 
   useEffect(() => {
-    fetch('/api/admin/spaces', { headers })
+    fetch('/api/admin/stats/filters', { headers })
       .then(r => r.json())
-      .then((data: Space[]) => {
-        setSpaces(data)
-        if (data.length > 0) setSpaceId(data[0].id)
-      })
+      .then(setFilterOptions)
   }, [])
 
   useEffect(() => {
-    if (!spaceId) return
     setLoading(true)
+    const params = new URLSearchParams()
+    if (scope.startsWith('sede:')) params.set('sede_id', scope.slice(5))
+    else if (scope.startsWith('space:')) params.set('space_id', scope.slice(6))
+    if (category) params.set('category', category)
+    if (faculty) params.set('faculty', faculty)
+    if (program) params.set('program', program)
+
     if (view === 'annual') {
-      fetch(`/api/admin/spaces/${spaceId}/stats/annual?year=${year}`, { headers })
+      params.set('year', String(year))
+      fetch(`/api/admin/stats/annual?${params}`, { headers })
         .then(r => r.json())
         .then(d => { setAnnual(d); setMonthly(null) })
         .finally(() => setLoading(false))
     } else {
-      fetch(`/api/admin/spaces/${spaceId}/stats/monthly?month=${month}`, { headers })
+      params.set('month', month)
+      fetch(`/api/admin/stats/monthly?${params}`, { headers })
         .then(r => r.json())
         .then(d => { setMonthly(d); setAnnual(null) })
         .finally(() => setLoading(false))
     }
-  }, [spaceId, view, year, month])
+  }, [scope, category, faculty, program, view, year, month])
 
   const pct = (val: number, total: number) =>
     total > 0 ? ` (${((val / total) * 100).toFixed(0)}%)` : ''
@@ -64,15 +141,53 @@ export function StatsPage({ token }: Props) {
   const n = (val: number) => val.toLocaleString('es-PE')
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+  const sedesWithSpaces = filterOptions?.sedes.map(sede => ({
+    sede,
+    spaces: filterOptions.spaces.filter(sp => sp.sede_id === sede.id),
+  })) ?? []
 
   return (
     <div style={s.page}>
       {/* Controles */}
       <div style={s.controls}>
         <div style={s.controlGroup}>
-          <label style={s.label}>Espacio</label>
-          <select style={s.select} value={spaceId ?? ''} onChange={e => setSpaceId(Number(e.target.value))}>
-            {spaces.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+          <label style={s.label}>Ámbito</label>
+          <select style={s.select} value={scope} onChange={e => setScope(e.target.value)}>
+            <option value="all">Todo el sistema</option>
+            {sedesWithSpaces.map(({ sede, spaces }) => (
+              <optgroup key={sede.id} label={sede.name}>
+                <option value={`sede:${sede.id}`}>Todo {sede.name}</option>
+                {spaces.map(sp => (
+                  <option key={sp.id} value={`space:${sp.id}`}>{sp.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        <div style={s.controlGroup}>
+          <label style={s.label}>Tipo de usuario</label>
+          <select style={s.select} value={category} onChange={e => setCategory(e.target.value)}>
+            <option value="">Todos</option>
+            {filterOptions?.categories.map(c => (
+              <option key={c.category} value={c.category}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={s.controlGroup}>
+          <label style={s.label}>Facultad</label>
+          <select style={s.select} value={faculty} onChange={e => setFaculty(e.target.value)}>
+            <option value="">Todas</option>
+            {filterOptions?.faculties.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+
+        <div style={s.controlGroup}>
+          <label style={s.label}>Programa académico</label>
+          <select style={s.select} value={program} onChange={e => setProgram(e.target.value)}>
+            <option value="">Todos</option>
+            {filterOptions?.programs.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
 
@@ -96,6 +211,14 @@ export function StatsPage({ token }: Props) {
             <input style={s.select} type="month" value={month} onChange={e => setMonth(e.target.value)} />
           </div>
         )}
+
+        <button
+          style={s.exportBtn}
+          disabled={!annual && !monthly}
+          onClick={() => { if (annual) exportAnnualCSV(annual); else if (monthly) exportMonthlyCSV(monthly) }}
+        >
+          ⬇ Exportar CSV
+        </button>
       </div>
 
       {loading && <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Cargando estadísticas...</p>}
@@ -103,7 +226,7 @@ export function StatsPage({ token }: Props) {
       {/* Vista anual */}
       {!loading && annual && (
         <div style={s.content}>
-          <h2 style={s.sectionTitle}>{annual.space_name} — {annual.year}</h2>
+          <h2 style={s.sectionTitle}>{annual.scope_label} — {annual.year}</h2>
 
           {/* Totales resumen */}
           <div style={s.summaryGrid}>
@@ -122,7 +245,7 @@ export function StatsPage({ token }: Props) {
 
           {/* Tabla mensual */}
           {annual.monthly.length === 0 ? (
-            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para {annual.year}.</p>
+            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para {annual.year} con estos filtros.</p>
           ) : (
             <div style={s.tableWrap}>
               <table style={s.table}>
@@ -191,6 +314,23 @@ export function StatsPage({ token }: Props) {
               }
             </div>
 
+            {/* Por programa académico */}
+            <div style={s.breakdownCard}>
+              <h3 style={s.breakdownTitle}>Por programa académico</h3>
+              {annual.program_breakdown.length === 0
+                ? <p style={s.noData}>Sin datos</p>
+                : annual.program_breakdown.slice(0, 8).map(item => (
+                  <div key={item.label} style={s.breakdownRow}>
+                    <span style={s.breakdownName}>{item.label}</span>
+                    <div style={s.barWrap}>
+                      <div style={{ ...s.bar, width: `${(item.count / (annual.program_breakdown[0]?.count || 1)) * 100}%`, background: 'var(--c-cyan)' }} />
+                    </div>
+                    <span style={s.breakdownCount}>{n(item.count)}{pct(item.count, annual.totals.entries)}</span>
+                  </div>
+                ))
+              }
+            </div>
+
             {/* Por género */}
             <div style={s.breakdownCard}>
               <h3 style={s.breakdownTitle}>Por género (ingresos)</h3>
@@ -217,10 +357,10 @@ export function StatsPage({ token }: Props) {
       {/* Vista mensual */}
       {!loading && monthly && (
         <div style={s.content}>
-          <h2 style={s.sectionTitle}>{monthly.space_name} — {monthly.year_month}</h2>
+          <h2 style={s.sectionTitle}>{monthly.scope_label} — {monthly.year_month}</h2>
 
           {monthly.daily.length === 0 ? (
-            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para este mes.</p>
+            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para este mes con estos filtros.</p>
           ) : (
             <>
               {/* Resumen del mes */}
@@ -270,13 +410,18 @@ export function StatsPage({ token }: Props) {
 
 const s: Record<string, React.CSSProperties> = {
   page: { padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: 0, overflowY: 'auto' },
-  controls: { display: 'flex', alignItems: 'flex-end', gap: '1.5rem', flexWrap: 'wrap' },
+  controls: { display: 'flex', alignItems: 'flex-end', gap: '1.25rem', flexWrap: 'wrap' },
   controlGroup: { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
   label: { fontSize: '0.75rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em' },
-  select: { padding: '0.5rem 0.75rem', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '7px', color: 'var(--c-text1)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer' },
+  select: { padding: '0.5rem 0.75rem', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '7px', color: 'var(--c-text1)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer', maxWidth: '220px' },
   viewTabs: { display: 'flex', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '8px', overflow: 'hidden' },
   tabBtn: { padding: '0.5rem 1.1rem', background: 'transparent', border: 'none', color: 'var(--c-text3)', fontSize: '0.875rem', cursor: 'pointer' },
   tabActive: { background: 'var(--c-border)', color: 'var(--c-text1)', fontWeight: 600 },
+  exportBtn: {
+    marginLeft: 'auto', padding: '0.55rem 1rem',
+    background: 'var(--c-blue)', border: 'none', borderRadius: '8px',
+    color: '#fff', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
+  },
   content: { display: 'flex', flexDirection: 'column', gap: '1.25rem' },
   sectionTitle: { fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-text1)' },
   summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' },
@@ -289,11 +434,11 @@ const s: Record<string, React.CSSProperties> = {
   tr: { borderBottom: '1px solid var(--c-border)' },
   td: { padding: '0.6rem 0.9rem', color: 'var(--c-text2)' },
   num: { textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
-  breakdownGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' },
+  breakdownGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' },
   breakdownCard: { background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '10px', padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
   breakdownTitle: { fontSize: '0.8rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' },
   breakdownRow: { display: 'flex', alignItems: 'center', gap: '0.6rem' },
-  breakdownName: { fontSize: '0.8rem', color: 'var(--c-text2)', width: '90px', flexShrink: 0 },
+  breakdownName: { fontSize: '0.8rem', color: 'var(--c-text2)', width: '90px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   barWrap: { flex: 1, height: 6, background: 'var(--c-border)', borderRadius: 999, overflow: 'hidden' },
   bar: { height: '100%', borderRadius: 999, transition: 'width 0.5s ease' },
   breakdownCount: { fontSize: '0.8rem', color: 'var(--c-text3)', whiteSpace: 'nowrap', flexShrink: 0 },

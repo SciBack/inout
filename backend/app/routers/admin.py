@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_, distinct
+from sqlalchemy import func, and_, or_, distinct
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from jose import JWTError, jwt
@@ -15,8 +15,8 @@ from ..models import AdminUser, Space, PresenceLog, Sede
 from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
-from ..services.faculty_map import resolve_faculty
-from ..services.labels import normalize_category, category_label, faculty_label
+from ..services.faculty_map import resolve_faculty, VALID_FACULTY_CODES
+from ..services.labels import normalize_category, category_label, faculty_label, CATEGORY_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
 from ..schemas import (
     LoginRequest, TokenResponse,
     SedeCreate, SedeUpdate, SedeResponse,
@@ -24,7 +24,8 @@ from ..schemas import (
     AdminUserCreate, AdminUserPasswordUpdate, AdminUserResponse,
     AnnualStatsResponse, MonthlyStatsResponse,
     MonthlyStatRow, StatsTotals, GenderBreakdown,
-    DailyStatRow, CategoryCount, FacultyCount,
+    DailyStatRow, CategoryCount, FacultyCount, ProgramCount,
+    StatsFilters, StatsFilterOptions,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -225,26 +226,124 @@ def delete_space(
 
 
 # ---------------------------------------------------------------------------
+# Stats — helpers de filtro compuesto (ámbito + categoría/facultad/programa)
+# ---------------------------------------------------------------------------
+
+def _resolve_scope(db: Session, sede_id: int | None, space_id: int | None) -> tuple[list, str]:
+    """Filtro de ubicación + etiqueta legible del ámbito. Prioridad:
+    space_id (un edificio) > sede_id (todos los edificios de un campus) >
+    nada (todo el sistema, todos los campus)."""
+    if space_id is not None:
+        space = db.query(Space).filter(Space.id == space_id).first()
+        if not space:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Espacio no encontrado")
+        return [PresenceLog.space_id == space_id], space.name
+
+    if sede_id is not None:
+        sede = db.query(Sede).filter(Sede.id == sede_id).first()
+        if not sede:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sede no encontrada")
+        space_ids = [row[0] for row in db.query(Space.id).filter(Space.sede_id == sede_id).all()]
+        # Sede sin edificios: filtro que no matchea nada, en vez de reventar
+        # o (peor) devolver todo el sistema por accidente.
+        return [PresenceLog.space_id.in_(space_ids or [-1])], sede.name
+
+    return [], "Todo el sistema"
+
+
+def _category_condition(category: str):
+    """Códigos crudos que normalizan al perfil canónico pedido — invierte
+    CATEGORY_MAP para poder filtrar en SQL sin traer toda la tabla a Python.
+    'OTROS' (sin categoría) es el único perfil que no tiene código crudo
+    propio: cubre NULL/vacío, no los códigos huérfanos sin mapear (ese caso
+    real es marginal y se sigue viendo agregado en el breakdown igual)."""
+    if category == "OTROS":
+        return or_(PresenceLog.patron_category.is_(None), PresenceLog.patron_category == "")
+    codes = [raw for raw, canon in CATEGORY_MAP.items() if canon == category]
+    return PresenceLog.patron_category.in_(codes or [category])
+
+
+def _build_filters(
+    db: Session, sede_id: int | None, space_id: int | None,
+    category: str | None, faculty: str | None, program: str | None,
+) -> tuple[list, str]:
+    scope_conditions, scope_label = _resolve_scope(db, sede_id, space_id)
+    conditions = list(scope_conditions)
+    if category:
+        conditions.append(_category_condition(category))
+    if faculty:
+        conditions.append(PresenceLog.patron_faculty == faculty)
+    if program:
+        conditions.append(PresenceLog.patron_program == program)
+    return conditions, scope_label
+
+
+# ---------------------------------------------------------------------------
+# Stats — catálogo de filtros (para poblar los selects del frontend)
+# ---------------------------------------------------------------------------
+
+@router.get("/stats/filters", response_model=StatsFilterOptions)
+def stats_filter_options(
+    current_user: AdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    sedes = db.query(Sede).order_by(Sede.name).all()
+    spaces = db.query(Space).options(joinedload(Space.sede)).order_by(Space.name).all()
+
+    # Catálogo de perfiles canónicos conocidos por el overlay — no una
+    # medición del rango actual, por eso count=0 siempre: así las opciones
+    # no "desaparecen" del selector al mover el filtro de fecha a un período
+    # sin datos de ese perfil.
+    categories = [
+        CategoryCount(category=canon, label=label, count=0)
+        for canon, label in OVERLAY_CATEGORY_LABELS.items()
+    ]
+
+    if VALID_FACULTY_CODES:
+        faculties = sorted(VALID_FACULTY_CODES)
+    else:
+        faculties = [
+            row[0] for row in db.query(distinct(PresenceLog.patron_faculty))
+            .filter(PresenceLog.patron_faculty.isnot(None), PresenceLog.patron_faculty != "")
+            .order_by(PresenceLog.patron_faculty)
+            .all()
+        ]
+
+    programs = [
+        row[0] for row in db.query(distinct(PresenceLog.patron_program))
+        .filter(PresenceLog.patron_program.isnot(None), PresenceLog.patron_program != "")
+        .order_by(PresenceLog.patron_program)
+        .all()
+    ]
+
+    return StatsFilterOptions(
+        sedes=sedes, spaces=spaces, categories=categories,
+        faculties=faculties, programs=programs,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Stats — anuales
 # ---------------------------------------------------------------------------
 
-@router.get("/spaces/{space_id}/stats/annual", response_model=AnnualStatsResponse)
+@router.get("/stats/annual", response_model=AnnualStatsResponse)
 def annual_stats(
-    space_id: int,
     year: int = None,
+    sede_id: int = None,
+    space_id: int = None,
+    category: str = None,
+    faculty: str = None,
+    program: str = None,
     current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if year is None:
         year = datetime.now(LIMA).year
 
-    space = db.query(Space).filter(Space.id == space_id).first()
-    if not space:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Espacio no encontrado")
-
+    scope_conditions, scope_label = _build_filters(db, sede_id, space_id, category, faculty, program)
     base_filter = and_(
-        PresenceLog.space_id == space_id,
         func.extract("year", PresenceLog.timestamp) == year,
+        *scope_conditions,
     )
 
     # Entradas y salidas por mes
@@ -357,6 +456,23 @@ def annual_stats(
         for fac, cnt in sorted(fac_counts.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
+    # Desglose por programa académico (visitantes únicos, solo entries). Sin
+    # catálogo de nombres bonitos por programa (no existe hoy en el overlay):
+    # se muestra el código crudo, igual que facultad cuando no hay label.
+    # Reusa fac_rows — ya trae patron_program, no hace falta otra query.
+    card_program: dict[str, str] = {}
+    for row in fac_rows:
+        prog = (row.patron_program or "").strip()
+        if prog:
+            card_program[row.cardnumber] = prog
+    program_counts: dict[str, int] = {}
+    for prog in card_program.values():
+        program_counts[prog] = program_counts.get(prog, 0) + 1
+    program_breakdown = [
+        ProgramCount(program=prog, label=prog, count=cnt)
+        for prog, cnt in sorted(program_counts.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+
     # Desglose por género (entradas totales del año)
     male_count = (
         db.query(func.count(PresenceLog.id))
@@ -370,13 +486,18 @@ def annual_stats(
     )
 
     return AnnualStatsResponse(
-        space_name=space.name,
+        scope_label=scope_label,
         year=year,
         monthly=monthly,
         totals=totals,
         category_breakdown=category_breakdown,
         faculty_breakdown=faculty_breakdown,
+        program_breakdown=program_breakdown,
         gender_breakdown=GenderBreakdown(male=male_count, female=female_count),
+        filters=StatsFilters(
+            sede_id=sede_id, space_id=space_id,
+            category=category, faculty=faculty, program=program,
+        ),
     )
 
 
@@ -384,10 +505,14 @@ def annual_stats(
 # Stats — detalle mensual
 # ---------------------------------------------------------------------------
 
-@router.get("/spaces/{space_id}/stats/monthly", response_model=MonthlyStatsResponse)
+@router.get("/stats/monthly", response_model=MonthlyStatsResponse)
 def monthly_stats(
-    space_id: int,
     month: str = None,
+    sede_id: int = None,
+    space_id: int = None,
+    category: str = None,
+    faculty: str = None,
+    program: str = None,
     current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -404,14 +529,11 @@ def monthly_stats(
         except (ValueError, IndexError):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato de mes inválido. Use YYYY-MM")
 
-    space = db.query(Space).filter(Space.id == space_id).first()
-    if not space:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Espacio no encontrado")
-
+    scope_conditions, scope_label = _build_filters(db, sede_id, space_id, category, faculty, program)
     base_filter = and_(
-        PresenceLog.space_id == space_id,
         func.extract("year", PresenceLog.timestamp) == year,
         func.extract("month", PresenceLog.timestamp) == mon,
+        *scope_conditions,
     )
 
     entries_by_day = dict(
@@ -463,9 +585,13 @@ def monthly_stats(
         ))
 
     return MonthlyStatsResponse(
-        space_name=space.name,
+        scope_label=scope_label,
         year_month=f"{year:04d}-{mon:02d}",
         daily=daily,
+        filters=StatsFilters(
+            sede_id=sede_id, space_id=space_id,
+            category=category, faculty=faculty, program=program,
+        ),
     )
 
 
