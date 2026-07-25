@@ -26,7 +26,7 @@ interface FilterOptions {
   spaces: Space[]
   categories: { category: string; label: string; count: number }[]
   faculties: string[]
-  programs: string[]
+  programs: { program: string; label: string; count: number }[]
 }
 
 interface Props { token: string }
@@ -145,6 +145,11 @@ export function StatsPage({ token }: Props) {
     sede,
     spaces: filterOptions.spaces.filter(sp => sp.sede_id === sede.id),
   })) ?? []
+  // Agrupado: programas con nombre real curado vs. códigos que todavía no
+  // tienen label (label === code cuando no hay mapeo — ver program_label
+  // en el backend) — separarlos deja claro qué falta curar sin esconderlo.
+  const identifiedPrograms = filterOptions?.programs.filter(p => p.label !== p.program) ?? []
+  const uncuratedPrograms = filterOptions?.programs.filter(p => p.label === p.program) ?? []
 
   return (
     <div style={s.page}>
@@ -187,7 +192,20 @@ export function StatsPage({ token }: Props) {
           <label style={s.label}>Programa académico</label>
           <select style={s.select} value={program} onChange={e => setProgram(e.target.value)}>
             <option value="">Todos</option>
-            {filterOptions?.programs.map(p => <option key={p} value={p}>{p}</option>)}
+            {identifiedPrograms.length > 0 && (
+              <optgroup label="Programas">
+                {identifiedPrograms.map(p => (
+                  <option key={p.program} value={p.program}>{p.label}</option>
+                ))}
+              </optgroup>
+            )}
+            {uncuratedPrograms.length > 0 && (
+              <optgroup label="Códigos sin identificar">
+                {uncuratedPrograms.map(p => (
+                  <option key={p.program} value={p.program}>{p.label}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 

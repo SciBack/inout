@@ -370,7 +370,7 @@ class StatsFilterOptions(BaseModel):
     spaces: list[SpaceResponse]
     categories: list[CategoryCount]  # perfil canónico conocido por el overlay; count siempre 0 (catálogo, no medición)
     faculties: list[str]
-    programs: list[str]
+    programs: list[ProgramCount]  # count siempre 0 — catálogo, no medición
 
 
 # ---------------------------------------------------------------------------

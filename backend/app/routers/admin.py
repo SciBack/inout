@@ -16,7 +16,7 @@ from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
 from ..services.faculty_map import resolve_faculty, VALID_FACULTY_CODES
-from ..services.labels import normalize_category, category_label, faculty_label, CATEGORY_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
+from ..services.labels import normalize_category, category_label, faculty_label, program_label, CATEGORY_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
 from ..schemas import (
     LoginRequest, TokenResponse,
     SedeCreate, SedeUpdate, SedeResponse,
@@ -309,11 +309,16 @@ def stats_filter_options(
             .all()
         ]
 
-    programs = [
+    program_codes = [
         row[0] for row in db.query(distinct(PresenceLog.patron_program))
         .filter(PresenceLog.patron_program.isnot(None), PresenceLog.patron_program != "")
-        .order_by(PresenceLog.patron_program)
         .all()
+    ]
+    # Ordenado por nombre (cuando hay label real) para que el select del
+    # frontend se lea como un catálogo, no como códigos crudos sueltos.
+    programs = [
+        ProgramCount(program=code, label=program_label(code), count=0)
+        for code in sorted(program_codes, key=program_label)
     ]
 
     return StatsFilterOptions(
@@ -456,9 +461,10 @@ def annual_stats(
         for fac, cnt in sorted(fac_counts.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
-    # Desglose por programa académico (visitantes únicos, solo entries). Sin
-    # catálogo de nombres bonitos por programa (no existe hoy en el overlay):
-    # se muestra el código crudo, igual que facultad cuando no hay label.
+    # Desglose por programa académico (visitantes únicos, solo entries).
+    # program_label() traduce a nombre real los códigos que el overlay tiene
+    # curados (hoy: los 20 códigos INEI de 8 dígitos); el resto (P## de Koha
+    # sin curar aún) cae al código crudo, igual que facultad sin label.
     # Reusa fac_rows — ya trae patron_program, no hace falta otra query.
     card_program: dict[str, str] = {}
     for row in fac_rows:
@@ -469,7 +475,7 @@ def annual_stats(
     for prog in card_program.values():
         program_counts[prog] = program_counts.get(prog, 0) + 1
     program_breakdown = [
-        ProgramCount(program=prog, label=prog, count=cnt)
+        ProgramCount(program=prog, label=program_label(prog), count=cnt)
         for prog, cnt in sorted(program_counts.items(), key=lambda kv: kv[1], reverse=True)
     ]
 

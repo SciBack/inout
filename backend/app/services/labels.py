@@ -14,7 +14,8 @@
 #   {
 #     "category_map":    {"ESTUDI": "student", "student": "student", ...},
 #     "category_labels": {"student": "Estudiantes", ...},
-#     "faculty_labels":  {"FCS": "Ciencias de la Salud", ...}
+#     "faculty_labels":  {"FCS": "Ciencias de la Salud", ...},
+#     "program_labels":  {"31300211": "Psicología", ...}
 #   }
 #
 # Sin archivo (producto agnóstico) no se normaliza ni traduce: se muestra el
@@ -38,6 +39,7 @@ LABELS = _load()
 CATEGORY_MAP: dict[str, str] = LABELS.get("category_map", {}) or {}
 CATEGORY_LABELS: dict[str, str] = LABELS.get("category_labels", {}) or {}
 FACULTY_LABELS: dict[str, str] = LABELS.get("faculty_labels", {}) or {}
+PROGRAM_LABELS: dict[str, str] = LABELS.get("program_labels", {}) or {}
 
 
 def normalize_category(raw: str | None) -> str:
@@ -56,3 +58,7 @@ def category_label(canon: str) -> str:
 
 def faculty_label(code: str) -> str:
     return FACULTY_LABELS.get(code, code)
+
+
+def program_label(code: str) -> str:
+    return PROGRAM_LABELS.get(code, code)
