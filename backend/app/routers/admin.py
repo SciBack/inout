@@ -15,6 +15,8 @@ from ..models import AdminUser, Space, PresenceLog, Sede
 from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
+from ..services.faculty_map import resolve_faculty
+from ..services.labels import normalize_category, category_label, faculty_label
 from ..schemas import (
     LoginRequest, TokenResponse,
     SedeCreate, SedeUpdate, SedeResponse,
@@ -48,14 +50,6 @@ DAY_NAMES = {
     0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves",
     4: "Viernes", 5: "Sábado", 6: "Domingo",
 }
-
-CATEGORY_LABELS = {
-    "ESTUDI": "Estudiantes",
-    "DOCEN": "Docentes",
-    "ADMIN": "Administrativos",
-}
-
-FACULTY_LABELS: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -320,49 +314,47 @@ def annual_stats(
         days_with_activity=sum(r.days_with_activity for r in monthly),
     )
 
-    # Desglose por categoría (visitantes únicos del año, solo entries)
-    cat_rows = (
-        db.query(
-            PresenceLog.patron_category,
-            func.count(distinct(PresenceLog.cardnumber)).label("cnt"),
-        )
+    # Desglose por categoría (visitantes únicos del año, solo entries).
+    # Se agrupa en Python por PERFIL CANÓNICO (normalize_category), no por el
+    # código crudo: una migración de fuente deja conviviendo dos familias de
+    # códigos para el mismo perfil (p. ej. "ESTUDI" Koha legacy y "student"
+    # eduPerson/LDAP) — agrupar en SQL por el código crudo los mostraría como
+    # filas separadas y, peor, contaría dos veces a alguien que tuvo eventos
+    # con ambos códigos el mismo año. Mismo patrón que dashboard.py.
+    category_pairs = (
+        db.query(PresenceLog.patron_category, PresenceLog.cardnumber)
         .filter(base_filter, PresenceLog.event_type == "entry")
-        .group_by(PresenceLog.patron_category)
-        .order_by(func.count(distinct(PresenceLog.cardnumber)).desc())
+        .distinct()
         .all()
     )
+    cards_by_profile: dict[str, set] = {}
+    for raw_cat, card in category_pairs:
+        cards_by_profile.setdefault(normalize_category(raw_cat), set()).add(card)
     category_breakdown = [
-        CategoryCount(
-            category=row.patron_category or "OTROS",
-            label=CATEGORY_LABELS.get(row.patron_category or "", row.patron_category or "Otros"),
-            count=row.cnt,
+        CategoryCount(category=profile, label=category_label(profile), count=len(cards))
+        for profile, cards in sorted(
+            cards_by_profile.items(), key=lambda kv: len(kv[1]), reverse=True
         )
-        for row in cat_rows
     ]
 
-    # Desglose por facultad (visitantes únicos del año, solo entries)
+    # Desglose por facultad (visitantes únicos del año, solo entries). Se
+    # resuelve por visitante con resolve_faculty(patron_faculty, patron_program)
+    # — con fallback al programa académico cuando la facultad no vino o no es
+    # un código válido — en vez de agrupar por patron_faculty crudo.
     fac_rows = (
-        db.query(
-            PresenceLog.patron_faculty,
-            func.count(distinct(PresenceLog.cardnumber)).label("cnt"),
-        )
-        .filter(
-            base_filter,
-            PresenceLog.event_type == "entry",
-            PresenceLog.patron_faculty.isnot(None),
-            PresenceLog.patron_faculty != "",
-        )
-        .group_by(PresenceLog.patron_faculty)
-        .order_by(func.count(distinct(PresenceLog.cardnumber)).desc())
+        db.query(PresenceLog.cardnumber, PresenceLog.patron_faculty, PresenceLog.patron_program)
+        .filter(base_filter, PresenceLog.event_type == "entry")
         .all()
     )
+    card_fac: dict[str, str] = {}
+    for row in fac_rows:
+        card_fac[row.cardnumber] = resolve_faculty(row.patron_faculty, row.patron_program)
+    fac_counts: dict[str, int] = {}
+    for fac in card_fac.values():
+        fac_counts[fac] = fac_counts.get(fac, 0) + 1
     faculty_breakdown = [
-        FacultyCount(
-            faculty=row.patron_faculty,
-            label=FACULTY_LABELS.get(row.patron_faculty, row.patron_faculty),
-            count=row.cnt,
-        )
-        for row in fac_rows
+        FacultyCount(faculty=fac, label=faculty_label(fac), count=cnt)
+        for fac, cnt in sorted(fac_counts.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
     # Desglose por género (entradas totales del año)
