@@ -39,62 +39,81 @@ export function LoginPage({ onLogin }: Props) {
       <form style={s.card} onSubmit={handleSubmit}>
         <div style={s.logo}>
           <span style={s.logoIcon}>⬡</span>
-          <span style={s.logoText}>InOut Admin</span>
+          <span style={s.logoText}>InOut</span>
         </div>
         <p style={s.subtitle}>Panel de administración</p>
 
         <div style={s.field}>
-          <label style={s.label}>Usuario</label>
-          <input style={s.input} type="text" value={username}
+          <label style={s.label} htmlFor="login-user">Usuario</label>
+          <input id="login-user" style={s.input} type="text" value={username}
             onChange={e => setUsername(e.target.value)}
             autoFocus autoComplete="username" disabled={loading} />
         </div>
         <div style={s.field}>
-          <label style={s.label}>Contraseña</label>
-          <input style={s.input} type="password" value={password}
+          <label style={s.label} htmlFor="login-pass">Contraseña</label>
+          <input id="login-pass" style={s.input} type="password" value={password}
             onChange={e => setPassword(e.target.value)}
             autoComplete="current-password" disabled={loading} />
         </div>
 
-        {error && <p style={s.error}>{error}</p>}
+        {error && <p style={s.error} role="alert">{error}</p>}
 
         <button style={{ ...s.btn, opacity: loading ? 0.6 : 1 }} type="submit" disabled={loading}>
           {loading ? 'Iniciando...' : 'Ingresar'}
         </button>
+
+        <a style={s.backLink} href="/">← Volver al panel de inicio</a>
       </form>
     </div>
   )
 }
 
+const FONT = "'Barlow', system-ui, -apple-system, sans-serif"
+
 const s: Record<string, React.CSSProperties> = {
   bg: {
     width: '100vw', height: '100vh',
-    background: '#0a1628',
+    background: 'var(--c-bg)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '1.5rem',
+    fontFamily: FONT,
   },
   card: {
-    background: '#0d1f35',
-    border: '1px solid #1e293b',
+    background: 'var(--c-bg-panel)',
+    border: '1px solid var(--c-border)',
     borderRadius: '14px',
     padding: '2.5rem 2rem',
     width: '100%', maxWidth: '360px',
     display: 'flex', flexDirection: 'column', gap: '1.1rem',
+    boxShadow: '0 12px 32px rgba(0,0,0,0.10)',
   },
   logo: { display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center' },
-  logoIcon: { fontSize: '1.6rem', color: '#3b82f6' },
-  logoText: { fontSize: '1.3rem', fontWeight: 700, color: '#f1f5f9' },
-  subtitle: { fontSize: '0.8rem', color: '#475569', textAlign: 'center', marginTop: '-0.5rem' },
+  logoIcon: { fontSize: '1.6rem', color: 'var(--c-blue)' },
+  logoText: { fontSize: '1.3rem', fontWeight: 700, color: 'var(--c-text1)' },
+  subtitle: { fontSize: '0.8rem', color: 'var(--c-text3)', textAlign: 'center', marginTop: '-0.5rem' },
   field: { display: 'flex', flexDirection: 'column', gap: '0.35rem' },
-  label: { fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  label: {
+    fontSize: '0.75rem', color: 'var(--c-text3)',
+    textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600,
+  },
   input: {
     padding: '0.65rem 0.9rem',
-    background: '#0a1628', border: '1px solid #1e293b', borderRadius: '8px',
-    color: '#f1f5f9', fontSize: '0.95rem', outline: 'none',
+    background: 'var(--c-bg)',
+    border: '1px solid var(--c-border)',
+    borderRadius: '8px',
+    color: 'var(--c-text1)',
+    fontSize: '0.95rem',
+    fontFamily: FONT,
+    outline: 'none',
   },
-  error: { fontSize: '0.85rem', color: '#ef4444', textAlign: 'center' },
+  error: { fontSize: '0.85rem', color: 'var(--c-red)', textAlign: 'center' },
   btn: {
-    padding: '0.7rem', background: '#3b82f6', border: 'none',
+    padding: '0.7rem', background: 'var(--c-blue)', border: 'none',
     borderRadius: '8px', color: '#fff', fontSize: '0.95rem',
-    fontWeight: 600, cursor: 'pointer', marginTop: '0.25rem',
+    fontWeight: 700, fontFamily: FONT, cursor: 'pointer', marginTop: '0.25rem',
+  },
+  backLink: {
+    fontSize: '0.8rem', color: 'var(--c-text3)',
+    textAlign: 'center', textDecoration: 'none', marginTop: '0.2rem',
   },
 }

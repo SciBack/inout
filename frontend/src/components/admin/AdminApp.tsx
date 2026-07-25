@@ -3,14 +3,13 @@ import { LoginPage } from './LoginPage'
 import { SedesPage } from './SedesPage'
 import { SpacesPage } from './SpacesPage'
 import { StatsPage } from './StatsPage'
+import { ADMIN_TOKEN_KEY, clearAdminSession, getAdminSession } from '../../utils/adminSession'
 
 type Tab = 'sedes' | 'spaces' | 'stats'
 
-const STORAGE_KEY = 'inout_admin_token'
-
 export function AdminApp() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY))
-  const [role, setRole] = useState<string>('')
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(ADMIN_TOKEN_KEY))
+  const [session, setSession] = useState(getAdminSession)
   const [tab, setTab] = useState<Tab>('sedes')
 
   // Verificar token al montar
@@ -24,15 +23,15 @@ export function AdminApp() {
   }, [])
 
   const handleLogin = (newToken: string, newRole: string) => {
-    localStorage.setItem(STORAGE_KEY, newToken)
+    localStorage.setItem(ADMIN_TOKEN_KEY, newToken)
     setToken(newToken)
-    setRole(newRole)
+    setSession(getAdminSession() ?? { username: '', role: newRole })
   }
 
   const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY)
+    clearAdminSession()
     setToken(null)
-    setRole('')
+    setSession(null)
   }
 
   if (!token) return <LoginPage onLogin={handleLogin} />
@@ -67,7 +66,13 @@ export function AdminApp() {
         </nav>
 
         <div style={s.sidebarBottom}>
-          <a href="/" style={s.backLink}>← Ir al kiosko</a>
+          {session?.username && (
+            <div style={s.userChip}>
+              <span style={s.userAvatar}>{session.username.charAt(0)}</span>
+              <span style={s.userName} title={session.username}>{session.username}</span>
+            </div>
+          )}
+          <a href="/" style={s.backLink}>← Ir al panel de inicio</a>
           <button style={s.logoutBtn} onClick={handleLogout}>Cerrar sesión</button>
         </div>
       </aside>
@@ -82,15 +87,17 @@ export function AdminApp() {
   )
 }
 
+const FONT = "'Barlow', system-ui, -apple-system, sans-serif"
+
 const s: Record<string, React.CSSProperties> = {
   shell: {
     display: 'flex', width: '100vw', height: '100vh',
-    background: '#0a1628', overflow: 'hidden',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    background: 'var(--c-bg)', overflow: 'hidden',
+    fontFamily: FONT,
   },
   sidebar: {
     width: '200px', flexShrink: 0,
-    background: '#0d1f35', borderRight: '1px solid #1e293b',
+    background: 'var(--c-bg-panel)', borderRight: '1px solid var(--c-border)',
     display: 'flex', flexDirection: 'column',
     padding: '1.25rem 0',
   },
@@ -98,37 +105,57 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: '0.7rem',
     padding: '0 1.25rem', marginBottom: '1.5rem',
   },
-  brandIcon: { fontSize: '1.4rem', color: '#3b82f6' },
-  brandName: { display: 'block', fontSize: '1rem', fontWeight: 700, color: '#f1f5f9' },
-  brandSub: { display: 'block', fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' },
+  brandIcon: { fontSize: '1.4rem', color: 'var(--c-blue)' },
+  brandName: { display: 'block', fontSize: '1rem', fontWeight: 700, color: 'var(--c-text1)' },
+  brandSub: { display: 'block', fontSize: '0.7rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.08em' },
   nav: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 0.5rem' },
   navBtn: {
     display: 'flex', alignItems: 'center', gap: '0.6rem',
     padding: '0.6rem 0.75rem', background: 'transparent',
-    border: 'none', borderRadius: '8px', color: '#475569',
-    fontSize: '0.875rem', cursor: 'pointer', textAlign: 'left', width: '100%',
+    border: 'none', borderRadius: '8px', color: 'var(--c-text3)',
+    fontSize: '0.875rem', fontFamily: FONT,
+    cursor: 'pointer', textAlign: 'left', width: '100%',
     transition: 'background 0.15s, color 0.15s',
   },
-  navActive: { background: 'rgba(59,130,246,0.12)', color: '#e2e8f0' },
+  navActive: {
+    background: 'color-mix(in oklch, var(--c-blue) 14%, transparent)',
+    color: 'var(--c-text1)', fontWeight: 600,
+  },
   navIcon: { fontSize: '0.8rem', width: '16px', textAlign: 'center' },
   sidebarBottom: {
     padding: '1rem 0.75rem 0',
-    borderTop: '1px solid #1e293b',
+    borderTop: '1px solid var(--c-border)',
     display: 'flex', flexDirection: 'column', gap: '0.5rem',
   },
+  userChip: {
+    display: 'flex', alignItems: 'center', gap: '0.5rem',
+    padding: '0 0.5rem 0.35rem',
+  },
+  userAvatar: {
+    width: '26px', height: '26px', flexShrink: 0,
+    borderRadius: '50%',
+    background: 'var(--c-blue)', color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
+  },
+  userName: {
+    fontSize: '0.85rem', fontWeight: 600, color: 'var(--c-text1)',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
   backLink: {
-    fontSize: '0.8rem', color: '#475569',
+    fontSize: '0.8rem', color: 'var(--c-text3)',
     textDecoration: 'none', padding: '0.4rem 0.5rem',
   },
   logoutBtn: {
     padding: '0.45rem 0.75rem',
-    background: 'transparent', border: '1px solid #1e293b',
-    borderRadius: '7px', color: '#64748b',
-    fontSize: '0.8rem', cursor: 'pointer', textAlign: 'left',
+    background: 'transparent', border: '1px solid var(--c-border)',
+    borderRadius: '7px', color: 'var(--c-text2)',
+    fontSize: '0.8rem', fontFamily: FONT,
+    cursor: 'pointer', textAlign: 'left',
   },
   main: {
     flex: 1, overflow: 'hidden',
     display: 'flex', flexDirection: 'column',
-    background: '#0a1628',
+    background: 'var(--c-bg)',
   },
 }

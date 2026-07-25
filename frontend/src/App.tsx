@@ -81,6 +81,7 @@ const THEME_CSS = `
   --c-blue: oklch(68% 0.17 244);
   --c-rose: oklch(73% 0.17 352);
   --c-cyan: oklch(73% 0.18 211);
+  --c-purple: oklch(68% 0.18 295);
   --c-alert-icon: oklch(72% 0.19 55);
   --c-alert-title: oklch(88% 0.03 55);
   --c-alert-subtitle: oklch(62% 0.03 55);
@@ -99,6 +100,7 @@ const THEME_CSS = `
   --c-blue: oklch(45% 0.16 244);
   --c-rose: oklch(50% 0.16 352);
   --c-cyan: oklch(45% 0.15 211);
+  --c-purple: oklch(48% 0.17 295);
   --c-alert-icon: oklch(52% 0.17 55);
   --c-alert-title: oklch(30% 0.10 55);
   --c-alert-subtitle: oklch(46% 0.08 55);
@@ -165,6 +167,26 @@ body { overflow: hidden; background: var(--c-bg); transition: background 400ms e
   .panel-right { flex: 0 0 40vh !important; width: 100% !important; }
 }
 `
+
+// ── Tema global — se inyecta al importar el módulo, ANTES de cualquier
+// render y sin importar la ruta. Antes vivía en un useEffect dentro de
+// App(), o sea DESPUÉS del early return de /admin: el panel de
+// administración y su login quedaban sin las variables --c-* (por eso
+// tenían colores hardcodeados) y sin data-theme (por eso salían siempre
+// en modo noche, incluso a plena luz del día).
+;(function injectGlobalCss() {
+  if (document.getElementById('inout-global-css')) return
+  const style = document.createElement('style')
+  style.id = 'inout-global-css'
+  style.textContent = THEME_CSS + GLOBAL_CSS
+  document.head.appendChild(style)
+})()
+
+// El panel de administración es una herramienta de escritorio de oficina,
+// no un kiosko en la entrada de un edificio: modo claro siempre, mismo
+// criterio que el panel de inicio. Se fija acá (no en un efecto) para que
+// aplique desde el primer paint, sin parpadeo oscuro al montar.
+if (isAdmin) document.documentElement.setAttribute('data-theme', 'day')
 
 export default function App() {
   if (isAdmin) return <AdminApp />
@@ -343,15 +365,7 @@ export default function App() {
     window.location.reload()
   }
 
-  // Inyectar CSS global una sola vez
-  useEffect(() => {
-    const existing = document.getElementById('inout-global-css')
-    if (existing) return
-    const style = document.createElement('style')
-    style.id = 'inout-global-css'
-    style.textContent = THEME_CSS + GLOBAL_CSS
-    document.head.appendChild(style)
-  }, [])
+  // (El CSS global ya se inyectó a nivel de módulo — ver arriba.)
 
   // Timer welcome: iniciar salida animada, luego volver a idle
   useEffect(() => {

@@ -148,8 +148,8 @@ export function SpacesPage({ token }: Props) {
                   <td style={s.td}><span style={s.idBadge}>{sp.id}</span></td>
                   <td style={s.td}>
                     {sp.sede
-                      ? <><code style={s.code}>{sp.sede.code}</code><span style={{ marginLeft: '0.4rem', color: '#64748b', fontSize: '0.8rem' }}>{sp.sede.name}</span></>
-                      : <span style={{ color: '#334155' }}>—</span>}
+                      ? <><code style={s.code}>{sp.sede.code}</code><span style={{ marginLeft: '0.4rem', color: 'var(--c-text3)', fontSize: '0.8rem' }}>{sp.sede.name}</span></>
+                      : <span style={{ color: 'var(--c-border)' }}>—</span>}
                   </td>
                   <td style={s.td}>
                     <span style={s.spaceName}>{sp.name}</span>
@@ -160,7 +160,7 @@ export function SpacesPage({ token }: Props) {
                   </td>
                   <td style={s.td}>{fmtTime(sp.open_time)} – {fmtTime(sp.close_time)}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, background: sp.active ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)', color: sp.active ? '#22c55e' : '#64748b' }}>
+                    <span style={{ ...s.badge, background: sp.active ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)', color: sp.active ? 'var(--c-green)' : 'var(--c-text3)' }}>
                       {sp.active ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
@@ -168,7 +168,7 @@ export function SpacesPage({ token }: Props) {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button style={s.btnSm} onClick={() => openEdit(sp)}>Editar</button>
                       {sp.active && (
-                        <button style={{ ...s.btnSm, color: '#ef4444', borderColor: '#7f1d1d' }}
+                        <button style={{ ...s.btnSm, color: 'var(--c-red)', borderColor: 'color-mix(in oklch, var(--c-red) 40%, transparent)' }}
                           onClick={() => handleDeactivate(sp)}>
                           Desactivar
                         </button>
@@ -185,11 +185,11 @@ export function SpacesPage({ token }: Props) {
       {/* Nota URL para kiosko */}
       {spaces.length > 0 && (
         <div style={s.hint2}>
-          <strong style={{ color: '#64748b' }}>URLs de kiosko:</strong>{' '}
+          <strong style={{ color: 'var(--c-text3)' }}>URLs de kiosko:</strong>{' '}
           {spaces.filter(sp => sp.active).map(sp => (
             <span key={sp.id} style={{ marginRight: '1rem' }}>
               <code style={s.code}>/?space={sp.id}</code>
-              <span style={{ color: '#475569' }}> → {sp.name}</span>
+              <span style={{ color: 'var(--c-text3)' }}> → {sp.name}</span>
             </span>
           ))}
         </div>
@@ -215,7 +215,7 @@ export function SpacesPage({ token }: Props) {
               <div style={{ ...s.formField, gridColumn: '1 / -1' }}>
                 <label style={s.label}>Código de biblioteca (Koha)</label>
                 <input style={s.input} value={form.library_code} onChange={f('library_code')} placeholder="Ej: BUL, CIA, BUT, BUJ" />
-                <span style={{ fontSize: '0.75rem', color: '#475569' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--c-text3)' }}>
                   Opcional. Solo si el edificio tiene su propia base Koha (ej: BUL, CIA, BUT, BUJ).
                 </span>
               </div>
@@ -261,7 +261,7 @@ export function SpacesPage({ token }: Props) {
               </label>
             )}
 
-            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{error}</p>}
+            {error && <p style={{ color: 'var(--c-red)', fontSize: '0.85rem' }}>{error}</p>}
 
             <div style={s.modalActions}>
               <button style={s.btnCancel} onClick={() => setModalOpen(false)}>Cancelar</button>
@@ -280,28 +280,28 @@ export function SpacesPage({ token }: Props) {
 const s: Record<string, React.CSSProperties> = {
   page: { padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: 0, overflow: 'auto' },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: '1.1rem', fontWeight: 700, color: '#e2e8f0' },
-  btnPrimary: { padding: '0.55rem 1.2rem', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' },
-  btnSm: { padding: '0.3rem 0.75rem', background: 'transparent', border: '1px solid #1e293b', borderRadius: '6px', color: '#94a3b8', fontSize: '0.8rem', cursor: 'pointer' },
-  btnCancel: { padding: '0.55rem 1.2rem', background: 'transparent', border: '1px solid #1e293b', borderRadius: '8px', color: '#64748b', fontSize: '0.9rem', cursor: 'pointer' },
-  hint: { color: '#475569', fontSize: '0.9rem' },
-  hint2: { fontSize: '0.8rem', color: '#475569', background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '8px', padding: '0.75rem 1rem' },
-  code: { background: '#132235', padding: '0.1rem 0.4rem', borderRadius: '4px', fontFamily: 'monospace', color: '#06b6d4', fontSize: '0.8rem' },
+  title: { fontSize: '1.1rem', fontWeight: 700, color: 'var(--c-text1)' },
+  btnPrimary: { padding: '0.55rem 1.2rem', background: 'var(--c-blue)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' },
+  btnSm: { padding: '0.3rem 0.75rem', background: 'transparent', border: '1px solid var(--c-border)', borderRadius: '6px', color: 'var(--c-text2)', fontSize: '0.8rem', cursor: 'pointer' },
+  btnCancel: { padding: '0.55rem 1.2rem', background: 'transparent', border: '1px solid var(--c-border)', borderRadius: '8px', color: 'var(--c-text3)', fontSize: '0.9rem', cursor: 'pointer' },
+  hint: { color: 'var(--c-text3)', fontSize: '0.9rem' },
+  hint2: { fontSize: '0.8rem', color: 'var(--c-text3)', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '8px', padding: '0.75rem 1rem' },
+  code: { background: 'var(--c-border)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontFamily: 'monospace', color: 'var(--c-cyan)', fontSize: '0.8rem' },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' },
-  th: { textAlign: 'left', padding: '0.6rem 0.8rem', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #1e293b' },
-  tr: { borderBottom: '1px solid #0f2540' },
-  td: { padding: '0.65rem 0.8rem', color: '#cbd5e1', verticalAlign: 'middle' },
-  idBadge: { background: '#132235', color: '#475569', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' },
-  spaceName: { display: 'block', color: '#e2e8f0', fontWeight: 500 },
-  spaceAddr: { display: 'block', color: '#475569', fontSize: '0.75rem' },
+  th: { textAlign: 'left', padding: '0.6rem 0.8rem', color: 'var(--c-text3)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--c-border)' },
+  tr: { borderBottom: '1px solid var(--c-border)' },
+  td: { padding: '0.65rem 0.8rem', color: 'var(--c-text2)', verticalAlign: 'middle' },
+  idBadge: { background: 'var(--c-border)', color: 'var(--c-text3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' },
+  spaceName: { display: 'block', color: 'var(--c-text1)', fontWeight: 500 },
+  spaceAddr: { display: 'block', color: 'var(--c-text3)', fontSize: '0.75rem' },
   badge: { padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 500 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-  modal: { background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '14px', padding: '2rem', width: '100%', maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '90vh', overflowY: 'auto' },
-  modalTitle: { fontSize: '1.05rem', fontWeight: 700, color: '#e2e8f0' },
+  modal: { background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '14px', padding: '2rem', width: '100%', maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '90vh', overflowY: 'auto' },
+  modalTitle: { fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-text1)' },
   modalActions: { display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' },
   formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' },
   formField: { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
-  label: { fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' },
-  input: { padding: '0.55rem 0.8rem', background: '#0a1628', border: '1px solid #1e293b', borderRadius: '7px', color: '#f1f5f9', fontSize: '0.9rem', outline: 'none', width: '100%', boxSizing: 'border-box' },
+  label: { fontSize: '0.75rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  input: { padding: '0.55rem 0.8rem', background: 'var(--c-bg)', border: '1px solid var(--c-border)', borderRadius: '7px', color: 'var(--c-text1)', fontSize: '0.9rem', outline: 'none', width: '100%', boxSizing: 'border-box' },
 }

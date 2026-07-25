@@ -98,7 +98,7 @@ export function StatsPage({ token }: Props) {
         )}
       </div>
 
-      {loading && <p style={{ color: '#475569', fontSize: '0.9rem' }}>Cargando estadísticas...</p>}
+      {loading && <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Cargando estadísticas...</p>}
 
       {/* Vista anual */}
       {!loading && annual && (
@@ -108,10 +108,10 @@ export function StatsPage({ token }: Props) {
           {/* Totales resumen */}
           <div style={s.summaryGrid}>
             {[
-              { label: 'Visitantes únicos', val: n(annual.totals.unique_visitors), color: '#06b6d4' },
-              { label: 'Ingresos totales', val: n(annual.totals.entries), color: '#3b82f6' },
-              { label: 'Días con actividad', val: String(annual.totals.days_with_activity), color: '#22c55e' },
-              { label: 'Promedio diario', val: annual.totals.days_with_activity > 0 ? n(Math.round(annual.totals.entries / annual.totals.days_with_activity)) : '—', color: '#8b5cf6' },
+              { label: 'Visitantes únicos', val: n(annual.totals.unique_visitors), color: 'var(--c-cyan)' },
+              { label: 'Ingresos totales', val: n(annual.totals.entries), color: 'var(--c-blue)' },
+              { label: 'Días con actividad', val: String(annual.totals.days_with_activity), color: 'var(--c-green)' },
+              { label: 'Promedio diario', val: annual.totals.days_with_activity > 0 ? n(Math.round(annual.totals.entries / annual.totals.days_with_activity)) : '—', color: 'var(--c-purple)' },
             ].map(item => (
               <div key={item.label} style={s.summaryCard}>
                 <span style={s.summaryLabel}>{item.label}</span>
@@ -122,7 +122,7 @@ export function StatsPage({ token }: Props) {
 
           {/* Tabla mensual */}
           {annual.monthly.length === 0 ? (
-            <p style={{ color: '#475569', fontSize: '0.9rem' }}>Sin datos para {annual.year}.</p>
+            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para {annual.year}.</p>
           ) : (
             <div style={s.tableWrap}>
               <table style={s.table}>
@@ -137,15 +137,15 @@ export function StatsPage({ token }: Props) {
                   {annual.monthly.map(row => (
                     <tr key={row.month} style={s.tr}>
                       <td style={s.td}>{row.month_name}</td>
-                      <td style={{ ...s.td, ...s.num, color: '#06b6d4' }}>{n(row.unique_visitors)}</td>
+                      <td style={{ ...s.td, ...s.num, color: 'var(--c-cyan)' }}>{n(row.unique_visitors)}</td>
                       <td style={{ ...s.td, ...s.num }}>{n(row.entries)}</td>
                       <td style={{ ...s.td, ...s.num }}>{n(row.exits)}</td>
                       <td style={{ ...s.td, ...s.num }}>{row.days_with_activity}</td>
                     </tr>
                   ))}
-                  <tr style={{ ...s.tr, borderTop: '2px solid #1e293b' }}>
-                    <td style={{ ...s.td, fontWeight: 700, color: '#e2e8f0' }}>TOTAL</td>
-                    <td style={{ ...s.td, ...s.num, color: '#06b6d4', fontWeight: 700 }}>{n(annual.totals.unique_visitors)}</td>
+                  <tr style={{ ...s.tr, borderTop: '2px solid var(--c-border)' }}>
+                    <td style={{ ...s.td, fontWeight: 700, color: 'var(--c-text1)' }}>TOTAL</td>
+                    <td style={{ ...s.td, ...s.num, color: 'var(--c-cyan)', fontWeight: 700 }}>{n(annual.totals.unique_visitors)}</td>
                     <td style={{ ...s.td, ...s.num, fontWeight: 700 }}>{n(annual.totals.entries)}</td>
                     <td style={{ ...s.td, ...s.num, fontWeight: 700 }}>{n(annual.totals.exits)}</td>
                     <td style={{ ...s.td, ...s.num, fontWeight: 700 }}>{annual.totals.days_with_activity}</td>
@@ -166,7 +166,7 @@ export function StatsPage({ token }: Props) {
                   <div key={item.label} style={s.breakdownRow}>
                     <span style={s.breakdownName}>{item.label}</span>
                     <div style={s.barWrap}>
-                      <div style={{ ...s.bar, width: `${(item.count / annual.totals.entries) * 100}%`, background: '#3b82f6' }} />
+                      <div style={{ ...s.bar, width: `${(item.count / annual.totals.entries) * 100}%`, background: 'var(--c-blue)' }} />
                     </div>
                     <span style={s.breakdownCount}>{n(item.count)}{pct(item.count, annual.totals.entries)}</span>
                   </div>
@@ -183,7 +183,7 @@ export function StatsPage({ token }: Props) {
                   <div key={item.label} style={s.breakdownRow}>
                     <span style={s.breakdownName}>{item.label}</span>
                     <div style={s.barWrap}>
-                      <div style={{ ...s.bar, width: `${(item.count / (annual.faculty_breakdown[0]?.count || 1)) * 100}%`, background: '#8b5cf6' }} />
+                      <div style={{ ...s.bar, width: `${(item.count / (annual.faculty_breakdown[0]?.count || 1)) * 100}%`, background: 'var(--c-purple)' }} />
                     </div>
                     <span style={s.breakdownCount}>{n(item.count)}{pct(item.count, annual.totals.entries)}</span>
                   </div>
@@ -195,8 +195,8 @@ export function StatsPage({ token }: Props) {
             <div style={s.breakdownCard}>
               <h3 style={s.breakdownTitle}>Por género (ingresos)</h3>
               {[
-                { label: 'Hombres', val: annual.gender_breakdown.male, color: '#3b82f6' },
-                { label: 'Mujeres', val: annual.gender_breakdown.female, color: '#ec4899' },
+                { label: 'Hombres', val: annual.gender_breakdown.male, color: 'var(--c-blue)' },
+                { label: 'Mujeres', val: annual.gender_breakdown.female, color: 'var(--c-rose)' },
               ].map(item => {
                 const total = annual.gender_breakdown.male + annual.gender_breakdown.female
                 return (
@@ -220,16 +220,16 @@ export function StatsPage({ token }: Props) {
           <h2 style={s.sectionTitle}>{monthly.space_name} — {monthly.year_month}</h2>
 
           {monthly.daily.length === 0 ? (
-            <p style={{ color: '#475569', fontSize: '0.9rem' }}>Sin datos para este mes.</p>
+            <p style={{ color: 'var(--c-text3)', fontSize: '0.9rem' }}>Sin datos para este mes.</p>
           ) : (
             <>
               {/* Resumen del mes */}
               <div style={s.summaryGrid}>
                 {[
-                  { label: 'Días con actividad', val: String(monthly.daily.length), color: '#22c55e' },
-                  { label: 'Total ingresos', val: n(monthly.daily.reduce((a, d) => a + d.entries, 0)), color: '#3b82f6' },
-                  { label: 'Visitantes únicos', val: n(monthly.daily.reduce((a, d) => a + d.unique_visitors, 0)), color: '#06b6d4' },
-                  { label: 'Promedio diario', val: n(Math.round(monthly.daily.reduce((a, d) => a + d.entries, 0) / monthly.daily.length)), color: '#8b5cf6' },
+                  { label: 'Días con actividad', val: String(monthly.daily.length), color: 'var(--c-green)' },
+                  { label: 'Total ingresos', val: n(monthly.daily.reduce((a, d) => a + d.entries, 0)), color: 'var(--c-blue)' },
+                  { label: 'Visitantes únicos', val: n(monthly.daily.reduce((a, d) => a + d.unique_visitors, 0)), color: 'var(--c-cyan)' },
+                  { label: 'Promedio diario', val: n(Math.round(monthly.daily.reduce((a, d) => a + d.entries, 0) / monthly.daily.length)), color: 'var(--c-purple)' },
                 ].map(item => (
                   <div key={item.label} style={s.summaryCard}>
                     <span style={s.summaryLabel}>{item.label}</span>
@@ -251,8 +251,8 @@ export function StatsPage({ token }: Props) {
                     {monthly.daily.map(row => (
                       <tr key={row.date} style={s.tr}>
                         <td style={s.td}>{row.date}</td>
-                        <td style={{ ...s.td, color: '#64748b' }}>{row.day_name}</td>
-                        <td style={{ ...s.td, ...s.num, color: '#06b6d4' }}>{n(row.unique_visitors)}</td>
+                        <td style={{ ...s.td, color: 'var(--c-text3)' }}>{row.day_name}</td>
+                        <td style={{ ...s.td, ...s.num, color: 'var(--c-cyan)' }}>{n(row.unique_visitors)}</td>
                         <td style={{ ...s.td, ...s.num }}>{n(row.entries)}</td>
                         <td style={{ ...s.td, ...s.num }}>{n(row.exits)}</td>
                       </tr>
@@ -272,30 +272,30 @@ const s: Record<string, React.CSSProperties> = {
   page: { padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: 0, overflowY: 'auto' },
   controls: { display: 'flex', alignItems: 'flex-end', gap: '1.5rem', flexWrap: 'wrap' },
   controlGroup: { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
-  label: { fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' },
-  select: { padding: '0.5rem 0.75rem', background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '7px', color: '#e2e8f0', fontSize: '0.9rem', outline: 'none', cursor: 'pointer' },
-  viewTabs: { display: 'flex', background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '8px', overflow: 'hidden' },
-  tabBtn: { padding: '0.5rem 1.1rem', background: 'transparent', border: 'none', color: '#475569', fontSize: '0.875rem', cursor: 'pointer' },
-  tabActive: { background: '#1e3a5f', color: '#e2e8f0', fontWeight: 600 },
+  label: { fontSize: '0.75rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  select: { padding: '0.5rem 0.75rem', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '7px', color: 'var(--c-text1)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer' },
+  viewTabs: { display: 'flex', background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '8px', overflow: 'hidden' },
+  tabBtn: { padding: '0.5rem 1.1rem', background: 'transparent', border: 'none', color: 'var(--c-text3)', fontSize: '0.875rem', cursor: 'pointer' },
+  tabActive: { background: 'var(--c-border)', color: 'var(--c-text1)', fontWeight: 600 },
   content: { display: 'flex', flexDirection: 'column', gap: '1.25rem' },
-  sectionTitle: { fontSize: '1.05rem', fontWeight: 700, color: '#e2e8f0' },
+  sectionTitle: { fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-text1)' },
   summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' },
-  summaryCard: { background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '10px', padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' },
-  summaryLabel: { fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  summaryCard: { background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '10px', padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' },
+  summaryLabel: { fontSize: '0.75rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em' },
   summaryVal: { fontSize: '1.6rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' },
-  th: { textAlign: 'left', padding: '0.6rem 0.9rem', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #1e293b' },
-  tr: { borderBottom: '1px solid #0f2540' },
-  td: { padding: '0.6rem 0.9rem', color: '#cbd5e1' },
+  th: { textAlign: 'left', padding: '0.6rem 0.9rem', color: 'var(--c-text3)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--c-border)' },
+  tr: { borderBottom: '1px solid var(--c-border)' },
+  td: { padding: '0.6rem 0.9rem', color: 'var(--c-text2)' },
   num: { textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
   breakdownGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' },
-  breakdownCard: { background: '#0d1f35', border: '1px solid #1e293b', borderRadius: '10px', padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
-  breakdownTitle: { fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' },
+  breakdownCard: { background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: '10px', padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
+  breakdownTitle: { fontSize: '0.8rem', color: 'var(--c-text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' },
   breakdownRow: { display: 'flex', alignItems: 'center', gap: '0.6rem' },
-  breakdownName: { fontSize: '0.8rem', color: '#94a3b8', width: '90px', flexShrink: 0 },
-  barWrap: { flex: 1, height: 6, background: '#132235', borderRadius: 999, overflow: 'hidden' },
+  breakdownName: { fontSize: '0.8rem', color: 'var(--c-text2)', width: '90px', flexShrink: 0 },
+  barWrap: { flex: 1, height: 6, background: 'var(--c-border)', borderRadius: 999, overflow: 'hidden' },
   bar: { height: '100%', borderRadius: 999, transition: 'width 0.5s ease' },
-  breakdownCount: { fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0 },
-  noData: { fontSize: '0.85rem', color: '#334155' },
+  breakdownCount: { fontSize: '0.8rem', color: 'var(--c-text3)', whiteSpace: 'nowrap', flexShrink: 0 },
+  noData: { fontSize: '0.85rem', color: 'var(--c-border)' },
 }

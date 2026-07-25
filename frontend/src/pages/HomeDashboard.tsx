@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { clearAdminSession, getAdminSession } from '../utils/adminSession'
 
 // ── Contrato de GET /api/spaces/overview (congelado) ────────────────────────
 interface BuildingOverview {
@@ -37,23 +38,10 @@ interface CampusGroup {
 const REFRESH_MS = 30000
 const RETRY_MS = 8000
 const SPACE_ID_KEY = 'inout_space_id'
-const ADMIN_TOKEN_KEY = 'inout_admin_token' // mismo storage key que AdminApp.tsx
 
-// Lee el username del JWT ya guardado por AdminApp.tsx al loguearse — sin
-// llamar al backend, solo para decidir qué mostrar en el link de la topbar.
-// No es una verificación de seguridad (no valida firma): si el token venció
-// o es inválido, simplemente no se muestra nombre — AdminApp.tsx sigue
-// siendo quien manda a LoginPage si el token real ya no sirve.
-function getAdminUsername(): string | null {
-  const token = localStorage.getItem(ADMIN_TOKEN_KEY)
-  if (!token) return null
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) return null
-    return typeof payload.sub === 'string' ? payload.sub : null
-  } catch {
-    return null
-  }
+const ROLE_LABELS: Record<string, string> = {
+  superadmin: 'Administrador',
+  admin: 'Administrador',
 }
 
 // Umbrales de estado — mismo criterio en toda la app: <50 verde, 50–80 ámbar, >80 rojo.
@@ -119,6 +107,20 @@ const ICON_ARROW_RIGHT = (
   </svg>
 )
 
+const ICON_USER = (
+  <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <circle cx="10" cy="7" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M4 16.5c0-2.6 2.7-4.2 6-4.2s6 1.6 6 4.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+const ICON_LOGOUT = (
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M12.5 14v2.2a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V3.8a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1V6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M8.5 10h8.2M14 7.2 16.8 10 14 12.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 // ── HomeDashboard ────────────────────────────────────────────────────────────
 export function HomeDashboard(): JSX.Element {
   const [data, setData] = useState<OverviewResponse | null>(null)
@@ -128,7 +130,9 @@ export function HomeDashboard(): JSX.Element {
     const stored = localStorage.getItem(SPACE_ID_KEY)
     return stored ? Number(stored) : null
   })
-  const [adminUsername] = useState<string | null>(getAdminUsername)
+  const [session, setSession] = useState(getAdminSession)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
   // Flujo guiado de selección: paso 1 (campus === null) → paso 2 (campus
   // elegido, se listan sus edificios) → confirmar edificio (barra inferior).
   const [selectedCampus, setSelectedCampus] = useState<string | null>(null)
@@ -175,20 +179,33 @@ export function HomeDashboard(): JSX.Element {
     window.location.href = '/kiosko'
   }
 
-  // Cerrar el selector rápido de edificio (topbar) con click afuera o Escape.
+  const logout = () => {
+    clearAdminSession()
+    setSession(null)
+    setUserMenuOpen(false)
+  }
+
+  // Cerrar popovers de la topbar (selector de edificio, menú de usuario) con
+  // click afuera o Escape — mismo comportamiento para los dos.
   useEffect(() => {
-    if (!pickerOpen) return
+    if (!pickerOpen && !userMenuOpen) return
     const onPointerDown = (e: PointerEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
+      const t = e.target as Node
+      if (pickerRef.current && !pickerRef.current.contains(t)) setPickerOpen(false)
+      if (userMenuRef.current && !userMenuRef.current.contains(t)) setUserMenuOpen(false)
     }
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setPickerOpen(false) }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setPickerOpen(false)
+      setUserMenuOpen(false)
+    }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [pickerOpen])
+  }, [pickerOpen, userMenuOpen])
 
   const activeBuilding = data?.buildings.find(b => b.id === activeSpaceId)
 
@@ -296,14 +313,46 @@ export function HomeDashboard(): JSX.Element {
             </div>
           )}
 
-          <a
-            className="hd-admin-link"
-            href="/admin"
-            title={adminUsername ? `Panel de administración — sesión de ${adminUsername}` : 'Administración'}
-          >
-            {ICON_GEAR}
-            {adminUsername ?? 'Admin'}
-          </a>
+          {/* Sesión — patrón estándar: sin sesión, "Iniciar sesión"; con
+              sesión, el usuario con su menú (configuración / cerrar sesión). */}
+          {!session ? (
+            <a className="hd-admin-link" href="/admin">
+              {ICON_USER}
+              Iniciar sesión
+            </a>
+          ) : (
+            <div className="hd-user" ref={userMenuRef}>
+              <button
+                className="hd-user-trigger"
+                onClick={() => setUserMenuOpen(v => !v)}
+                aria-expanded={userMenuOpen}
+                aria-haspopup="true"
+              >
+                <span className="hd-user-avatar" aria-hidden="true">{session.username.charAt(0)}</span>
+                <span className="hd-user-name">{session.username}</span>
+                <span className="hd-picker-chevron">{ICON_CHEVRON}</span>
+              </button>
+
+              {userMenuOpen && (
+                <div className="hd-user-menu" role="menu">
+                  <div className="hd-user-menu-head">
+                    <span className="hd-user-menu-name">{session.username}</span>
+                    {ROLE_LABELS[session.role] && (
+                      <span className="hd-user-menu-role">{ROLE_LABELS[session.role]}</span>
+                    )}
+                  </div>
+                  <a className="hd-user-menu-item" href="/admin" role="menuitem">
+                    {ICON_GEAR}
+                    Configuración
+                  </a>
+                  <button className="hd-user-menu-item" onClick={logout} role="menuitem">
+                    {ICON_LOGOUT}
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -652,7 +701,89 @@ const CSS = `
 .hd-picker-item:focus-visible { outline: 2px solid var(--c-blue); outline-offset: -2px; }
 .hd-picker-item[data-active="true"] { color: var(--c-blue); font-weight: 600; }
 
-/* ── Link a administración ── */
+/* ── Menú de usuario (sesión iniciada) ── */
+.hd-user { position: relative; }
+.hd-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 11px;
+  padding: 7px 12px 7px 8px;
+  color: var(--c-text1);
+  font-family: 'Barlow', sans-serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out;
+}
+.hd-user-trigger:hover { background: var(--c-bg-panel); border-color: var(--c-border); }
+.hd-user-trigger:active { transform: scale(0.97); }
+.hd-user-trigger:focus-visible { outline: 2px solid var(--c-blue); outline-offset: 2px; }
+.hd-user-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--c-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.hd-user-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hd-user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--c-bg-panel);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  transform-origin: top right;
+  animation: hdPickerIn 160ms cubic-bezier(0.23,1,0.32,1) forwards;
+  z-index: 20;
+}
+.hd-user-menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--c-border);
+}
+.hd-user-menu-name { font-size: 13.5px; font-weight: 700; color: var(--c-text1); }
+.hd-user-menu-role { font-size: 11.5px; color: var(--c-text3); }
+.hd-user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--c-text2);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 130ms ease-out, color 130ms ease-out;
+}
+.hd-user-menu-item svg { flex-shrink: 0; color: var(--c-text3); }
+.hd-user-menu-item:hover { background: var(--c-border); color: var(--c-text1); }
+.hd-user-menu-item:focus-visible { outline: 2px solid var(--c-blue); outline-offset: -2px; }
+
+/* ── Link de inicio de sesión (sin sesión activa) ── */
 .hd-admin-link {
   display: flex;
   align-items: center;

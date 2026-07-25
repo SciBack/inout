@@ -5,9 +5,11 @@
 }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: #0f172a;
-  color: #f1f5f9;
+  font-family: 'Barlow', system-ui, -apple-system, sans-serif;
+  /* Fallback = modo noche, igual que antes: si por lo que sea el tema no
+     llegó a inyectarse, el kiosko sigue viéndose como siempre. */
+  background: var(--c-bg, #0f172a);
+  color: var(--c-text1, #f1f5f9);
   height: 100vh;
   overflow: hidden;
 }
