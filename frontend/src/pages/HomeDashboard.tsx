@@ -37,6 +37,24 @@ interface CampusGroup {
 const REFRESH_MS = 30000
 const RETRY_MS = 8000
 const SPACE_ID_KEY = 'inout_space_id'
+const ADMIN_TOKEN_KEY = 'inout_admin_token' // mismo storage key que AdminApp.tsx
+
+// Lee el username del JWT ya guardado por AdminApp.tsx al loguearse — sin
+// llamar al backend, solo para decidir qué mostrar en el link de la topbar.
+// No es una verificación de seguridad (no valida firma): si el token venció
+// o es inválido, simplemente no se muestra nombre — AdminApp.tsx sigue
+// siendo quien manda a LoginPage si el token real ya no sirve.
+function getAdminUsername(): string | null {
+  const token = localStorage.getItem(ADMIN_TOKEN_KEY)
+  if (!token) return null
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) return null
+    return typeof payload.sub === 'string' ? payload.sub : null
+  } catch {
+    return null
+  }
+}
 
 // Umbrales de estado — mismo criterio en toda la app: <50 verde, 50–80 ámbar, >80 rojo.
 function statusColor(pct: number): string {
@@ -110,6 +128,7 @@ export function HomeDashboard(): JSX.Element {
     const stored = localStorage.getItem(SPACE_ID_KEY)
     return stored ? Number(stored) : null
   })
+  const [adminUsername] = useState<string | null>(getAdminUsername)
   // Flujo guiado de selección: paso 1 (campus === null) → paso 2 (campus
   // elegido, se listan sus edificios) → confirmar edificio (barra inferior).
   const [selectedCampus, setSelectedCampus] = useState<string | null>(null)
@@ -235,7 +254,7 @@ export function HomeDashboard(): JSX.Element {
       <style>{CSS}</style>
 
       <div className="hd-topbar">
-        <span className="hd-brand">InOut · Ocupación en vivo</span>
+        <span className="hd-brand">InOut · Control de aforo</span>
 
         <div className="hd-topbar-actions">
           {hasBuildings && (
@@ -277,9 +296,13 @@ export function HomeDashboard(): JSX.Element {
             </div>
           )}
 
-          <a className="hd-admin-link" href="/admin" title="Administración">
+          <a
+            className="hd-admin-link"
+            href="/admin"
+            title={adminUsername ? `Panel de administración — sesión de ${adminUsername}` : 'Administración'}
+          >
             {ICON_GEAR}
-            Admin
+            {adminUsername ?? 'Admin'}
           </a>
         </div>
       </div>
