@@ -16,7 +16,7 @@ from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
 from ..services.faculty_map import resolve_faculty, VALID_FACULTY_CODES
-from ..services.labels import normalize_category, category_label, faculty_label, program_label, CATEGORY_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
+from ..services.labels import normalize_category, category_label, faculty_label, normalize_program, program_label, CATEGORY_MAP, PROGRAM_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
 from ..schemas import (
     LoginRequest, TokenResponse,
     SedeCreate, SedeUpdate, SedeResponse,
@@ -263,6 +263,16 @@ def _category_condition(category: str):
     return PresenceLog.patron_category.in_(codes or [category])
 
 
+def _program_condition(program: str):
+    """Mismo patrón que _category_condition pero para programa: el mismo
+    programa académico llega con varios códigos crudos (INEI, P## de Koha,
+    acrónimo/texto libre — ver program_map en el overlay), así que filtrar
+    por 'program' debe incluir todos los alias del código canónico pedido,
+    no solo una coincidencia exacta."""
+    codes = [program] + [raw for raw, canon in PROGRAM_MAP.items() if canon == program]
+    return PresenceLog.patron_program.in_(codes)
+
+
 def _build_filters(
     db: Session, sede_id: int | None, space_id: int | None,
     category: str | None, faculty: str | None, program: str | None,
@@ -274,7 +284,7 @@ def _build_filters(
     if faculty:
         conditions.append(PresenceLog.patron_faculty == faculty)
     if program:
-        conditions.append(PresenceLog.patron_program == program)
+        conditions.append(_program_condition(program))
     return conditions, scope_label
 
 
@@ -314,11 +324,13 @@ def stats_filter_options(
         .filter(PresenceLog.patron_program.isnot(None), PresenceLog.patron_program != "")
         .all()
     ]
-    # Ordenado por nombre (cuando hay label real) para que el select del
-    # frontend se lea como un catálogo, no como códigos crudos sueltos.
+    # Normalizado a código canónico antes de armar el catálogo: sin esto el
+    # mismo programa (dos fuentes, ver program_map) aparecía dos veces en el
+    # selector. Mismo patrón que category_breakdown en annual_stats.
+    canonical_programs = sorted(set(normalize_program(code) for code in program_codes))
     programs = [
         ProgramCount(program=code, label=program_label(code), count=0)
-        for code in sorted(program_codes, key=program_label)
+        for code in sorted(canonical_programs, key=program_label)
     ]
 
     return StatsFilterOptions(
@@ -462,15 +474,16 @@ def annual_stats(
     ]
 
     # Desglose por programa académico (visitantes únicos, solo entries).
-    # program_label() traduce a nombre real los códigos que el overlay tiene
-    # curados (hoy: los 20 códigos INEI de 8 dígitos); el resto (P## de Koha
-    # sin curar aún) cae al código crudo, igual que facultad sin label.
+    # normalize_program() colapsa alias (INEI / P## de Koha / acrónimo — ver
+    # program_map en el overlay) al mismo código canónico ANTES de contar:
+    # si no, el mismo programa aparece partido en dos filas. program_label()
+    # traduce ese canónico a nombre real cuando el overlay lo tiene curado.
     # Reusa fac_rows — ya trae patron_program, no hace falta otra query.
     card_program: dict[str, str] = {}
     for row in fac_rows:
         prog = (row.patron_program or "").strip()
         if prog:
-            card_program[row.cardnumber] = prog
+            card_program[row.cardnumber] = normalize_program(prog)
     program_counts: dict[str, int] = {}
     for prog in card_program.values():
         program_counts[prog] = program_counts.get(prog, 0) + 1

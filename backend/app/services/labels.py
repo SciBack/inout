@@ -10,12 +10,20 @@
 #      Sin esto el dashboard mostraría el mismo perfil dos veces, una por familia.
 #   2. etiquetar:  perfil canónico → texto ("student" → "Estudiantes")
 #
+# El mismo problema de "dos códigos, un solo perfil" se repite en programa
+# académico: el mismo programa llega con su código INEI de 8 dígitos (fuente
+# nueva) y con su P## de Koha o un acrónimo/texto libre (fuente vieja),
+# conviviendo en presence_log. program_map colapsa los alias al código
+# canónico ANTES de contar o filtrar — si no, el mismo programa aparece
+# duplicado en el selector y partido en dos filas en el desglose.
+#
 # Formato del JSON (todas las claves opcionales):
 #   {
 #     "category_map":    {"ESTUDI": "student", "student": "student", ...},
 #     "category_labels": {"student": "Estudiantes", ...},
 #     "faculty_labels":  {"FCS": "Ciencias de la Salud", ...},
-#     "program_labels":  {"31300211": "Psicología", ...}
+#     "program_labels":  {"31300211": "Psicología", ...},
+#     "program_map":     {"P33": "31300211", "Psic.": "31300211", ...}
 #   }
 #
 # Sin archivo (producto agnóstico) no se normaliza ni traduce: se muestra el
@@ -40,6 +48,7 @@ CATEGORY_MAP: dict[str, str] = LABELS.get("category_map", {}) or {}
 CATEGORY_LABELS: dict[str, str] = LABELS.get("category_labels", {}) or {}
 FACULTY_LABELS: dict[str, str] = LABELS.get("faculty_labels", {}) or {}
 PROGRAM_LABELS: dict[str, str] = LABELS.get("program_labels", {}) or {}
+PROGRAM_MAP: dict[str, str] = LABELS.get("program_map", {}) or {}
 
 
 def normalize_category(raw: str | None) -> str:
@@ -58,6 +67,14 @@ def category_label(canon: str) -> str:
 
 def faculty_label(code: str) -> str:
     return FACULTY_LABELS.get(code, code)
+
+
+def normalize_program(raw: str | None) -> str:
+    """Código crudo → código canónico. Sin entrada en program_map, el propio
+    código crudo YA es canónico (comportamiento honesto por defecto, igual
+    que normalize_category)."""
+    code = (raw or "").strip()
+    return PROGRAM_MAP.get(code, code)
 
 
 def program_label(code: str) -> str:
