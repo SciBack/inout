@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:design": "node scripts/design-system/verificar-stack.mjs src && node scripts/design-system/verificar-iconos.mjs src --sin-legado"
   },
   "dependencies": {
     "react": "^18.3.1",
