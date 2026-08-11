@@ -18,6 +18,7 @@ Los métodos del proveedor son async (el hot path del escaneo lo es); por eso
 las corren con `asyncio.run(...)` desde su propio contexto.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -29,6 +30,45 @@ from .identity import build_enabled_providers, upsert_person
 from .identity.base import IdentityProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _upsert_records(db: Session, provider_name: str, records) -> tuple[int, int, int]:
+    """Persiste los registros de un proveedor. SÍNCRONO a propósito: lo llama
+    `sync_provider` vía `asyncio.to_thread` para no bloquear el event loop.
+    Devuelve (altas, cambios, errores)."""
+    created = 0
+    updated = 0
+    errors = 0
+    for rec in records:
+        try:
+            # ¿Ya existía en el padrón? Determina si es alta o cambio.
+            exists = (
+                db.query(Person.id)
+                .filter(Person.person_key == rec.person_key)
+                .first()
+                is not None
+            )
+            upsert_person(db, rec, source=provider_name)
+            if exists:
+                updated += 1
+            else:
+                created += 1
+        except Exception:
+            errors += 1
+            # Rollback obligatorio: en PostgreSQL un error de SQL aborta la
+            # transacción entera, y sin esto TODO lo que sigue falla —
+            # incluido el commit final que guarda el estado de la corrida,
+            # que quedaría congelada en 'running' y el padrón sin replicar.
+            # Un registro malo debe costar ese registro, no la corrida.
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("[sync] proveedor=%s: rollback falló", provider_name)
+            logger.exception(
+                "[sync] proveedor=%s: error al upsertar record person_key=%s",
+                provider_name, getattr(rec, "person_key", "?"),
+            )
+    return created, updated, errors
 
 
 async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSyncRun:
@@ -58,35 +98,24 @@ async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSync
 
     try:
         records = await provider.fetch_all()
-        for rec in records:
-            try:
-                # ¿Ya existía en el padrón? Determina si es alta o cambio.
-                exists = (
-                    db.query(Person.id)
-                    .filter(Person.person_key == rec.person_key)
-                    .first()
-                    is not None
-                )
-                upsert_person(db, rec, source=provider.name)
-                if exists:
-                    updated += 1
-                else:
-                    created += 1
-            except Exception:
-                errors += 1
-                # Rollback obligatorio: en PostgreSQL un error de SQL aborta la
-                # transacción entera, y sin esto TODO lo que sigue falla —
-                # incluido el commit final que guarda el estado de la corrida,
-                # que quedaría congelada en 'running' y el padrón sin replicar.
-                # Un registro malo debe costar ese registro, no la corrida.
-                try:
-                    db.rollback()
-                except Exception:
-                    logger.exception("[sync] proveedor=%s: rollback falló", provider.name)
-                logger.exception(
-                    "[sync] proveedor=%s: error al upsertar record person_key=%s",
-                    provider.name, getattr(rec, "person_key", "?"),
-                )
+        # El volcado se persiste en un HILO APARTE, no aquí.
+        #
+        # `sync_all` corre como BackgroundTask de FastAPI, es decir DENTRO del
+        # event loop. El bucle de upserts es I/O de base síncrono y largo (~18k
+        # registros con su viaje a la BD cada uno) sin un solo await, así que
+        # ejecutarlo en la corrutina bloquea el event loop entero: ninguna
+        # petición avanza, las que ya tomaron conexión se quedan con su
+        # transacción abierta ('idle in transaction'), el pool se agota y la API
+        # deja de responder hasta que termine. Incidente real del 2026-08-11:
+        # 25 min sin servicio tras disparar /admin/sync con tráfico en curso.
+        # El sync de las 03:00 nunca lo destapó porque no compite con nadie.
+        #
+        # `db` se usa solo desde el hilo mientras esta corrutina está suspendida
+        # en el await — el acceso queda serializado por construcción, nunca en
+        # paralelo, que es lo que la Session de SQLAlchemy no admite.
+        created, updated, errors = await asyncio.to_thread(
+            _upsert_records, db, provider.name, records
+        )
     except Exception:
         # Fallo global del proveedor (fetch_all no debería lanzar, pero por si acaso).
         errors += 1

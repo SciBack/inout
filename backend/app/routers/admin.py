@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_, distinct
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from jose import JWTError, jwt
 import asyncio
@@ -11,7 +11,7 @@ from collections import defaultdict
 import calendar
 
 from ..database import get_db
-from ..models import AdminUser, Space, PresenceLog, Sede
+from ..models import AdminUser, Space, PresenceLog, Sede, ProviderSyncRun
 from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
@@ -33,6 +33,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 LIMA = ZoneInfo("America/Lima")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 8
+
+# Tras esta ventana, una corrida que sigue en 'running' se considera muerta
+# (el proceso se cayó sin cerrarla) y deja de bloquear un sync nuevo.
+SYNC_STALE_AFTER = timedelta(hours=2)
 
 def _hash_password(plain: str) -> str:
     return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
@@ -669,6 +673,7 @@ def change_password(
 def trigger_sync(
     background_tasks: BackgroundTasks,
     current_user: AdminUser = Depends(require_superadmin),
+    db: Session = Depends(get_db),
 ):
     """
     Dispara la sincronización del padrón local desde todos los proveedores
@@ -687,6 +692,30 @@ def trigger_sync(
             "status": "sin-proveedores",
             "detail": "No hay proveedores de identidad habilitados.",
             "providers": [],
+        }
+
+    # No apilar corridas: dos syncs simultáneos duplican el trabajo y la carga
+    # sobre la BD sin adelantar nada. La ventana de obsolescencia existe porque
+    # una corrida que muere de golpe (reinicio del contenedor, OOM) deja su fila
+    # en 'running' para siempre — sin ella, un solo corte bloquearía el sync
+    # a perpetuidad.
+    en_curso = (
+        db.query(ProviderSyncRun)
+        .filter(
+            ProviderSyncRun.status == "running",
+            ProviderSyncRun.started_at >= datetime.now(timezone.utc) - SYNC_STALE_AFTER,
+        )
+        .order_by(ProviderSyncRun.started_at.desc())
+        .first()
+    )
+    if en_curso:
+        return {
+            "status": "ya-en-curso",
+            "detail": (
+                f"Ya hay una sincronización en curso ({en_curso.provider}, "
+                f"iniciada {en_curso.started_at.isoformat()}). No se lanzó otra."
+            ),
+            "providers": provider_names,
         }
 
     # sync_all es async y abre su propia sesión; BackgroundTasks la corre tras responder.

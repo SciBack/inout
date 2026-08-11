@@ -188,3 +188,130 @@ class TestFetchAllPropagaElFallo:
         monkeypatch.setattr(p, "_search", _boom)
 
         assert asyncio.run(p.lookup("cardnumber", "1")) is None
+
+
+class TestNoBloqueaElEventLoop:
+    """`sync_all` corre como BackgroundTask de FastAPI, o sea DENTRO del event
+    loop. El bucle de upserts es I/O de base síncrono y largo: si se ejecuta en
+    la corrutina, bloquea el loop entero y la API deja de responder mientras
+    dura el sync.
+
+    Incidente real (2026-08-11): 25 min sin servicio tras disparar /admin/sync
+    con tráfico en curso — peticiones con la transacción abierta, pool agotado,
+    y solo se recuperó reiniciando el backend. El sync de las 03:00 nunca lo
+    destapó porque a esa hora no compite con nadie.
+    """
+
+    def test_el_loop_sigue_atendiendo_mientras_el_sync_corre(self, db):
+        """Lo que importa NO es cuántas peticiones se atienden al final —con el
+        bucle bloqueante también acaban atendiéndose, solo que después—, sino
+        cuántas se atienden MIENTRAS el sync sigue en curso. Bloqueado, son 0.
+        """
+        import time
+
+        registros = [registro(f"ldap:{i}") for i in range(20)]
+
+        import app.services.sync as sync_mod
+        original = sync_mod.upsert_person
+
+        def lento(db_, rec, source):
+            time.sleep(0.01)          # bloqueante, como el viaje real a la BD
+            return original(db_, rec, source)
+
+        sync_mod.upsert_person = lento
+        try:
+            async def escenario():
+                sync_terminado = False
+                atendidas_durante = 0
+
+                async def sync():
+                    nonlocal sync_terminado
+                    await sync_provider(db, FakeProvider(records=registros))
+                    sync_terminado = True
+
+                async def api_simulada():
+                    nonlocal atendidas_durante
+                    for _ in range(40):
+                        await asyncio.sleep(0.005)
+                        if sync_terminado:
+                            break
+                        atendidas_durante += 1
+
+                await asyncio.gather(sync(), api_simulada())
+                return atendidas_durante
+
+            atendidas = asyncio.run(escenario())
+        finally:
+            sync_mod.upsert_person = original
+
+        assert atendidas > 0, (
+            "el event loop quedó bloqueado: no se atendió NINGUNA petición "
+            "mientras el sync corría. El bucle de upserts debe ejecutarse en un "
+            "hilo (asyncio.to_thread), no dentro de la corrutina."
+        )
+
+
+class TestNoApilaCorridas:
+    """Dos syncs a la vez duplican trabajo y carga sobre la BD sin adelantar
+    nada. Pero el guard no puede ser absoluto: una corrida que muere de golpe
+    (reinicio, OOM) deja su fila en 'running' para siempre, y sin ventana de
+    obsolescencia un solo corte bloquearía el sync a perpetuidad.
+    """
+
+    class _Tareas:
+        def __init__(self):
+            self.lanzadas = []
+
+        def add_task(self, fn, *a, **kw):
+            self.lanzadas.append(fn)
+
+    @staticmethod
+    def _corrida(db, *, hace, status="running"):
+        from datetime import datetime, timedelta, timezone
+        from app.models import ProviderSyncRun
+
+        run = ProviderSyncRun(
+            provider="ldap", status=status, created=0, updated=0, errors=0,
+            started_at=datetime.now(timezone.utc) - hace,
+        )
+        db.add(run)
+        db.commit()
+        return run
+
+    @pytest.fixture(autouse=True)
+    def _con_proveedores(self, monkeypatch):
+        import app.routers.admin as admin_mod
+        monkeypatch.setattr(admin_mod, "build_enabled_providers",
+                            lambda: [FakeProvider(name="ldap")])
+
+    def _llamar(self, db):
+        import app.routers.admin as admin_mod
+        tareas = self._Tareas()
+        resp = admin_mod.trigger_sync(background_tasks=tareas, current_user=None, db=db)
+        return resp, tareas
+
+    def test_rechaza_si_ya_hay_una_en_curso(self, db):
+        from datetime import timedelta
+        self._corrida(db, hace=timedelta(minutes=5))
+        resp, tareas = self._llamar(db)
+        assert resp["status"] == "ya-en-curso"
+        assert tareas.lanzadas == [], "lanzó un sync habiendo otro en curso"
+
+    def test_una_corrida_muerta_no_bloquea_para_siempre(self, db):
+        from datetime import timedelta
+        self._corrida(db, hace=timedelta(hours=5))   # más allá de SYNC_STALE_AFTER
+        resp, tareas = self._llamar(db)
+        assert resp["status"] == "aceptado"
+        assert len(tareas.lanzadas) == 1
+
+    def test_una_corrida_ya_cerrada_no_bloquea(self, db):
+        from datetime import timedelta
+        self._corrida(db, hace=timedelta(minutes=5), status="ok")
+        resp, tareas = self._llamar(db)
+        assert resp["status"] == "aceptado"
+        assert len(tareas.lanzadas) == 1
+
+    def test_sin_corridas_previas_lanza(self, db):
+        resp, tareas = self._llamar(db)
+        assert resp["status"] == "aceptado"
+        assert len(tareas.lanzadas) == 1
