@@ -17,6 +17,7 @@ import json
 import os
 
 from ..config import settings
+from .labels import normalize_program
 
 
 def _load_faculty_config() -> tuple[dict[str, str], set[str]]:
@@ -37,7 +38,10 @@ def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> s
     """
     Devuelve la facultad efectiva:
     1. Si patron_faculty es un código válido → lo usa.
-    2. Si no, busca patron_program en PROGRAM_TO_FACULTY.
+    2. Si no, busca patron_program en PROGRAM_TO_FACULTY — primero con el
+       código crudo y, si no está, con el canónico de normalize_program().
+       El segundo intento evita que el overlay tenga que repetir aquí cada
+       alias que program_map ya declara (dos copias que se desincronizan).
     3. Si no hay whitelist configurada (producto agnóstico) y patron_faculty
        viene informado → lo usa tal cual.
     4. Si nada aplica → "Sin Facultad".
@@ -47,6 +51,8 @@ def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> s
         return fac
     prog = (patron_program or "").strip()
     mapped = PROGRAM_TO_FACULTY.get(prog)
+    if not mapped and prog:
+        mapped = PROGRAM_TO_FACULTY.get(normalize_program(prog))
     if mapped:
         return mapped
     # Sin whitelist configurada: aceptar el valor informado tal cual.

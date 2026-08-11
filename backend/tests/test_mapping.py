@@ -81,9 +81,34 @@ class TestPrecedencia:
         out = map_fields("ldap", {"eduPersonAffiliation": "alum"})
         assert out["category"] == "alum"
 
-    def test_multivalor_fuera_de_la_precedencia_toma_el_primero(self):
+    def test_multivalor_fuera_de_la_precedencia_es_determinista(self):
+        """Ninguno está en la precedencia declarada: se elige por orden estable,
+        NO por el que la fuente puso primero."""
         out = map_fields("ldap", {"eduPersonAffiliation": ["rarito", "otro"]})
-        assert out["category"] == "rarito"
+        assert out["category"] == "otro"
+
+
+class TestMultivalorSinPrecedencia:
+    """Un directorio no garantiza el orden de un atributo multivalor. Sin este
+    colapso estable, el mismo registro resolvía distinto entre dos sincronizaciones
+    y la persona parecía cambiar de programa sola.
+
+    Caso real que lo motivó: el código de programa institucional es multivalor
+    porque los programas recodificados llevan el histórico y el vigente.
+    """
+
+    def test_mismo_resultado_sea_cual_sea_el_orden_de_la_fuente(self):
+        campo = "instFacultyCode"  # sin precedencia declarada en LDAP_MAP
+        a = map_fields("ldap", {campo: ["FIA", "FCS", "EPG"]})
+        b = map_fields("ldap", {campo: ["EPG", "FIA", "FCS"]})
+        c = map_fields("ldap", {campo: ["FCS", "EPG", "FIA"]})
+        assert a["faculty"] == b["faculty"] == c["faculty"]
+
+    def test_un_solo_valor_en_lista_se_desenvuelve(self):
+        assert map_fields("ldap", {"instFacultyCode": ["FIA"]})["faculty"] == "FIA"
+
+    def test_lista_vacia_no_produce_campo(self):
+        assert "faculty" not in map_fields("ldap", {"instFacultyCode": []})
 
 
 class TestValueMaps:

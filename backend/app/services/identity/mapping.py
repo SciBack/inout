@@ -58,7 +58,13 @@ def _collapse(provider: str, field: str, val):
     Ej.: eduPersonAffiliation ['faculty','student'] + precedence
     ['faculty','staff','student'] → 'faculty'. Determinista a propósito: la
     fuente puede no serlo (un híbrido resuelve distinto según qué origen ganó).
-    Sin precedencia declarada, toma el primer valor.
+
+    Sin precedencia declarada NO se toma val[0]: el orden en que un directorio
+    devuelve un atributo multivalor no está garantizado, así que el mismo
+    registro podía resolver distinto entre dos sincronizaciones y hacer que
+    una persona cambiara de programa sola. Se ordena antes de elegir: cuál
+    gana es arbitrario, pero es siempre el mismo. Declarar precedencia sigue
+    siendo la vía para elegir a conciencia.
     """
     if not isinstance(val, list):
         return val
@@ -67,7 +73,7 @@ def _collapse(provider: str, field: str, val):
         for candidate in order:
             if candidate in val:
                 return candidate
-    return val[0] if val else None
+    return sorted(val, key=str)[0] if val else None
 
 
 def _remap_value(provider: str, field: str, val):
