@@ -168,12 +168,31 @@ def map_identifiers(provider: str, raw: dict) -> dict:
     return out
 
 
+def _key_value(val: str) -> str:
+    """Forma canónica de una credencial PARA DERIVAR LA CLAVE del padrón.
+
+    Quita los ceros de relleno de la izquierda cuando el valor es solo dígitos:
+    un documento es el mismo número lo escriba la fuente como '01261673' o
+    '001261673', pero como la clave se deriva de ese texto, cada variante creaba
+    una PERSONA distinta en el padrón (caso real 2026-08-12: dos filas para la
+    misma persona, `ldap:01261673` y `ldap:001261673`).
+
+    Solo se toca lo que es íntegramente numérico: recortar ceros de un correo o
+    de un código alfanumérico cambiaría el identificador, no lo normalizaría.
+    Y solo afecta a la CLAVE — la credencial se sigue guardando tal como vino,
+    que es lo que la persona lleva impreso en el carné.
+    """
+    if val.isdigit():
+        return val.lstrip("0") or "0"
+    return val
+
+
 def _fallback_key(provider: str, identifiers: dict) -> str | None:
     """person_key derivado cuando la fuente no trae uno explícito."""
     for id_type in ("document_number", "cardnumber", "samaccountname", "uid", "email"):
         val = identifiers.get(id_type)
         if val:
-            return f"{provider}:{val}"
+            return f"{provider}:{_key_value(str(val))}"
     return None
 
 

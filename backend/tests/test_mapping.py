@@ -223,3 +223,40 @@ class TestValorDemasiadoLargoNoTumbaALaPersona:
         for col in Person.__table__.columns:
             if getattr(col.type, "length", None):
                 assert FIELD_MAX_LEN[col.name] == col.type.length
+
+
+class TestClaveInsensibleAlRellenoDeCeros:
+    """La clave del padrón se deriva del documento. Si la fuente escribe el
+    mismo número con distinto relleno ('01261673' y '001261673'), cada variante
+    creaba una PERSONA distinta.
+
+    Caso real (2026-08-12): dos filas para Juan Elias Mejia Coello,
+    `ldap:01261673` y `ldap:001261673`. Se detectó porque el sync reportaba
+    IdentityCollision sobre esa clave todos los días.
+    """
+
+    def test_mismo_documento_con_ceros_da_la_misma_clave(self):
+        a = record_from_raw("ldap", {"cn": "Juan", "instDocumentNumber": "01261673"}, source="ldap")
+        b = record_from_raw("ldap", {"cn": "Juan", "instDocumentNumber": "001261673"}, source="ldap")
+        assert a.person_key == b.person_key
+
+    def test_la_credencial_se_guarda_tal_como_vino(self):
+        """Normalizar la clave no debe alterar lo que la persona lleva impreso."""
+        rec = record_from_raw("ldap", {"cn": "Juan", "instDocumentNumber": "001261673"}, source="ldap")
+        assert rec.identifiers["document_number"] == "001261673"
+
+    def test_documentos_distintos_siguen_siendo_distintos(self):
+        a = record_from_raw("ldap", {"cn": "A", "instDocumentNumber": "01261673"}, source="ldap")
+        b = record_from_raw("ldap", {"cn": "B", "instDocumentNumber": "01261674"}, source="ldap")
+        assert a.person_key != b.person_key
+
+    def test_no_toca_lo_que_no_es_numerico(self):
+        """Recortar ceros de un valor alfanumérico lo cambiaría, no lo
+        normalizaría."""
+        from app.services.identity.mapping import _key_value
+        assert _key_value("00A123") == "00A123"
+        assert _key_value("0x0f") == "0x0f"
+
+    def test_un_valor_de_solo_ceros_no_queda_vacio(self):
+        from app.services.identity.mapping import _key_value
+        assert _key_value("000") == "0"
