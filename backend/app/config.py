@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # Proveedor Koha por BD directa (lee borrowers vía MariaDB, reusa koha_db_*).
     koha_db_enabled: bool = False
     koha_db_priority: int = 40
+    # Código del atributo extendido de Koha que guarda el documento del patron
+    # (borrower_attributes.code). Cada institución lo nombra a su manera, así
+    # que el canónico no lo asume: vacío = no se consulta y el patron se indexa
+    # solo por su carné, que es el comportamiento histórico.
+    koha_document_attribute: str = ""
 
     # Koha DB directa (fotos) — por sede también
     koha_db_host: str = ""

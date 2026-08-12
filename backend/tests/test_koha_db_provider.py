@@ -132,3 +132,50 @@ class TestConnectResuelveLaBibliotecaCorrecta:
         p = KohaDbProvider(cfg, branch={"name": "koha_db_but", "library_code": "BUT"})
         host, user, pw, name = cfg.koha_db_for_sede(p.library_code or "otra-cosa")
         assert name == "koha_but"
+
+
+class TestElDocumentoDelPatronSeIndexa:
+    """Koha identifica al patron por MÁS de una credencial: el carné vive en
+    `borrowers.cardnumber` y el documento en los atributos extendidos. Medido en
+    UPeU (2026-08-12): 18.710 patrons tienen el documento cargado y InOut no lo
+    leía — quien escaneaba su documento y solo existía en Koha no resolvía.
+
+    El código del atributo es data de cada institución (KOHA_DOCUMENT_ATTRIBUTE);
+    sin declararlo, el canónico no lo consulta.
+    """
+
+    def test_indexa_carne_y_documento(self):
+        from app.services.identity.koha_db_provider import _credenciales
+        assert _credenciales("202622857", "70596558") == {
+            "cardnumber": "202622857",
+            "document_number": "70596558",
+        }
+
+    def test_sin_documento_solo_el_carne(self):
+        from app.services.identity.koha_db_provider import _credenciales
+        assert _credenciales("202622857", None) == {"cardnumber": "202622857"}
+
+    def test_documento_en_blanco_no_se_indexa(self):
+        from app.services.identity.koha_db_provider import _credenciales
+        assert _credenciales("202622857", "   ") == {"cardnumber": "202622857"}
+
+    def test_sin_atributo_declarado_no_se_consulta(self, monkeypatch):
+        """Producto agnóstico: sin configuración, la consulta no cambia."""
+        from app.config import settings
+        from app.services.identity.koha_db_provider import KohaDbProvider
+
+        monkeypatch.setattr(settings, "koha_document_attribute", "")
+        col, join, params = KohaDbProvider()._doc_query_parts()
+        assert (col, join, params) == ("", "", [])
+
+    def test_con_atributo_declarado_se_une_y_se_parametriza(self, monkeypatch):
+        """El código va como parámetro, no interpolado en el SQL."""
+        from app.config import settings
+        from app.services.identity.koha_db_provider import KohaDbProvider
+
+        monkeypatch.setattr(settings, "koha_document_attribute", "DNI")
+        col, join, params = KohaDbProvider()._doc_query_parts()
+        assert "document_number" in col
+        assert "borrower_attributes" in join
+        assert params == ["DNI"]
+        assert "DNI" not in join, "el código no debe interpolarse en el SQL"

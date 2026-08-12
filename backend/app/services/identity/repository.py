@@ -2,6 +2,7 @@
 # sincronización de `person_identifiers`. Reutilizable por el sync y el resolver.
 
 import logging
+import unicodedata
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -87,30 +88,60 @@ class IdentityCollision(Exception):
     """
 
 
+def _normalizar_nombre(nombre: str | None) -> str:
+    """Forma comparable de un nombre: sin tildes, sin mayúsculas y sin espacios
+    de más. La misma persona llega escrita distinto según la fuente ('YAHIR
+    ALEXANDER NEIRA CURO' en una, 'Yahir Alexander Neira Curo' en otra)."""
+    limpio = unicodedata.normalize("NFKD", nombre or "")
+    limpio = limpio.encode("ascii", "ignore").decode().lower()
+    return " ".join(limpio.split())
+
+
 def _conflicting_cardnumber(db: Session, person: Person, rec: PersonRecord) -> tuple | None:
-    """Devuelve (carné_existente, carné_entrante) si son personas distintas.
+    """Devuelve (credencial_existente, credencial_entrante) si son DOS PERSONAS.
 
-    El carné es el identificador institucional: una persona tiene exactamente
-    uno. Dos registros que comparten person_key pero declaran carnés distintos
-    son dos humanos, no dos vistas del mismo.
+    Una persona tiene VARIAS credenciales, no una: carné universitario, DNI,
+    carné de extranjería, pasaporte, y a veces más de un código institucional
+    —quien trabaja y además estudió lleva el de trabajador y el de alumno—. El
+    directorio ya lo refleja: 28.752 DNI, 145 CE y 91 pasaportes, y Koha
+    identifica a sus patrons por carné y por DNI a la vez. Rechazar un segundo
+    identificador sería negar cómo funciona la institución.
 
-    No se compara el documento a propósito: que cambie con el carné estable es
-    justo el caso legítimo (corrección de DNI) que sí debe reconciliar.
+    Así que un carné nuevo NO es por sí solo señal de otra persona. Lo que se
+    protege es lo de verdad grave: que la fuente asigne a dos humanos el mismo
+    documento (pasó, caso real) y, como el person_key se deriva de él, acaben
+    fusionados en una fila. Eso se distingue por el NOMBRE, no por el número.
+
+    - mismo nombre  → la misma persona sumando una credencial → se acepta
+    - nombre distinto → dos humanos bajo un documento → se rechaza
+
+    Se compara contra TODAS las credenciales de la fila, no contra una
+    cualquiera: con varias por persona, tomar la primera que devuelva la base
+    haría depender el resultado de un orden que nadie garantiza.
     """
     entrante = (rec.identifiers or {}).get("cardnumber")
     if not entrante:
         return None
-    existente = (
-        db.query(PersonIdentifier)
-        .filter(
+    entrante = str(entrante)
+
+    existentes = [
+        row.id_value
+        for row in db.query(PersonIdentifier).filter(
             PersonIdentifier.person_key == person.person_key,
             PersonIdentifier.id_type == "cardnumber",
         )
-        .first()
-    )
-    if existente is None or existente.id_value == str(entrante):
+    ]
+    if not existentes or entrante in existentes:
         return None
-    return (existente.id_value, str(entrante))
+
+    # Sin nombre en alguno de los dos lados no hay con qué distinguirlos: se
+    # mantiene el rechazo, que es el lado seguro del error.
+    nombre_actual = _normalizar_nombre(person.full_name)
+    nombre_entrante = _normalizar_nombre(rec.full_name)
+    if nombre_actual and nombre_entrante and nombre_actual == nombre_entrante:
+        return None
+
+    return (existentes[0], entrante)
 
 
 def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:

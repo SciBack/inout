@@ -18,7 +18,32 @@ from .base import PersonRecord
 logger = logging.getLogger(__name__)
 
 # Columnas mínimas necesarias del borrower.
-_COLS = "cardnumber, firstname, surname, sex, categorycode, sort1, sort2"
+_COLS = "b.cardnumber, b.firstname, b.surname, b.sex, b.categorycode, b.sort1, b.sort2"
+
+# Koha identifica a un patron por MÁS de una credencial: el carné institucional
+# vive en `borrowers.cardnumber`, pero el documento está en los atributos
+# extendidos (`borrower_attributes`, código configurable). Medido en UPeU
+# (2026-08-12): 18.710 patrons tienen el documento cargado ahí. Sin leerlo,
+# quien escanea su documento y solo existe en Koha no resuelve.
+#
+# El código del atributo es data de cada institución, no del producto: se
+# declara en KOHA_DOCUMENT_ATTRIBUTE. Vacío = no se consulta (agnóstico).
+_ATTR_JOIN = (
+    "LEFT JOIN borrower_attributes ba "
+    "  ON ba.borrowernumber = b.borrowernumber AND ba.code = %s"
+)
+
+
+def _credenciales(card: str, documento) -> dict:
+    """Todas las credenciales con que Koha conoce al patron. El documento solo
+    aparece si la institución declaró su atributo (ver _ATTR_JOIN)."""
+    out = {}
+    if card:
+        out["cardnumber"] = card
+    doc = str(documento).strip() if documento else ""
+    if doc:
+        out["document_number"] = doc
+    return out
 
 
 class KohaDbProvider:
@@ -47,6 +72,15 @@ class KohaDbProvider:
         self.priority = branch.get("priority", cfg.koha_db_priority)
         self.enabled = cfg.koha_db_enabled
 
+    def _doc_query_parts(self) -> tuple[str, str, list]:
+        """(columna_extra, join, params) para traer el documento del patron.
+        Sin atributo configurado devuelve fragmentos vacíos: el producto
+        canónico no sabe cómo llama cada institución a ese atributo."""
+        code = (settings.koha_document_attribute or "").strip()
+        if not code:
+            return "", "", []
+        return ", ba.attribute AS document_number", _ATTR_JOIN, [code]
+
     def _connect(self, sede_code: str):
         host, user, pw, name = settings.koha_db_for_sede(self.library_code or sede_code)
         if not host or not name:
@@ -71,7 +105,7 @@ class KohaDbProvider:
             program=(r.get("sort2") or None),
             source=self.name,
             raw={k: (str(v) if v is not None else None) for k, v in r.items()},
-            identifiers={"cardnumber": card} if card else {},
+            identifiers=_credenciales(card, r.get("document_number")),
         )
 
     async def lookup(
@@ -86,6 +120,8 @@ class KohaDbProvider:
         if self.library_code and sede_code and sede_code != self.library_code:
             return None
 
+        _doc_col, join, doc_params = self._doc_query_parts()
+
         def run():
             conn = self._connect(sede_code)
             if conn is None:
@@ -93,8 +129,9 @@ class KohaDbProvider:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"SELECT {_COLS} FROM borrowers WHERE cardnumber=%s LIMIT 1",
-                        (id_value,),
+                        f"SELECT {_COLS}{_doc_col} FROM borrowers b {join} "
+                        "WHERE b.cardnumber=%s LIMIT 1",
+                        (*doc_params, id_value),
                     )
                     return cur.fetchone()
             finally:
@@ -109,6 +146,8 @@ class KohaDbProvider:
 
     async def fetch_all(self):
         """Volcado completo del padrón, paginado (para el sync programado)."""
+        _doc_col, join, doc_params = self._doc_query_parts()
+
         def run():
             conn = self._connect(self.library_code or "")
             if conn is None:
@@ -117,8 +156,9 @@ class KohaDbProvider:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"SELECT {_COLS} FROM borrowers "
-                        "WHERE cardnumber IS NOT NULL AND cardnumber <> ''"
+                        f"SELECT {_COLS}{_doc_col} FROM borrowers b {join} "
+                        "WHERE b.cardnumber IS NOT NULL AND b.cardnumber <> ''",
+                        tuple(doc_params),
                     )
                     out = cur.fetchall()
             finally:

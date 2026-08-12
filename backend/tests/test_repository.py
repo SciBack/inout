@@ -177,3 +177,106 @@ class TestReconciliacionCrossProveedor:
         assert db.query(Person).count() == 2
         assert find_person_by_value(db, "10").full_name == "Ada"
         assert find_person_by_value(db, "20").full_name == "Grace"
+
+
+class TestUnaPersonaTieneVariasCredenciales:
+    """Una persona NO tiene un solo identificador. Lleva carné universitario,
+    DNI, y según el caso carné de extranjería o pasaporte; quien trabaja y
+    además estudió arrastra el código de trabajador y el de alumno.
+
+    Medido en el directorio de UPeU (2026-08-12): 28.752 DNI, 145 CE y 91
+    pasaportes. Y Koha identifica a sus patrons por carné Y por DNI a la vez
+    (18.710 con ambos). Rechazar la segunda credencial negaba cómo funciona
+    la institución: 7 personas al día quedaban fuera del padrón y escaneaban
+    como "Sin identificar" con su carné vigente.
+    """
+
+    def test_acepta_un_segundo_carne_de_la_misma_persona(self, db):
+        upsert_person(
+            db,
+            rec("ldap:70596558", {"cardnumber": "70596558", "document_number": "70596558"},
+                full_name="Gonzalo Reymundo Soto"),
+            source="koha_db",
+        )
+        # El directorio trae su código institucional, distinto del DNI.
+        upsert_person(
+            db,
+            rec("ldap:70596558", {"cardnumber": "202622857", "document_number": "70596558"},
+                full_name="Gonzalo Reymundo Soto"),
+            source="ldap",
+        )
+        assert db.query(Person).count() == 1, "no debe duplicar a la persona"
+        # Cualquiera de las dos credenciales resuelve a la misma persona.
+        assert find_person_by_value(db, "70596558").full_name == "Gonzalo Reymundo Soto"
+        assert find_person_by_value(db, "202622857").full_name == "Gonzalo Reymundo Soto"
+
+    def test_el_nombre_se_compara_sin_tildes_ni_mayusculas(self, db):
+        """La misma persona llega escrita distinto según la fuente."""
+        upsert_person(
+            db,
+            rec("ldap:60233598", {"cardnumber": "324110503", "document_number": "60233598"},
+                full_name="YAHIR ALEXANDER NEIRA CURO"),
+            source="ldap",
+        )
+        upsert_person(
+            db,
+            rec("ldap:60233598", {"cardnumber": "202623077", "document_number": "60233598"},
+                full_name="Yahir Alexander Neira Curo"),
+            source="ldap",
+        )
+        assert db.query(Person).count() == 1
+
+    def test_dos_humanos_bajo_un_documento_siguen_rechazandose(self, db):
+        """Lo que la guarda sí debe seguir atrapando."""
+        upsert_person(
+            db,
+            rec("ldap:14586255", {"cardnumber": "323100145", "document_number": "14586255"},
+                full_name="Yasmani Vargas"),
+            source="ldap",
+        )
+        with pytest.raises(IdentityCollision):
+            upsert_person(
+                db,
+                rec("ldap:14586255", {"cardnumber": "202211927", "document_number": "14586255"},
+                    full_name="Persona Distinta"),
+                source="ldap",
+            )
+
+    def test_sin_nombre_se_mantiene_el_rechazo(self, db):
+        """Sin nombre no hay con qué distinguirlos: se elige el lado seguro."""
+        upsert_person(
+            db,
+            rec("ldap:99999999", {"cardnumber": "111", "document_number": "99999999"}),
+            source="ldap",
+        )
+        with pytest.raises(IdentityCollision):
+            upsert_person(
+                db,
+                rec("ldap:99999999", {"cardnumber": "222", "document_number": "99999999"}),
+                source="ldap",
+            )
+
+    def test_compara_contra_todas_las_credenciales_no_contra_una(self, db):
+        """Con varias credenciales por persona, mirar solo la primera que
+        devuelva la base haría depender el resultado de un orden que nadie
+        garantiza: la tercera credencial debe reconocer a las dos anteriores."""
+        for carne in ("70596558", "202622857"):
+            upsert_person(
+                db,
+                rec("ldap:70596558", {"cardnumber": carne, "document_number": "70596558"},
+                    full_name="Gonzalo Reymundo Soto"),
+                source="ldap",
+            )
+        # Reenviar la PRIMERA credencial no debe verse como conflicto.
+        upsert_person(
+            db,
+            rec("ldap:70596558", {"cardnumber": "70596558", "document_number": "70596558"},
+                full_name="Gonzalo Reymundo Soto"),
+            source="ldap",
+        )
+        assert db.query(Person).count() == 1
+        carnes = {
+            i.id_value for i in db.query(PersonIdentifier)
+            .filter(PersonIdentifier.id_type == "cardnumber")
+        }
+        assert carnes == {"70596558", "202622857"}
