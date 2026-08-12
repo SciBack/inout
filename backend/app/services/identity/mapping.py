@@ -11,6 +11,7 @@
 #       "fields":      {"cn": "full_name", "givenName": "first_name", ...},
 #       "identifiers": {"uid": "uid", "sAMAccountName": "samaccountname"}
 #     },
+#       "value_patterns": {"document_type": "^urn:schac:...:([^:]+):"},
 #     "csv":  { "fields": {...}, "identifiers": {...} },
 #     "koha": { ... }
 #   }
@@ -23,6 +24,7 @@
 import json
 import logging
 import os
+import re
 
 from ...config import settings
 from ...models import Person
@@ -42,7 +44,8 @@ FIELD_MAX_LEN: dict[str, int] = {
 # Campos asignables a PersonRecord (excluye person_key, que se resuelve aparte).
 ASSIGNABLE_FIELDS = {
     "full_name", "first_name", "gender", "category", "faculty", "program",
-    "escuela", "role", "document_number", "email", "home_sede_code", "home_building",
+    "escuela", "role", "document_number", "document_type", "email",
+    "home_sede_code", "home_building",
 }
 
 # Tipos de credencial reconocidos para el passthrough sin mapa configurado.
@@ -114,6 +117,31 @@ def _fits(provider: str, field: str, val):
     return None
 
 
+def _extract(provider: str, field: str, val):
+    """Extrae la parte útil de un valor compuesto, según el patrón declarado.
+
+    Las fuentes publican identificadores estructurados: el directorio de UPeU
+    dice `urn:schac:personalUniqueID:pe:DNI:PE:61093482`, donde el tipo de
+    documento va incrustado en la cadena. El canónico no puede conocer ese
+    formato —es de cada institución y de cada estándar—, así que el overlay
+    declara un regex con UN grupo de captura y aquí solo se aplica.
+
+    Sin coincidencia se descarta el campo en vez de guardar la cadena entera:
+    propagar la URN completa como "tipo de documento" sería peor que no tenerlo.
+    """
+    patron = provider_map(provider).get("value_patterns", {}).get(field)
+    if not patron or not isinstance(val, str):
+        return val
+    m = re.search(patron, val)
+    if not m:
+        logger.warning(
+            "[identity] proveedor=%s: '%s' no casó con su patrón declarado: %r",
+            provider, field, val[:80],
+        )
+        return None
+    return m.group(1) if m.groups() else m.group(0)
+
+
 def _remap_value(provider: str, field: str, val):
     """Traduce el valor con value_maps (ej. schacGender ISO 5218: 1→M, 2→F).
     Un valor fuera del mapa se descarta (None) en vez de propagarse crudo."""
@@ -143,6 +171,7 @@ def map_fields(provider: str, raw: dict) -> dict:
 
     for field in list(out):
         val = _collapse(provider, field, out[field])
+        val = _extract(provider, field, val)
         val = _remap_value(provider, field, val)
         out[field] = _fits(provider, field, val)
         if out[field] is None:

@@ -22,6 +22,7 @@ class PersonRecord:
     escuela: str | None = None
     role: str | None = None
     document_number: str | None = None
+    document_type: str | None = None
     email: str | None = None
     home_sede_code: str | None = None
     home_building: str | None = None

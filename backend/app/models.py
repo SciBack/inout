@@ -96,6 +96,7 @@ class Person(Base):
     escuela = Column(String(255))       # nombre de la escuela/programa
     role = Column(String(150))          # cargo/estamento — texto libre de la fuente
     document_number = Column(String(20))
+    document_type = Column(String(20))   # DNI | CE | PASSPORT — lo declara la fuente
     email = Column(String(200))
     home_sede_code = Column(String(20))  # campus de pertenencia
     home_building = Column(String(100))  # edificio de pertenencia
@@ -133,3 +134,8 @@ class ProviderSyncRun(Base):
     updated = Column(Integer, default=0)   # cambios
     errors = Column(Integer, default=0)
     status = Column(String(20))            # 'running' | 'ok' | 'error'
+    # Cobertura real de cada campo mapeado en esta corrida: {campo: n_registros}.
+    # Sin esto, que la fuente deje de publicar un atributo —o lo renombre— degrada
+    # el padrón en silencio: los reportes salen vacíos y nadie se entera hasta que
+    # alguien nota algo raro semanas después.
+    field_coverage = Column(JSON)

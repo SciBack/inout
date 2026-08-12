@@ -401,6 +401,27 @@ class PersonResponse(BaseModel):
         from_attributes = True
 
 
+class FieldCoverage(BaseModel):
+    """Cobertura de un campo en la última corrida, comparada con la anterior."""
+    field: str
+    count: int
+    percent: float
+    previous: Optional[int] = None
+    dropped: bool = False   # cayó a menos de la mitad → la fuente dejó de publicarlo
+
+
+class SyncHealthResponse(BaseModel):
+    """Salud del contrato con la fuente. Existe para que un atributo que deja de
+    llegar deje de ser invisible: InOut consume una fracción de lo que el
+    directorio publica, y un renombrado aguas arriba vacía el campo sin que nada
+    falle ni se registre."""
+    provider: str
+    run_id: int
+    finished_at: Optional[datetime] = None
+    total_records: int
+    fields: list[FieldCoverage]
+
+
 class ProviderSyncRunResponse(BaseModel):
     id: int
     provider: str

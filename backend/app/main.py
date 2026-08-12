@@ -68,6 +68,11 @@ def _run_migrations():
         "ALTER TABLE persons ALTER COLUMN escuela TYPE VARCHAR(255)",
         "ALTER TABLE persons ALTER COLUMN role TYPE VARCHAR(150)",
         "ALTER TABLE presence_log ALTER COLUMN patron_program TYPE VARCHAR(100)",
+        # Tipo de documento (DNI/CE/PASSPORT). El directorio lo declara al 100%
+        # en schacPersonalUniqueID y InOut lo aplanaba a un número sin tipo.
+        "ALTER TABLE persons ADD COLUMN IF NOT EXISTS document_type VARCHAR(20)",
+        # Cobertura por campo de cada corrida de sync (ver ProviderSyncRun).
+        "ALTER TABLE provider_sync_runs ADD COLUMN IF NOT EXISTS field_coverage JSONB",
         # Columnas de admin_users
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",

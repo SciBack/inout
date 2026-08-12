@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 # Campos del padrón que se copian desde el PersonRecord.
 _PERSON_FIELDS = (
     "full_name", "first_name", "gender", "category", "faculty", "program",
-    "escuela", "role", "document_number", "email", "home_sede_code", "home_building",
+    "escuela", "role", "document_number", "document_type", "email",
+    "home_sede_code", "home_building",
 )
 
 

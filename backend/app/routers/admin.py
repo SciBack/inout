@@ -22,6 +22,7 @@ from ..schemas import (
     SedeCreate, SedeUpdate, SedeResponse,
     SpaceCreate, SpaceUpdate, SpaceResponse,
     AdminUserCreate, AdminUserPasswordUpdate, AdminUserResponse,
+    SyncHealthResponse, FieldCoverage,
     AnnualStatsResponse, MonthlyStatsResponse,
     MonthlyStatRow, StatsTotals, GenderBreakdown,
     DailyStatRow, CategoryCount, FacultyCount, ProgramCount,
@@ -668,6 +669,63 @@ def change_password(
 # ---------------------------------------------------------------------------
 # Sincronización del padrón de identidad (solo superadmin)
 # ---------------------------------------------------------------------------
+
+@router.get("/sync/health", response_model=list[SyncHealthResponse])
+def sync_health(
+    current_user: AdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cobertura por campo de la última corrida de cada proveedor.
+
+    InOut consume una fracción de los atributos que publica la fuente. Si esta
+    renombra uno o deja de aprovisionarlo, el campo llega vacío: nada falla,
+    nada se registra, y los reportes salen incompletos hasta que alguien nota
+    algo raro. `dropped` marca el campo que cayó a menos de la mitad respecto
+    a la corrida anterior, que es la señal de que el contrato cambió.
+    """
+    salida: list[SyncHealthResponse] = []
+    proveedores = [
+        row[0] for row in db.query(distinct(ProviderSyncRun.provider)).all()
+    ]
+    for nombre in sorted(proveedores):
+        corridas = (
+            db.query(ProviderSyncRun)
+            .filter(
+                ProviderSyncRun.provider == nombre,
+                ProviderSyncRun.field_coverage.isnot(None),
+            )
+            .order_by(ProviderSyncRun.id.desc())
+            .limit(2)
+            .all()
+        )
+        if not corridas:
+            continue
+        actual = corridas[0]
+        previa = corridas[1].field_coverage if len(corridas) > 1 else {}
+        cobertura = actual.field_coverage or {}
+        total = cobertura.get("_total", 0) or 0
+
+        campos = []
+        for campo, n in sorted(cobertura.items(), key=lambda kv: -kv[1]):
+            if campo == "_total":
+                continue
+            antes = (previa or {}).get(campo)
+            campos.append(FieldCoverage(
+                field=campo,
+                count=n,
+                percent=round(n * 100 / total, 2) if total else 0.0,
+                previous=antes,
+                dropped=bool(antes and antes >= total * 0.1 and n < antes / 2),
+            ))
+        salida.append(SyncHealthResponse(
+            provider=nombre,
+            run_id=actual.id,
+            finished_at=actual.finished_at,
+            total_records=total,
+            fields=campos,
+        ))
+    return salida
+
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 def trigger_sync(

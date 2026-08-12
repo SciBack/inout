@@ -315,3 +315,74 @@ class TestNoApilaCorridas:
         resp, tareas = self._llamar(db)
         assert resp["status"] == "aceptado"
         assert len(tareas.lanzadas) == 1
+
+
+class TestDeteccionDeDegradacionSilenciosa:
+    """InOut consume 11 de los 34 atributos que publica el directorio. Si la
+    fuente renombra uno o deja de aprovisionarlo, el campo llega vacío: nada
+    lanza, nada se registra, y los reportes salen incompletos hasta que alguien
+    nota algo raro semanas después.
+
+    Medir la cobertura por corrida convierte eso en un número comparable.
+    """
+
+    def test_mide_cuantos_registros_traen_cada_campo(self, db):
+        from app.services.sync import _medir_cobertura
+
+        registros = [
+            registro("ldap:1", full_name="Ada", faculty="FIA"),
+            registro("ldap:2", full_name="Bob"),                # sin facultad
+            registro("ldap:3", full_name="Cid", faculty="FCS"),
+        ]
+        cob = _medir_cobertura(registros)
+        assert cob["_total"] == 3
+        assert cob["full_name"] == 3
+        assert cob["faculty"] == 2
+        assert cob["id:document_number"] == 3
+
+    def test_un_campo_que_deja_de_venir_queda_en_cero(self, db):
+        from app.services.sync import _medir_cobertura
+
+        cob = _medir_cobertura([registro("ldap:1", full_name="Ada")])
+        assert cob.get("faculty", 0) == 0
+
+    def test_avisa_cuando_un_campo_se_desploma(self, db, caplog):
+        from app.services.sync import _avisar_desplome
+
+        previa = {"_total": 1000, "faculty": 900}
+        actual = {"_total": 1000, "faculty": 3}   # la fuente dejó de publicarlo
+        with caplog.at_level("WARNING"):
+            _avisar_desplome("ldap", actual, previa)
+        assert "faculty" in caplog.text
+        assert "desplomó" in caplog.text
+
+    def test_una_baja_gradual_no_dispara_ruido(self, db, caplog):
+        """Gente que se matricula o cuyo vínculo expira mueve los números todo
+        el tiempo: solo interesa el corte seco."""
+        from app.services.sync import _avisar_desplome
+
+        with caplog.at_level("WARNING"):
+            _avisar_desplome("ldap", {"_total": 1000, "faculty": 850}, {"_total": 1000, "faculty": 900})
+        assert caplog.text == ""
+
+    def test_un_campo_ya_marginal_no_dispara_ruido(self, db, caplog):
+        """Lo que solo traían 20 de 1000 no merece alarma al bajar a 5."""
+        from app.services.sync import _avisar_desplome
+
+        with caplog.at_level("WARNING"):
+            _avisar_desplome("ldap", {"_total": 1000, "raro": 5}, {"_total": 1000, "raro": 20})
+        assert caplog.text == ""
+
+    def test_la_primera_corrida_no_avisa(self, db, caplog):
+        from app.services.sync import _avisar_desplome
+
+        with caplog.at_level("WARNING"):
+            _avisar_desplome("ldap", {"_total": 10, "faculty": 0}, None)
+        assert caplog.text == ""
+
+    def test_la_corrida_guarda_su_cobertura(self, db):
+        run = asyncio.run(sync_provider(db, FakeProvider(records=[
+            registro("ldap:1", full_name="Ada", faculty="FIA"),
+        ])))
+        assert run.field_coverage["_total"] == 1
+        assert run.field_coverage["faculty"] == 1

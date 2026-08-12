@@ -260,3 +260,54 @@ class TestClaveInsensibleAlRellenoDeCeros:
     def test_un_valor_de_solo_ceros_no_queda_vacio(self):
         from app.services.identity.mapping import _key_value
         assert _key_value("000") == "0"
+
+
+class TestExtraccionDeValoresCompuestos:
+    """Las fuentes publican identificadores estructurados. El directorio de UPeU
+    dice `urn:schac:personalUniqueID:pe:DNI:PE:61093482`: el tipo de documento
+    va incrustado en la URN, y sin extraerlo InOut guardaba solo el número y
+    perdía si era DNI, carné de extranjería o pasaporte (medido 2026-08-12:
+    28.752 / 145 / 91).
+
+    El canónico NO conoce ese formato — lo declara el overlay como regex.
+    """
+
+    MAPA = {
+        "ldap": {
+            "fields": {"instUniqueId": "document_type"},
+            "identifiers": {"uid": "cardnumber"},
+            "value_patterns": {"document_type": "^urn:schac:personalUniqueID:[^:]+:([^:]+):"},
+        }
+    }
+
+    @pytest.fixture(autouse=True)
+    def _mapa(self, identity_map):
+        identity_map(self.MAPA)
+
+    @pytest.mark.parametrize("urn,esperado", [
+        ("urn:schac:personalUniqueID:pe:DNI:PE:61093482", "DNI"),
+        ("urn:schac:personalUniqueID:pe:CE:PE:000066766", "CE"),
+        ("urn:schac:personalUniqueID:pe:PASSPORT:PE:X1234", "PASSPORT"),
+    ])
+    def test_extrae_el_tipo_declarado(self, urn, esperado):
+        assert map_fields("ldap", {"instUniqueId": urn})["document_type"] == esperado
+
+    def test_lo_que_no_casa_se_descarta_entero(self):
+        """Guardar la URN completa como 'tipo de documento' sería peor que no
+        tener el dato."""
+        out = map_fields("ldap", {"instUniqueId": "vaya-cosa-rara"})
+        assert "document_type" not in out
+
+    def test_sin_patron_declarado_el_valor_pasa_intacto(self, identity_map):
+        """Producto agnóstico: sin patrón, no se toca nada. Se usa un valor
+        corto a propósito — uno largo lo descartaría la guarda de longitud, que
+        es otro mecanismo y se prueba aparte."""
+        identity_map({"ldap": {"fields": {"instUniqueId": "document_type"}}})
+        assert map_fields("ldap", {"instUniqueId": "DNI"})["document_type"] == "DNI"
+
+    def test_la_urn_cruda_no_cabe_y_se_descarta(self, identity_map):
+        """Segunda red: aunque alguien olvide declarar el patrón, la URN entera
+        no acaba guardada como 'tipo de documento'."""
+        identity_map({"ldap": {"fields": {"instUniqueId": "document_type"}}})
+        urn = "urn:schac:personalUniqueID:pe:DNI:PE:61093482"
+        assert "document_type" not in map_fields("ldap", {"instUniqueId": urn})
