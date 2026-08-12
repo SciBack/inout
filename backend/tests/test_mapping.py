@@ -22,6 +22,8 @@ LDAP_MAP = {
             "schacGender": "gender",
             "instFacultyCode": "faculty",
             "instDocumentNumber": "document_number",
+            "instTitle": "role",
+            "instOrgUnit": "escuela",
         },
         "identifiers": {
             "uid": "cardnumber",
@@ -162,3 +164,62 @@ class TestRecordFromRaw:
         # El set completo de afiliaciones se preserva aunque category se colapse.
         assert rec.raw["eduPersonAffiliation"] == ["student", "faculty"]
         assert rec.category == "faculty"
+
+
+class TestValorDemasiadoLargoNoTumbaALaPersona:
+    """Las fuentes guardan texto descriptivo donde el padrón declara códigos.
+    Medido en producción (2026-08-11): `ou` de LDAP llega con 128 caracteres,
+    `title` con 80 y `sort2` de Koha con 64.
+
+    Sin esta guarda el INSERT reventaba y se perdía la PERSONA COMPLETA por un
+    campo accesorio: 141 registros por corrida, de los cuales ~18 nunca llegaron
+    a existir en el padrón y ~123 dejaron de actualizarse. El mismo valor rompía
+    además el escaneo en vivo, que escribe el programa en cada evento.
+    """
+
+    # Caso real de producción: 80 caracteres para role, que admite 150 hoy
+    # pero admitía 50 cuando esto reventaba.
+    CARGO_LARGO = "Asistente de Laboratorio Centro de Investigacion de Ciencia de Alimentos (CICAL)"
+
+    def _limite(self, campo):
+        from app.services.identity.mapping import FIELD_MAX_LEN
+        return FIELD_MAX_LEN[campo]
+
+    def test_descarta_el_campo_que_no_cabe(self):
+        excesivo = "x" * (self._limite("role") + 1)
+        out = map_fields("ldap", {"cn": "Ada", "instTitle": excesivo})
+        assert "role" not in out, "un valor que no cabe debe descartarse, no propagarse"
+
+    def test_conserva_al_resto_de_la_persona(self):
+        """Lo que de verdad importa: la persona sigue entrando al padrón."""
+        excesivo = "x" * (self._limite("escuela") + 1)
+        out = map_fields("ldap", {
+            "cn": "Ada Lovelace", "instFacultyCode": "FIA", "instOrgUnit": excesivo,
+        })
+        assert out["full_name"] == "Ada Lovelace"
+        assert out["faculty"] == "FIA"
+        assert "escuela" not in out
+
+    def test_no_recorta(self):
+        """Un código truncado es otro código y podría chocar con uno real."""
+        excesivo = "Diplomatura en " + "y" * self._limite("escuela")
+        out = map_fields("ldap", {"cn": "Ada", "instOrgUnit": excesivo})
+        assert "escuela" not in out
+        assert excesivo[: self._limite("escuela")] not in out.values()
+
+    def test_el_valor_que_si_cabe_pasa_intacto(self):
+        out = map_fields("ldap", {"cn": "Ada", "instTitle": self.CARGO_LARGO})
+        assert out["role"] == self.CARGO_LARGO
+
+    def test_justo_en_el_limite_pasa(self):
+        exacto = "z" * self._limite("role")
+        assert map_fields("ldap", {"instTitle": exacto})["role"] == exacto
+
+    def test_los_limites_salen_del_modelo(self):
+        """Si mañana se ensancha una columna, el límite la sigue solo."""
+        from app.models import Person
+        from app.services.identity.mapping import FIELD_MAX_LEN
+
+        for col in Person.__table__.columns:
+            if getattr(col.type, "length", None):
+                assert FIELD_MAX_LEN[col.name] == col.type.length

@@ -21,10 +21,23 @@
 # coincide con un tipo de credencial conocido.
 
 import json
+import logging
 import os
 
 from ...config import settings
+from ...models import Person
 from .base import PersonRecord
+
+logger = logging.getLogger(__name__)
+
+# Longitud máxima de cada campo, leída del propio modelo: si mañana se ensancha
+# una columna, este límite la sigue solo. Declararlo a mano sería una segunda
+# copia que se desincroniza en silencio.
+FIELD_MAX_LEN: dict[str, int] = {
+    col.name: col.type.length
+    for col in Person.__table__.columns
+    if getattr(col.type, "length", None)
+}
 
 # Campos asignables a PersonRecord (excluye person_key, que se resuelve aparte).
 ASSIGNABLE_FIELDS = {
@@ -76,6 +89,31 @@ def _collapse(provider: str, field: str, val):
     return sorted(val, key=str)[0] if val else None
 
 
+def _fits(provider: str, field: str, val):
+    """Descarta el valor que no cabe en su columna, en vez de dejar que reviente
+    la fila entera.
+
+    Las fuentes guardan texto descriptivo donde el padrón declara códigos: `ou`
+    de LDAP llega con 128 caracteres, `title` con 80, `sort2` de Koha con 64. Sin
+    esta guarda el INSERT falla y se pierde a la PERSONA COMPLETA por un campo
+    accesorio —pasaba con 141 registros por corrida, y el mismo valor rompía el
+    escaneo en vivo—. Perder un cargo es un dato menos; perder a la persona es un
+    hueco en el padrón que se arrastra a diario.
+
+    Se descarta y NO se recorta a propósito: un código truncado es un código
+    distinto, y podría colisionar con uno real. Mismo criterio que value_maps,
+    que descarta lo que no reconoce en vez de propagarlo crudo.
+    """
+    limite = FIELD_MAX_LEN.get(field)
+    if limite is None or not isinstance(val, str) or len(val) <= limite:
+        return val
+    logger.warning(
+        "[identity] proveedor=%s: '%s' descartado, %d caracteres para un campo de %d: %r",
+        provider, field, len(val), limite, val[:80],
+    )
+    return None
+
+
 def _remap_value(provider: str, field: str, val):
     """Traduce el valor con value_maps (ej. schacGender ISO 5218: 1→M, 2→F).
     Un valor fuera del mapa se descarta (None) en vez de propagarse crudo."""
@@ -104,7 +142,9 @@ def map_fields(provider: str, raw: dict) -> dict:
                 out[key] = val
 
     for field in list(out):
-        out[field] = _remap_value(provider, field, _collapse(provider, field, out[field]))
+        val = _collapse(provider, field, out[field])
+        val = _remap_value(provider, field, val)
+        out[field] = _fits(provider, field, val)
         if out[field] is None:
             del out[field]
     return out

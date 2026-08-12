@@ -51,7 +51,7 @@ class PresenceLog(Base):
     patron_category = Column(String(50))
     patron_gender = Column(String(1))   # 'M' | 'F' | None
     patron_faculty = Column(String(20)) # sort1 de Koha (facultad)
-    patron_program = Column(String(20)) # sort2 de Koha (código escuela/programa)
+    patron_program = Column(String(100)) # espeja persons.program
     # Snapshot del campus de ORIGEN de la persona (Person.home_sede_code) al
     # momento del evento — NO una relación: si la persona se traslada de
     # campus después, el histórico debe seguir reflejando de dónde era
@@ -91,9 +91,10 @@ class Person(Base):
     gender = Column(String(1))          # 'M' | 'F' | None
     category = Column(String(50))
     faculty = Column(String(20))        # facultad de pertenencia
-    program = Column(String(20))        # código escuela/programa
-    escuela = Column(String(100))       # nombre de la escuela/programa
-    role = Column(String(50))           # rol/estamento (docente, alumno, etc.)
+    program = Column(String(100))       # código de programa, o su nombre cuando la fuente
+                                        # guarda texto libre (diplomaturas, talleres)
+    escuela = Column(String(255))       # nombre de la escuela/programa
+    role = Column(String(150))          # cargo/estamento — texto libre de la fuente
     document_number = Column(String(20))
     email = Column(String(200))
     home_sede_code = Column(String(20))  # campus de pertenencia

@@ -55,6 +55,19 @@ def _run_migrations():
         # Snapshot del campus de origen de la persona al momento del evento
         # (visitantes cruzados entre campus). NULL = no identificado.
         "ALTER TABLE presence_log ADD COLUMN IF NOT EXISTS patron_home_sede VARCHAR(20)",
+        # Ensanchado de campos que reciben texto libre de la fuente.
+        # LDAP y Koha guardan descripciones donde InOut declaraba códigos cortos:
+        # ou llega con 128 caracteres ("Curso Taller de elaboración de tesis…"),
+        # title con 80 ("Asistente de Laboratorio … (CICAL)") y sort2 de Koha con
+        # 64 ("Diplomatura en Liderazgo, Gestión Educativa…"). Al no caber, el
+        # INSERT/UPDATE entero fallaba y la persona no se replicaba —141 por
+        # corrida—, y el mismo valor rompía también el escaneo en vivo, que
+        # escribe patron_program. ALTER TYPE a un tamaño mayor no reescribe datos
+        # ni pierde nada; es idempotente porque repetirlo deja el mismo tipo.
+        "ALTER TABLE persons ALTER COLUMN program TYPE VARCHAR(100)",
+        "ALTER TABLE persons ALTER COLUMN escuela TYPE VARCHAR(255)",
+        "ALTER TABLE persons ALTER COLUMN role TYPE VARCHAR(150)",
+        "ALTER TABLE presence_log ALTER COLUMN patron_program TYPE VARCHAR(100)",
         # Columnas de admin_users
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
