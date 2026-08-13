@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { speak } from '../utils/voicePreference'
 
 interface ScanResult {
   event_type: string
@@ -29,16 +30,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   ADMIN: 'Administrativo',
   EXTERN: 'Externo',
   visitor: 'Visita',
-}
-
-function speak(text: string) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const msg = new SpeechSynthesisUtterance(text)
-  msg.lang = 'es-PE'
-  msg.rate = 0.95
-  msg.pitch = 1.1
-  window.speechSynthesis.speak(msg)
 }
 
 function getInitials(name: string): string {

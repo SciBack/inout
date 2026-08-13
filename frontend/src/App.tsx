@@ -6,6 +6,7 @@ import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
 import { useDayNightMode } from './hooks/useDayNightMode'
 import ThemePicker, { THEME_PICKER_CSS } from './components/ThemePicker'
+import VoiceToggle, { VOICE_TOGGLE_CSS } from './components/VoiceToggle'
 import { getThemePreference, resolveTheme, type ThemePreference } from './utils/themePreference'
 import { enqueueOfflineScan, flushOfflineQueue, getPendingCount } from './utils/offlineQueue'
 
@@ -180,7 +181,7 @@ body { overflow: hidden; background: var(--c-bg); transition: background 400ms e
   if (document.getElementById('inout-global-css')) return
   const style = document.createElement('style')
   style.id = 'inout-global-css'
-  style.textContent = THEME_CSS + GLOBAL_CSS + THEME_PICKER_CSS
+  style.textContent = THEME_CSS + GLOBAL_CSS + THEME_PICKER_CSS + VOICE_TOGGLE_CSS
   document.head.appendChild(style)
 })()
 
@@ -528,6 +529,7 @@ export default function App() {
           ← Elegir otro edificio
         </button>
         <ThemePicker onChange={setThemePref} />
+        <VoiceToggle />
         {activeSpace && (
           <span style={styles.breadcrumbPath}>
             {activeSpace.sede_name && (
