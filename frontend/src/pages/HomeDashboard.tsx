@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clearAdminSession, getAdminSession } from '../utils/adminSession'
+import ThemePicker from '../components/ThemePicker'
+import type { ThemePreference } from '../utils/themePreference'
 
 // ── Contrato de GET /api/spaces/overview (congelado) ────────────────────────
 interface BuildingOverview {
@@ -122,7 +124,12 @@ const ICON_LOGOUT = (
 )
 
 // ── HomeDashboard ────────────────────────────────────────────────────────────
-export function HomeDashboard(): JSX.Element {
+interface HomeDashboardProps {
+  /** Repinta el tema al elegir apariencia; lo resuelve App. */
+  onThemeChange: (pref: ThemePreference) => void
+}
+
+export function HomeDashboard({ onThemeChange }: HomeDashboardProps): JSX.Element {
   const [data, setData] = useState<OverviewResponse | null>(null)
   const [error, setError] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -274,6 +281,7 @@ export function HomeDashboard(): JSX.Element {
         <span className="hd-brand">InOut · Control de aforo</span>
 
         <div className="hd-topbar-actions">
+          <ThemePicker onChange={onThemeChange} />
           {hasBuildings && (
             <div className="hd-picker" ref={pickerRef}>
               <button

@@ -5,6 +5,8 @@ import { OccupancyPanel } from './components/OccupancyPanel'
 import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
 import { useDayNightMode } from './hooks/useDayNightMode'
+import ThemePicker, { THEME_PICKER_CSS } from './components/ThemePicker'
+import { getThemePreference, resolveTheme, type ThemePreference } from './utils/themePreference'
 import { enqueueOfflineScan, flushOfflineQueue, getPendingCount } from './utils/offlineQueue'
 
 // ── Routing: /admin → AdminApp, /kiosko → flujo de kiosko explícito ─────────
@@ -178,7 +180,7 @@ body { overflow: hidden; background: var(--c-bg); transition: background 400ms e
   if (document.getElementById('inout-global-css')) return
   const style = document.createElement('style')
   style.id = 'inout-global-css'
-  style.textContent = THEME_CSS + GLOBAL_CSS
+  style.textContent = THEME_CSS + GLOBAL_CSS + THEME_PICKER_CSS
   document.head.appendChild(style)
 })()
 
@@ -344,9 +346,14 @@ export default function App() {
   // deslumbrar de noche en el lobby. Sin coordenadas cargadas en esa sede,
   // el hook cae a 'night' — mismo look oscuro que el kiosko siempre tuvo,
   // cero regresión.
-  const showingHomeDashboard = spaceId === undefined && !isKiosko
   const dayNightMode = useDayNightMode(activeSpace?.sede_latitude ?? null, activeSpace?.sede_longitude ?? null)
-  const theme = showingHomeDashboard ? 'day' : dayNightMode
+
+  // La preferencia elegida en ESTE dispositivo manda sobre el ciclo solar: el
+  // staff que está parado delante de la pantalla juzga mejor que un cálculo de
+  // amanecer si al mediodía le da el sol en la cara. 'auto' devuelve el mando
+  // al ciclo real de la sede para quien lo prefiera así.
+  const [themePref, setThemePref] = useState<ThemePreference>(getThemePreference)
+  const theme = resolveTheme(themePref, dayNightMode)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
@@ -499,7 +506,7 @@ export default function App() {
     // Fuera de /kiosko: esto es una visita de navegador a la raíz pública,
     // no un dispositivo kiosko sin configurar. Es el nuevo dashboard.
     if (!isKiosko) {
-      return <HomeDashboard />
+      return <HomeDashboard onThemeChange={setThemePref} />
     }
     if (connectionLost) {
       return <SpaceErrorScreen reason="connection" />
@@ -520,6 +527,7 @@ export default function App() {
         <button style={styles.breadcrumbBack} onClick={changeBuilding}>
           ← Elegir otro edificio
         </button>
+        <ThemePicker onChange={setThemePref} />
         {activeSpace && (
           <span style={styles.breadcrumbPath}>
             {activeSpace.sede_name && (
