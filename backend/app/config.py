@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     ldap_bind_dn: str = ""
     ldap_bind_pass: str = ""
     ldap_base_dn: str = ""
+    # Subárbol con el catálogo de unidades organizativas (facultades y áreas).
+    # La persona trae solo el código en departmentNumber; el nombre vive aquí.
+    # Vacío = no se consulta y la unidad de los trabajadores queda sin resolver,
+    # que es el comportamiento previo.
+    ldap_org_base_dn: str = ""
     ldap_user_filter: str = ""
     # Atributos LDAP contra los que se busca el valor escaneado (coma-separados).
     # Permite que carné o documento resuelvan a la misma persona.

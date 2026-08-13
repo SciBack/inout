@@ -158,7 +158,15 @@ def map_fields(provider: str, raw: dict) -> dict:
     field_map = conf.get("fields", {})
     out: dict = {}
     if field_map:
+        # Varias fuentes pueden alimentar el MISMO campo: gana la primera
+        # declarada que traiga valor. Así el overlay expresa una cadena de
+        # respaldo sin código — p. ej. la facultad de un estudiante viene en su
+        # código de facultad, y la de un trabajador (que no tiene) en su unidad
+        # organizativa. Antes ganaba la última del diccionario, que dependía del
+        # orden de escritura del JSON y era invisible al leerlo.
         for src, dst in field_map.items():
+            if dst in out:
+                continue
             val = raw.get(src)
             if val is not None and val != "":
                 out[dst] = val

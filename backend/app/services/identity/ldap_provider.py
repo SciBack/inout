@@ -102,6 +102,42 @@ class LdapProvider:
         )
         return conn
 
+    def _cargar_unidades(self, conn) -> dict[str, str]:
+        """Catálogo `código de unidad → nombre` del subárbol organizativo.
+
+        La persona trae solo `departmentNumber` (un número); el nombre legible
+        vive en el árbol de organización del directorio. Sin resolverlo, un
+        trabajador aparece sin unidad en los reportes aunque el dato exista.
+
+        Se lee una vez por corrida y se cachea: son ~100 entradas frente a
+        decenas de miles de personas, y hacerlo por persona sería absurdo.
+        """
+        base = getattr(settings, "ldap_org_base_dn", "") or ""
+        if not base:
+            return {}
+        catalogo: dict[str, str] = {}
+        try:
+            entradas = conn.extend.standard.paged_search(
+                search_base=base,
+                search_filter="(objectClass=*)",
+                attributes=["ou", "description"],
+                paged_size=self.page_size,
+                generator=True,
+            )
+            for e in entradas:
+                if e.get("type") != "searchResEntry":
+                    continue
+                a = self._flatten(e.get("attributes", {}))
+                codigo = str(a.get("ou") or "").strip()
+                nombre = str(a.get("description") or "").strip()
+                if codigo and nombre:
+                    catalogo[codigo] = nombre
+        except Exception:
+            # El catálogo es un extra: si falla, las personas se sincronizan
+            # igual y solo se quedan sin nombre de unidad.
+            logger.warning("[ldap] no se pudo leer el catálogo de unidades", exc_info=True)
+        return catalogo
+
     def _search(self, search_filter: str) -> list[PersonRecord]:
         import ldap3
 
@@ -109,6 +145,7 @@ class LdapProvider:
         conn = None
         try:
             conn = self._connect()
+            unidades = self._cargar_unidades(conn)
             entries = conn.extend.standard.paged_search(
                 search_base=self.base_dn,
                 search_filter=search_filter,
@@ -120,6 +157,12 @@ class LdapProvider:
                 if entry.get("type") != "searchResEntry":
                     continue
                 raw = self._flatten(entry.get("attributes", {}))
+                # El código de unidad se traduce a su nombre ANTES de mapear,
+                # para que el overlay lo reciba ya legible y no tenga que
+                # conocer el árbol organizativo del directorio.
+                codigo_unidad = str(raw.get("departmentNumber") or "").strip()
+                if codigo_unidad and codigo_unidad in unidades:
+                    raw["_unidad"] = unidades[codigo_unidad]
                 # map_key elige el mapeo y el namespace del person_key (común a
                 # todas las ramas); name registra de qué rama vino el dato.
                 rec = record_from_raw(self.map_key, raw, self.name)

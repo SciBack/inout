@@ -311,3 +311,48 @@ class TestExtraccionDeValoresCompuestos:
         identity_map({"ldap": {"fields": {"instUniqueId": "document_type"}}})
         urn = "urn:schac:personalUniqueID:pe:DNI:PE:61093482"
         assert "document_type" not in map_fields("ldap", {"instUniqueId": urn})
+
+
+class TestCadenaDeRespaldoEntreFuentes:
+    """Varias fuentes pueden alimentar el mismo campo; gana la primera declarada
+    que traiga valor.
+
+    Caso real (2026-08-13): `scibackFacultyCode` solo lo trae el eje estudiante
+    (86%). Un administrativo no tiene facultad y caía en "Sin Facultad", que es
+    cierto pero inútil — su unidad sí está en el directorio, en otro atributo.
+    Antes ganaba la ÚLTIMA clave del diccionario, o sea el orden de escritura
+    del JSON decidía en silencio.
+    """
+
+    MAPA = {
+        "ldap": {
+            "fields": {
+                "instFacultyCode": "faculty",   # 1ª opción
+                "_unidad": "faculty",           # respaldo
+                "cn": "full_name",
+            },
+            "identifiers": {"uid": "cardnumber"},
+        }
+    }
+
+    @pytest.fixture(autouse=True)
+    def _mapa(self, identity_map):
+        identity_map(self.MAPA)
+
+    def test_gana_la_primera_declarada(self):
+        """Estudiante: tiene código de facultad, se ignora el respaldo."""
+        out = map_fields("ldap", {"instFacultyCode": "FIA", "_unidad": "Dirección de TI"})
+        assert out["faculty"] == "FIA"
+
+    def test_cae_al_respaldo_si_la_primera_no_viene(self):
+        """Trabajador: sin código de facultad, se usa su unidad."""
+        out = map_fields("ldap", {"_unidad": "Dirección de Tecnologías de Información"})
+        assert out["faculty"] == "Dirección de Tecnologías de Información"
+
+    def test_sin_ninguna_de_las_dos_queda_vacio(self):
+        assert "faculty" not in map_fields("ldap", {"cn": "Ada"})
+
+    def test_la_primera_vacia_no_bloquea_al_respaldo(self):
+        """Un string vacío no cuenta como valor: debe pasar al siguiente."""
+        out = map_fields("ldap", {"instFacultyCode": "", "_unidad": "Tesorería"})
+        assert out["faculty"] == "Tesorería"

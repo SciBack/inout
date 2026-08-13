@@ -68,6 +68,13 @@ def _run_migrations():
         "ALTER TABLE persons ALTER COLUMN escuela TYPE VARCHAR(255)",
         "ALTER TABLE persons ALTER COLUMN role TYPE VARCHAR(150)",
         "ALTER TABLE presence_log ALTER COLUMN patron_program TYPE VARCHAR(100)",
+        # `faculty` pasa a guardar la facultad del estudiante O la unidad del
+        # trabajador ("Dirección de Tecnologías de Información"), que no cabe
+        # en 20 caracteres. Un administrativo no tiene facultad: agruparlo en
+        # "Sin Facultad" era correcto pero inútil — su unidad sí existe en el
+        # directorio, solo había que resolverla.
+        "ALTER TABLE persons ALTER COLUMN faculty TYPE VARCHAR(150)",
+        "ALTER TABLE presence_log ALTER COLUMN patron_faculty TYPE VARCHAR(150)",
         # Tipo de documento (DNI/CE/PASSPORT). El directorio lo declara al 100%
         # en schacPersonalUniqueID y InOut lo aplanaba a un número sin tipo.
         "ALTER TABLE persons ADD COLUMN IF NOT EXISTS document_type VARCHAR(20)",

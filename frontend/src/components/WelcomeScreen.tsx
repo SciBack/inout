@@ -67,13 +67,17 @@ export function WelcomeScreen({ result, isVisible }: Props) {
   const displayName = firstName || (isUnknown ? 'VISITA' : patron.name)
 
   useEffect(() => {
-    const hour = new Date().getHours()
-    const timeGreet = hour < 12 ? 'buenos días' : hour < 19 ? 'buenas tardes' : 'buenas noches'
+    // UN saludo, con el nombre. Antes decía "Bienvenido, buenas tardes":
+    // dos fórmulas de cortesía seguidas y a nadie en concreto. En una entrada
+    // por la que pasan cientos de personas al día, lo que hace que el saludo
+    // se sienta dirigido a ti es tu nombre, no la hora — que además ya está
+    // en pantalla, en el reloj.
+    const nombre = firstName ? `, ${firstName}` : ''
     const audioText = isUnknown
       ? 'Registrado como visita'
       : isEntry
-        ? (patron.gender === 'F' ? `Bienvenida, ${timeGreet}` : `Bienvenido, ${timeGreet}`)
-        : timeGreet.charAt(0).toUpperCase() + timeGreet.slice(1)
+        ? `${patron.gender === 'F' ? 'Bienvenida' : 'Bienvenido'}${nombre}`
+        : `Hasta luego${nombre}`
     speak(audioText)
     setPhotoError(false)
   }, [message])
