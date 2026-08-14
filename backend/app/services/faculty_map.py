@@ -41,6 +41,13 @@ def _load_faculty_config() -> tuple[dict[str, str], set[str], set[str]]:
 
 PROGRAM_TO_FACULTY, VALID_FACULTY_CODES, VALID_ORG_UNITS = _load_faculty_config()
 
+# Valor de PRESENTACIÓN para el desglose cuando no se pudo determinar la unidad.
+# No es un dato: significa "no se sabe". Guardarlo en el padrón lo convierte en
+# un hueco que ya no parece hueco, y entonces ninguna otra fuente lo rellena
+# —la cadena de respaldo solo completa lo que está vacío—. Los proveedores deben
+# traducirlo a None antes de persistir.
+SIN_FACULTAD = "Sin Facultad"
+
 
 def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> str:
     """
@@ -69,4 +76,4 @@ def resolve_faculty(patron_faculty: str | None, patron_program: str | None) -> s
     # Sin whitelist configurada: aceptar el valor informado tal cual.
     if not VALID_FACULTY_CODES and not VALID_ORG_UNITS and fac:
         return fac
-    return "Sin Facultad"
+    return SIN_FACULTAD

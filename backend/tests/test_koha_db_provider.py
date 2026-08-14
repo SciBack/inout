@@ -179,3 +179,32 @@ class TestElDocumentoDelPatronSeIndexa:
         assert "borrower_attributes" in join
         assert params == ["DNI"]
         assert "DNI" not in join, "el código no debe interpolarse en el SQL"
+
+
+class TestNoPersistirElCentinela:
+    """resolve_faculty() devuelve "Sin Facultad" —un valor de PRESENTACIÓN para
+    el desglose— cuando no hay con qué resolver. Persistirlo convierte un hueco
+    en algo que ya no parece hueco: la cadena de respaldo solo rellena campos
+    vacíos, así que una fuente con mejor dato (la unidad del trabajador que
+    publica el directorio) dejaba de completarlo. 1.825 personas quedaron así.
+    """
+
+    def test_sin_facultad_resoluble_se_guarda_como_vacio(self):
+        from app.services.identity.koha_db_provider import _facultad_o_nada
+        assert _facultad_o_nada(None, None) is None
+
+    def test_codigo_no_reconocido_tampoco_se_persiste(self, monkeypatch):
+        """Con catálogo institucional declarado, lo que no está en él no es una
+        facultad — y tampoco debe guardarse el centinela que lo representa.
+        (Sin overlay el canónico acepta el valor tal cual: es agnóstico y no
+        tiene contra qué validarlo.)"""
+        from app.services import faculty_map
+        from app.services.identity.koha_db_provider import _facultad_o_nada
+        monkeypatch.setattr(faculty_map, "VALID_FACULTY_CODES", {"FIA"})
+        assert _facultad_o_nada("basura-que-nadie-declaró", None) is None
+
+    def test_una_facultad_de_verdad_sí_se_guarda(self, monkeypatch):
+        from app.services import faculty_map
+        from app.services.identity.koha_db_provider import _facultad_o_nada
+        monkeypatch.setattr(faculty_map, "VALID_FACULTY_CODES", {"FIA"})
+        assert _facultad_o_nada("FIA", None) == "FIA"

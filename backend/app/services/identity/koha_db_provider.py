@@ -12,7 +12,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 from ...config import settings
-from ..faculty_map import resolve_faculty
+from ..faculty_map import SIN_FACULTAD, resolve_faculty
 from .base import PersonRecord
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,19 @@ _ATTR_JOIN = (
     "LEFT JOIN borrower_attributes ba "
     "  ON ba.borrowernumber = b.borrowernumber AND ba.code = %s"
 )
+
+
+def _facultad_o_nada(sort1, sort2) -> str | None:
+    """Facultad resuelta, o None si no se pudo determinar.
+
+    resolve_faculty() devuelve "Sin Facultad" —un valor de PRESENTACIÓN para el
+    desglose— cuando no hay con qué resolver. Persistirlo convierte un hueco en
+    algo que ya no parece hueco: la cadena de respaldo solo rellena campos
+    vacíos, así que una fuente con mejor dato (la unidad del trabajador que
+    publica el directorio) dejaba de completarlo. 1.825 personas quedaron así.
+    """
+    fac = resolve_faculty(sort1, sort2)
+    return None if fac == SIN_FACULTAD else (fac or None)
 
 
 def _credenciales(card: str, documento) -> dict:
@@ -101,7 +114,7 @@ class KohaDbProvider:
             first_name=first or None,
             gender=(r.get("sex") or None),
             category=(r.get("categorycode") or None),
-            faculty=resolve_faculty(r.get("sort1"), r.get("sort2")) or None,
+            faculty=_facultad_o_nada(r.get("sort1"), r.get("sort2")),
             program=(r.get("sort2") or None),
             source=self.name,
             raw={k: (str(v) if v is not None else None) for k, v in r.items()},
