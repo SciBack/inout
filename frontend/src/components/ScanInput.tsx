@@ -143,20 +143,18 @@ export function ScanInput({ onScan, disabled }: Props) {
         <p style={s.promptSub}>al lector</p>
       </div>
 
-      {/* Botón entrada manual — HABILITADO TEMPORALMENTE para pruebas (2026-08-13).
-          Volver a comentar cuando terminen: en un kiosko de entrada este botón
-          invita a teclear a quien debería pasar su carné. */}
-      <button
+      {/* Botón entrada manual — deshabilitado temporalmente */}
+      {/* <button
         style={s.kbdBtn}
         onClick={() => setManualOpen(true)}
         title="Ingresar número de carnet manualmente"
       >
         {KEYBOARD_SVG}
         <span>Ingresar manualmente</span>
-      </button>
+      </button> */}
 
-      {/* Modal de entrada manual — HABILITADO TEMPORALMENTE (ver arriba). */}
-      {manualOpen && (
+      {/* Modal de entrada manual — deshabilitado temporalmente */}
+      {/* {manualOpen && (
         <div style={s.overlay} onClick={() => setManualOpen(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <p style={s.modalTitle}>Número de carnet</p>
@@ -183,7 +181,7 @@ export function ScanInput({ onScan, disabled }: Props) {
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }
