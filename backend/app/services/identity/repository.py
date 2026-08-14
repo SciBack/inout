@@ -64,6 +64,30 @@ def find_person_by_value(db: Session, id_value: str) -> Person | None:
     return _viva(db.query(Person).filter(Person.person_key == ident.person_key)).first()
 
 
+def esta_de_baja(db: Session, id_value: str) -> bool:
+    """¿Esta credencial pertenece a alguien a quien ya se dio de baja?
+
+    Hace falta porque el escaneo, si no encuentra a nadie en el padrón, pregunta
+    en vivo a los proveedores. Una persona de baja sigue existiendo en fuentes
+    con menos autoridad —la biblioteca conserva a sus lectores mucho después de
+    que el directorio deje de publicarlos—, así que esa consulta la resucitaba
+    de hecho: el padrón decía "de baja" y el kiosko la saludaba igual.
+    """
+    ident = (
+        db.query(PersonIdentifier)
+        .filter(PersonIdentifier.id_value == str(id_value))
+        .first()
+    )
+    if ident is None:
+        return False
+    person = (
+        db.query(Person)
+        .filter(Person.person_key == ident.person_key)
+        .first()
+    )
+    return person is not None and person.active is False
+
+
 def _sync_identifiers(db: Session, person_key: str, identifiers: dict) -> None:
     """Asegura filas (id_type, id_value)→person_key sin duplicar la credencial."""
     for id_type, id_value in (identifiers or {}).items():

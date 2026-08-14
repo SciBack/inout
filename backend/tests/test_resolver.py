@@ -206,3 +206,63 @@ class TestElAforoNuncaSeDetiene:
         con_proveedores(p)
         asyncio.run(resolve_person(db, "cardnumber", "201913085", sede_code="LIMA"))
         assert p.lookups == [("cardnumber", "201913085", "LIMA")]
+
+
+class TestUnaBajaNoSeResucitaAlEscanear:
+    """El escaneo, si no encuentra a nadie en el padrón, pregunta en vivo a los
+    proveedores. Una persona de baja sigue existiendo en fuentes con menos
+    autoridad —la biblioteca conserva a sus lectores mucho después de que el
+    directorio deje de publicarlos—, así que esa consulta la resucitaba de
+    hecho: el padrón decía "de baja" y el kiosko la saludaba igual.
+
+    Caso real (14-ago-2026), visto en producción tras dar las bajas: una
+    persona inactiva resolvía a su ficha completa.
+    """
+
+    def test_una_credencial_de_baja_bloquea_la_consulta_en_vivo(self, db):
+        from app.models import Person, PersonIdentifier
+        from app.services.identity.repository import esta_de_baja
+        db.add(Person(person_key="ldap:1", source="ldap", full_name="Baja", active=False))
+        db.add(PersonIdentifier(id_type="cardnumber", id_value="111", person_key="ldap:1"))
+        db.commit()
+        assert esta_de_baja(db, "111") is True
+
+    def test_una_credencial_viva_no_bloquea(self, db):
+        from app.models import Person, PersonIdentifier
+        from app.services.identity.repository import esta_de_baja
+        db.add(Person(person_key="ldap:2", source="ldap", full_name="Viva", active=True))
+        db.add(PersonIdentifier(id_type="cardnumber", id_value="222", person_key="ldap:2"))
+        db.commit()
+        assert esta_de_baja(db, "222") is False
+
+    def test_una_credencial_desconocida_no_bloquea(self, db):
+        """Una visita externa nunca estuvo en el padrón: debe poder consultarse
+        en vivo como siempre."""
+        from app.services.identity.repository import esta_de_baja
+        assert esta_de_baja(db, "no-existe") is False
+
+    def test_el_escaneo_NO_consulta_en_vivo_a_una_baja(self, db, con_proveedores):
+        """Lo que de verdad importa: aunque la biblioteca siga teniendo su ficha,
+        el kiosko no debe preguntarle. Si preguntara, la resucitaría."""
+        from app.models import Person, PersonIdentifier
+        db.add(Person(person_key="ldap:3", source="ldap", full_name="Baja", active=False))
+        db.add(PersonIdentifier(id_type="cardnumber", id_value="333", person_key="ldap:3"))
+        db.commit()
+        koha = FakeProvider("koha_db", 40, PersonRecord(
+            person_key="koha:333", source="koha_db", full_name="Baja",
+            identifiers={"cardnumber": "333"}))
+        con_proveedores(koha)
+        person, origen = asyncio.run(resolve_person(db, "cardnumber", "333"))
+        assert person is None
+        assert origen == "unidentified"
+        assert koha.lookups == [], "no se debió preguntar a ningún proveedor"
+
+    def test_una_visita_externa_sí_se_consulta_en_vivo(self, db, con_proveedores):
+        """La guarda no debe romper el relleno perezoso de quien nunca estuvo."""
+        koha = FakeProvider("koha_db", 40, PersonRecord(
+            person_key="koha:444", source="koha_db", full_name="Nueva",
+            identifiers={"cardnumber": "444"}))
+        con_proveedores(koha)
+        person, origen = asyncio.run(resolve_person(db, "cardnumber", "444"))
+        assert person is not None and origen == "koha_db"
+        assert koha.lookups

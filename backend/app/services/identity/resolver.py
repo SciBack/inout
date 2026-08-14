@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...models import Person
 from .providers import build_enabled_providers
-from .repository import find_person_by_value, upsert_person
+from .repository import esta_de_baja, find_person_by_value, upsert_person
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,19 @@ async def resolve_person(
             return person, "local"
     except Exception:
         logger.exception("resolve_person: fallo consultando el padrón local")
+
+    # (1.bis) Baja conocida: no se pregunta a nadie más.
+    #
+    #   Si el padrón ya dijo que esta persona causó baja, consultar en vivo a
+    #   los proveedores la resucitaría de hecho: las fuentes con menos autoridad
+    #   la conservan mucho después —la biblioteca no borra a sus lectores— y
+    #   devolverían una ficha perfectamente válida. Quien causó baja dejó de ser
+    #   comunidad: si aparece por el edificio se cuenta como visita.
+    try:
+        if esta_de_baja(db, id_value):
+            return None, "unidentified"
+    except Exception:
+        logger.exception("resolve_person: fallo comprobando la baja")
 
     # (2) Relleno perezoso en vivo, por prioridad.
     try:
