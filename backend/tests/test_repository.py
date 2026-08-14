@@ -454,3 +454,39 @@ class TestSyncedAtEsDeLaFuenteQueGobierna:
         upsert_person(db, self._rec(full_name="Ada"), "ldap")
         upsert_person(db, self._rec(full_name="Ada", escuela="Ingeniería"), "koha_db")
         assert db.query(Person).one().escuela == "Ingeniería"
+
+
+class TestReactivarTambienRespetaLaAutoridad:
+    """Caso real (14-ago-2026): el directorio daba de baja a 7.457 personas y,
+    en la misma corrida, la biblioteca las resucitaba a todas — le bastaba con
+    tenerlas aún en su padrón. La baja no duraba ni un minuto.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _config(self, monkeypatch):
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "SOURCE_PRECEDENCE", ("ldap", "koha_db"))
+        monkeypatch.setattr(repo_mod, "GLOBAL_IDENTIFIERS", ("document_number",))
+
+    def _rec(self, **kw):
+        ids = kw.pop("identifiers", {"document_number": "444"})
+        return PersonRecord(person_key="k", source="x", identifiers=ids, **kw)
+
+    def test_una_fuente_sin_autoridad_no_resucita(self, db):
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        db.query(Person).update({"active": False})
+        db.commit()
+        upsert_person(db, self._rec(full_name="Ada"), "koha_db")
+        assert db.query(Person).one().active is False
+
+    def test_la_fuente_que_gobierna_sí_resucita(self, db):
+        """Reingreso, contrato nuevo: si vuelve a publicarla quien manda, vuelve."""
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        db.query(Person).update({"active": False})
+        db.commit()
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        assert db.query(Person).one().active is True
+
+    def test_una_persona_nueva_nace_viva(self, db):
+        upsert_person(db, self._rec(full_name="Nueva"), "koha_db")
+        assert db.query(Person).one().active is True

@@ -318,9 +318,13 @@ def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
         # alguien que el directorio ya dejó de publicar, le pone fecha de hoy, y
         # la baja no se detecta nunca.
         person.synced_at = now
-    # Reaparecer en la fuente reactiva: alguien pudo causar baja y volver
-    # (reingreso, contrato nuevo), y su ficha debe volver a resolver.
-    person.active = True
+        # Reaparecer reactiva: alguien pudo causar baja y volver (reingreso,
+        # contrato nuevo), y su ficha debe volver a resolver. Va dentro del
+        # control de autoridad por el mismo motivo que la marca de tiempo: si
+        # cualquiera pudiera reactivar, la biblioteca resucitaría en la misma
+        # corrida a quien el directorio acaba de dar de baja —le basta con
+        # tenerlo aún en su padrón— y la baja no duraría ni un minuto.
+        person.active = True
 
     # Persistir person antes de tocar identifiers (garantiza person_key estable).
     db.flush()
