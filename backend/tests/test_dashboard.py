@@ -153,3 +153,46 @@ class TestVisitantesCruzados:
         counts = [h.count for h in breakdown]
         assert counts == sorted(counts, reverse=True)
         assert breakdown[0].home_sede_code == "JULIACA"
+
+
+class TestVisitanteUnicoEsLaPersona:
+    """Alguien lleva varias credenciales —carné de trabajador, carné de alumno,
+    DNI— y las usa indistintamente. Agrupando por el código escaneado, la misma
+    humana entra dos veces en el desglose y el aforo del día suma de más. Caso
+    real (13-ago-2026): un trabajador que además estudió salía dos veces en
+    "Sin Facultad", una por cada carné.
+
+    Se prueba sobre _compute_cross_campus_breakdown por el mismo motivo que el
+    resto del módulo: es el agregado por visitante único que SQLite sí compila.
+    """
+
+    def _entrada(self, db, card, person_key, home_sede="BUT"):
+        ev = _entry(1, card, home_sede)
+        ev.person_key = person_key
+        db.add(ev)
+        db.commit()
+
+    def test_dos_credenciales_de_la_misma_persona_cuentan_una_vez(self, db):
+        self._entrada(db, "9610165", "ldap:10867326")
+        self._entrada(db, "10867326", "ldap:10867326")
+        assert _by_code(_run(db))["BUT"].count == 1
+
+    def test_dos_personas_distintas_siguen_contando_dos(self, db):
+        self._entrada(db, "111", "ldap:111")
+        self._entrada(db, "222", "ldap:222")
+        assert _by_code(_run(db))["BUT"].count == 2
+
+    def test_sin_persona_se_cuenta_por_su_codigo(self, db):
+        """Una visita externa no está en el padrón y aun así ocupa el edificio:
+        se cuenta, agrupada por el código que presentó."""
+        self._entrada(db, "visita-1", None)
+        self._entrada(db, "visita-1", None)
+        self._entrada(db, "visita-2", None)
+        assert _by_code(_run(db))["BUT"].count == 2
+
+    def test_la_persona_manda_sobre_el_codigo(self, db):
+        """Dos códigos distintos con la misma persona no son dos visitantes,
+        aunque los códigos no se parezcan en nada."""
+        self._entrada(db, "carne-trabajador", "ldap:1")
+        self._entrada(db, "dni", "ldap:1")
+        assert _by_code(_run(db))["BUT"].count == 1

@@ -16,6 +16,7 @@ from ..config import settings
 from ..services.identity import build_enabled_providers
 from ..services.sync import sync_all
 from ..services.faculty_map import resolve_faculty, VALID_FACULTY_CODES
+from ..services.visitantes import visitante_unico
 from ..services.labels import normalize_category, category_label, faculty_label, normalize_program, program_label, CATEGORY_MAP, PROGRAM_MAP, CATEGORY_LABELS as OVERLAY_CATEGORY_LABELS
 from ..schemas import (
     LoginRequest, TokenResponse,
@@ -393,7 +394,7 @@ def annual_stats(
     unique_by_month = dict(
         db.query(
             func.extract("month", PresenceLog.timestamp).label("month"),
-            func.count(distinct(PresenceLog.cardnumber)).label("cnt"),
+            func.count(distinct(visitante_unico())).label("cnt"),
         )
         .filter(base_filter, PresenceLog.event_type == "entry")
         .group_by(func.extract("month", PresenceLog.timestamp))
@@ -443,7 +444,7 @@ def annual_stats(
     # filas separadas y, peor, contaría dos veces a alguien que tuvo eventos
     # con ambos códigos el mismo año. Mismo patrón que dashboard.py.
     category_pairs = (
-        db.query(PresenceLog.patron_category, PresenceLog.cardnumber)
+        db.query(PresenceLog.patron_category, visitante_unico())
         .filter(base_filter, PresenceLog.event_type == "entry")
         .distinct()
         .all()
@@ -463,13 +464,13 @@ def annual_stats(
     # — con fallback al programa académico cuando la facultad no vino o no es
     # un código válido — en vez de agrupar por patron_faculty crudo.
     fac_rows = (
-        db.query(PresenceLog.cardnumber, PresenceLog.patron_faculty, PresenceLog.patron_program)
+        db.query(visitante_unico(), PresenceLog.patron_faculty, PresenceLog.patron_program)
         .filter(base_filter, PresenceLog.event_type == "entry")
         .all()
     )
     card_fac: dict[str, str] = {}
     for row in fac_rows:
-        card_fac[row.cardnumber] = resolve_faculty(row.patron_faculty, row.patron_program)
+        card_fac[row.visitante] = resolve_faculty(row.patron_faculty, row.patron_program)
     fac_counts: dict[str, int] = {}
     for fac in card_fac.values():
         fac_counts[fac] = fac_counts.get(fac, 0) + 1
@@ -488,7 +489,7 @@ def annual_stats(
     for row in fac_rows:
         prog = (row.patron_program or "").strip()
         if prog:
-            card_program[row.cardnumber] = normalize_program(prog)
+            card_program[row.visitante] = normalize_program(prog)
     program_counts: dict[str, int] = {}
     for prog in card_program.values():
         program_counts[prog] = program_counts.get(prog, 0) + 1
@@ -583,7 +584,7 @@ def monthly_stats(
     unique_by_day = dict(
         db.query(
             func.date(PresenceLog.timestamp).label("day"),
-            func.count(distinct(PresenceLog.cardnumber)).label("cnt"),
+            func.count(distinct(visitante_unico())).label("cnt"),
         )
         .filter(base_filter, PresenceLog.event_type == "entry")
         .group_by(func.date(PresenceLog.timestamp))

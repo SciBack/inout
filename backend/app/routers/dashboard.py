@@ -12,6 +12,7 @@ from collections import defaultdict
 from ..schemas import DashboardStats, PresenceEntry, CategoryCount, FacultyCount, HourlyCount, FacultyTimeline, FacultyEvent, PublicSpaceResponse, HomeSedeCount, SpacesOverviewResponse, BuildingOverview, OverviewTotals
 from ..config import settings
 from ..services.faculty_map import resolve_faculty
+from ..services.visitantes import visitante_unico
 from ..services.labels import normalize_category, category_label, faculty_label
 
 router = APIRouter()
@@ -153,7 +154,7 @@ def _compute_cross_campus_breakdown(
     timezone) a propósito — así se puede probar directo contra SQLite.
     """
     home_sede_pairs = (
-        db.query(PresenceLog.patron_home_sede, PresenceLog.cardnumber)
+        db.query(PresenceLog.patron_home_sede, visitante_unico())
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
@@ -251,7 +252,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
 
     # ── Visitantes únicos hoy ────────────────────────────────────────────────
     unique_visitors_today = (
-        db.query(func.count(func.distinct(PresenceLog.cardnumber)))
+        db.query(func.count(func.distinct(visitante_unico())))
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
@@ -269,7 +270,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         d_ini = hoy_ini - timedelta(days=days_back)
         d_fin = hoy_ini - timedelta(days=days_back - 1)
         count = (
-            db.query(func.count(func.distinct(PresenceLog.cardnumber)))
+            db.query(func.count(func.distinct(visitante_unico())))
             .filter(
                 PresenceLog.event_type == "entry",
                 PresenceLog.space_id == sid,
@@ -395,7 +396,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     # perfil ya normalizado — así una persona no se cuenta dos veces si tuvo
     # eventos con códigos de distinta familia el mismo día.
     category_pairs = (
-        db.query(PresenceLog.patron_category, PresenceLog.cardnumber)
+        db.query(PresenceLog.patron_category, visitante_unico())
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
@@ -472,7 +473,11 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
 
     # ── Top facultades hoy (con fallback a programa académico) ──────────────
     all_entries_fac = (
-        db.query(PresenceLog.cardnumber, PresenceLog.patron_faculty, PresenceLog.patron_program)
+        db.query(
+            visitante_unico(),
+            PresenceLog.patron_faculty,
+            PresenceLog.patron_program,
+        )
         .filter(
             PresenceLog.event_type == "entry",
             PresenceLog.space_id == sid,
@@ -485,7 +490,7 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     # Resolver facultad efectiva por visitante único (último registro gana)
     card_fac: dict[str, str] = {}
     for row in all_entries_fac:
-        card_fac[row.cardnumber] = resolve_faculty(row.patron_faculty, row.patron_program)
+        card_fac[row.visitante] = resolve_faculty(row.patron_faculty, row.patron_program)
 
     fac_counts: dict[str, int] = defaultdict(int)
     for fac in card_fac.values():
