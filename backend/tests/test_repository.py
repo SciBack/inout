@@ -418,3 +418,39 @@ class TestAutoridadEntreFuentes:
         upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
         upsert_person(db, self._rec("k", full_name="Juan", faculty="Facultad de Ingeniería"), "koha_db")
         assert db.query(Person).one().faculty == "Facultad de Ingeniería"
+
+
+class TestSyncedAtEsDeLaFuenteQueGobierna:
+    """Caso real (14-ago-2026): la detección de bajas no encontraba a nadie
+    ausente porque la biblioteca, al reconciliar a alguien que el directorio ya
+    había dejado de publicar, le refrescaba la marca de tiempo. La persona
+    parecía vista hoy y la baja no se detectaba nunca.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _config(self, monkeypatch):
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "SOURCE_PRECEDENCE", ("ldap", "koha_db"))
+        monkeypatch.setattr(repo_mod, "GLOBAL_IDENTIFIERS", ("document_number",))
+
+    def _rec(self, **kw):
+        ids = kw.pop("identifiers", {"document_number": "555"})
+        return PersonRecord(person_key="k", source="x", identifiers=ids, **kw)
+
+    def test_una_fuente_sin_autoridad_no_refresca_la_marca(self, db):
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        marca_ldap = db.query(Person).one().synced_at
+        upsert_person(db, self._rec(full_name="Ada"), "koha_db")
+        assert db.query(Person).one().synced_at == marca_ldap
+
+    def test_la_fuente_que_gobierna_sí_la_refresca(self, db):
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        marca = db.query(Person).one().synced_at
+        upsert_person(db, self._rec(full_name="Ada Lovelace"), "ldap")
+        assert db.query(Person).one().synced_at >= marca
+
+    def test_la_menos_autoritativa_sigue_rellenando_huecos(self, db):
+        """No se ignora a la otra fuente: solo deja de mover el reloj."""
+        upsert_person(db, self._rec(full_name="Ada"), "ldap")
+        upsert_person(db, self._rec(full_name="Ada", escuela="Ingeniería"), "koha_db")
+        assert db.query(Person).one().escuela == "Ingeniería"

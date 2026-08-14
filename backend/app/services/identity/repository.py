@@ -312,7 +312,12 @@ def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
     if manda:
         person.source = entrante
         person.raw = rec.raw
-    person.synced_at = now
+        # synced_at es "cuándo la vio por última vez la fuente que la gobierna",
+        # no "cuándo la tocó cualquiera". Refrescarlo desde una fuente sin
+        # autoridad borra el rastro de ausencia: la biblioteca reconcilia a
+        # alguien que el directorio ya dejó de publicar, le pone fecha de hoy, y
+        # la baja no se detecta nunca.
+        person.synced_at = now
     # Reaparecer en la fuente reactiva: alguien pudo causar baja y volver
     # (reingreso, contrato nuevo), y su ficha debe volver a resolver.
     person.active = True
