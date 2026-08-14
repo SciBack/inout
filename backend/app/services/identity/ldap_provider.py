@@ -138,6 +138,35 @@ class LdapProvider:
             logger.warning("[ldap] no se pudo leer el catálogo de unidades", exc_info=True)
         return catalogo
 
+    @staticmethod
+    def _resolver_unidad(raw: dict, unidades: dict[str, str]) -> None:
+        """Traduce el código de unidad de la persona a su nombre, in situ.
+
+        Se hace ANTES de mapear para que el overlay reciba el dato ya legible y
+        no tenga que conocer el árbol organizativo del directorio.
+
+        El atributo es MULTIVALOR: una persona puede pertenecer a varias
+        unidades (225 de 2.765 medidas el 13-ago-2026, hasta 3 cada una).
+        Tratarlo como escalar lo perdía entero —str(['4','136']) no casa con
+        ningún código— y esas personas se quedaban sin área sin que nada
+        fallara. Se traducen todas las que el catálogo reconoce y el colapso
+        determinista del mapeo elige una: cuál es arbitrario, pero es siempre la
+        misma entre corridas.
+
+        Un código que el catálogo no tiene se ignora: es un hueco de la fuente
+        (56 códigos, 899 personas el 13-ago-2026) y esas personas quedan sin
+        unidad, igual que antes de existir esta traducción.
+        """
+        codigos = raw.get("departmentNumber")
+        if not isinstance(codigos, list):
+            codigos = [codigos]
+        nombres = [
+            unidades[c] for c in (str(v or "").strip() for v in codigos)
+            if c and c in unidades
+        ]
+        if nombres:
+            raw["_unidad"] = nombres if len(nombres) > 1 else nombres[0]
+
     def _search(self, search_filter: str) -> list[PersonRecord]:
         import ldap3
 
@@ -157,12 +186,7 @@ class LdapProvider:
                 if entry.get("type") != "searchResEntry":
                     continue
                 raw = self._flatten(entry.get("attributes", {}))
-                # El código de unidad se traduce a su nombre ANTES de mapear,
-                # para que el overlay lo reciba ya legible y no tenga que
-                # conocer el árbol organizativo del directorio.
-                codigo_unidad = str(raw.get("departmentNumber") or "").strip()
-                if codigo_unidad and codigo_unidad in unidades:
-                    raw["_unidad"] = unidades[codigo_unidad]
+                self._resolver_unidad(raw, unidades)
                 # map_key elige el mapeo y el namespace del person_key (común a
                 # todas las ramas); name registra de qué rama vino el dato.
                 rec = record_from_raw(self.map_key, raw, self.name)

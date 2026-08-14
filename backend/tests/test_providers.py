@@ -7,6 +7,7 @@ sistema degrada a "Sin identificar" en vez de romper.
 import pytest
 
 from app.config import Settings
+from app.services.identity.ldap_provider import LdapProvider
 from app.services.identity.providers import build_enabled_providers
 
 
@@ -208,3 +209,50 @@ class TestRamasMalDeclaradas:
             con_ramas('[{"name": "rota"}, {"name": "ldap-alumni", "base_dn": "ou=alumni,dc=x"}]')
         )
         assert [p.name for p in ps] == ["ldap", "ldap-alumni"]
+
+
+class TestUnidadOrganizativa:
+    """El directorio publica el área del trabajador partida en dos: la persona
+    trae un código en departmentNumber y el nombre vive en el árbol de
+    organización. Sin juntarlos, un administrativo aparece sin área aunque el
+    dato exista (2.332 personas medidas el 13-ago-2026).
+    """
+
+    CATALOGO = {"18": "Dirección de Tecnologías de Información", "13": "Dirección Financiera"}
+
+    def _resolver(self, raw):
+        LdapProvider._resolver_unidad(raw, self.CATALOGO)
+        return raw
+
+    def test_traduce_el_codigo_a_su_nombre(self):
+        assert self._resolver({"departmentNumber": "18"})["_unidad"] == \
+            "Dirección de Tecnologías de Información"
+
+    def test_codigo_fuera_del_catalogo_no_produce_unidad(self):
+        """Hueco de la fuente: 56 códigos usados no existen en el árbol. Mejor
+        sin unidad que inventar una."""
+        assert "_unidad" not in self._resolver({"departmentNumber": "9999"})
+
+    def test_sin_atributo_no_produce_unidad(self):
+        assert "_unidad" not in self._resolver({"uid": "1"})
+
+    def test_multivalor_conserva_todas_las_reconocidas(self):
+        """225 personas pertenecen a 2-3 unidades. Tratarlo como escalar perdía
+        el dato entero: str(['18','13']) no casa con ningún código."""
+        out = self._resolver({"departmentNumber": ["18", "13"]})
+        assert sorted(out["_unidad"]) == ["Dirección Financiera",
+                                          "Dirección de Tecnologías de Información"]
+
+    def test_multivalor_descarta_solo_lo_desconocido(self):
+        out = self._resolver({"departmentNumber": ["9999", "18"]})
+        assert out["_unidad"] == "Dirección de Tecnologías de Información"
+
+    def test_multivalor_todo_desconocido_no_produce_unidad(self):
+        assert "_unidad" not in self._resolver({"departmentNumber": ["9999", "8888"]})
+
+    def test_catalogo_vacio_no_produce_unidad(self):
+        """Sin LDAP_ORG_BASE_DN configurado el catálogo llega vacío: se degrada
+        al comportamiento previo, no se rompe."""
+        raw = {"departmentNumber": "18"}
+        LdapProvider._resolver_unidad(raw, {})
+        assert "_unidad" not in raw
