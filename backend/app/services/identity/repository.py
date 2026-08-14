@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...models import Person, PersonIdentifier
 from .base import PersonRecord
+from .mapping import GLOBAL_IDENTIFIERS
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,56 @@ def _conflicting_cardnumber(db: Session, person: Person, rec: PersonRecord) -> t
     return (existentes[0], entrante)
 
 
+def _reconciliar_por_documento(db: Session, rec: PersonRecord) -> Person | None:
+    """Busca a la persona por el NÚMERO de documento, cruzando nombres de campo.
+
+    Cada fuente llama a sus columnas como quiere. El directorio publica el DNI
+    en su atributo de documento; la biblioteca usa ESE MISMO NÚMERO como carné
+    del lector. La reconciliación por (tipo, valor) los ve como dos credenciales
+    distintas, así que la misma humana acababa partida en dos filas —1.648 casos
+    medidos el 13-ago-2026—, cada una con su unidad y sus estadísticas: un
+    código escaneado resolvía a una y el otro a la otra.
+
+    Un documento de identidad identifica a la PERSONA, no al registro de un
+    sistema: cuando el número coincide es la misma humana, aunque una fuente lo
+    guarde bajo otro nombre de campo. Basta con que el tipo sea de documento en
+    UNO de los dos lados —el entrante o el ya guardado— y por eso no vale
+    comparar solo valores: dos carnés locales que coincidan por casualidad son
+    dos personas, no una.
+
+    Qué tipos cuentan como documento lo declara el overlay: cuál es el
+    identificador legal de alguien depende del país y de la institución, no del
+    producto. Sin overlay la lista va vacía y esta función no hace nada.
+    """
+    if not GLOBAL_IDENTIFIERS:
+        return None
+    for id_type, id_value in (rec.identifiers or {}).items():
+        if not id_value:
+            continue
+        existente = (
+            db.query(PersonIdentifier)
+            .filter(PersonIdentifier.id_value == str(id_value))
+            .first()
+        )
+        if existente is None:
+            continue
+        if id_type not in GLOBAL_IDENTIFIERS and existente.id_type not in GLOBAL_IDENTIFIERS:
+            continue
+        person = (
+            db.query(Person)
+            .filter(Person.person_key == existente.person_key)
+            .first()
+        )
+        if person is not None:
+            logger.info(
+                "[identity] reconciliada por documento %s: '%s' (%s) se suma a la "
+                "persona %s, que ya lo tenía como %s.",
+                id_value, rec.person_key, id_type, person.person_key, existente.id_type,
+            )
+            return person
+    return None
+
+
 def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
     """Upsert idempotente en `persons` por person_key + sincroniza credenciales.
 
@@ -185,6 +236,26 @@ def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
             person = find_person_by_identifier(db, id_type, str(id_value))
             if person is not None:
                 break
+
+    # 2.bis Reconciliar por el DOCUMENTO, cruzando el nombre del campo.
+    #
+    #     Cada fuente llama a sus columnas como quiere. El directorio publica el
+    #     DNI en su atributo de documento; la biblioteca usa ESE MISMO NÚMERO
+    #     como carné del lector. El paso anterior compara (tipo, valor), así que
+    #     para él son dos credenciales distintas y crea una segunda persona:
+    #     la misma humana partida en dos filas, cada una con su unidad y sus
+    #     estadísticas (1.648 casos medidos el 13-ago-2026). Al escanear, un
+    #     código la resolvía a una fila y el otro a la otra.
+    #
+    #     Un documento de identidad identifica a la PERSONA, no al registro de
+    #     un sistema: cuando el número coincide, es la misma humana aunque una
+    #     fuente lo guarde bajo otro nombre de campo. Los tipos que valen como
+    #     documento los declara el overlay (_global_identifiers), porque cuál es
+    #     el identificador legal de una persona depende del país y la
+    #     institución, no del producto. Sin overlay la lista va vacía y este
+    #     paso no hace nada.
+    if person is None:
+        person = _reconciliar_por_documento(db, rec)
 
     if person is None:
         person = Person(person_key=rec.person_key)

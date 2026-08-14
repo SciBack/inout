@@ -280,3 +280,83 @@ class TestUnaPersonaTieneVariasCredenciales:
             .filter(PersonIdentifier.id_type == "cardnumber")
         }
         assert carnes == {"70596558", "202622857"}
+
+
+class TestReconciliacionPorDocumento:
+    """Cada fuente llama a sus columnas como quiere: el directorio publica el
+    DNI en su atributo de documento y la biblioteca usa ESE MISMO NÚMERO como
+    carné del lector. Comparando (tipo, valor) son dos credenciales distintas,
+    así que la misma persona acababa partida en dos filas —1.648 casos medidos
+    el 13-ago-2026— y cada código escaneado resolvía a una distinta.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _globales(self, monkeypatch):
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "GLOBAL_IDENTIFIERS", ("document_number",))
+
+    def _rec(self, key, nombre, **ids):
+        return PersonRecord(person_key=key, source="x", full_name=nombre, identifiers=ids)
+
+    def _dos_fuentes(self, db):
+        """El caso real: LDAP indexa 10867326 como documento y el carné del
+        trabajador aparte; Koha usa ese mismo DNI como carné del lector, sin
+        declararlo como documento."""
+        upsert_person(db, self._rec("ldap:10867326", "Juan Alberto Sanchez",
+                                    cardnumber="9610165", document_number="10867326"), "ldap")
+        upsert_person(db, self._rec("koha:10867326", "Juan Alberto Sanchez",
+                                    cardnumber="10867326"), "koha")
+
+    def test_el_mismo_numero_bajo_otro_campo_es_la_misma_persona(self, db):
+        self._dos_fuentes(db)
+        assert db.query(Person).count() == 1
+
+    def test_las_credenciales_de_ambas_fuentes_quedan_en_la_misma_persona(self, db):
+        self._dos_fuentes(db)
+        p = db.query(Person).one()
+        valores = {
+            row.id_value for row in db.query(PersonIdentifier)
+            .filter(PersonIdentifier.person_key == p.person_key)
+        }
+        assert valores == {"9610165", "10867326"}
+
+    def test_cualquiera_de_los_dos_codigos_resuelve_a_la_misma_persona(self, db):
+        """Es lo que ve quien escanea: presente el carné o el DNI, debe salir
+        el mismo registro."""
+        self._dos_fuentes(db)
+        por_carne = find_person_by_value(db, "9610165")
+        por_documento = find_person_by_value(db, "10867326")
+        assert por_carne is not None
+        assert por_carne.person_key == por_documento.person_key
+
+    def test_sin_documento_no_se_reconcilia(self, db):
+        """Dos personas sin documento que comparten nada siguen separadas."""
+        upsert_person(db, self._rec("a:1", "Ada", cardnumber="1"), "a")
+        upsert_person(db, self._rec("b:2", "Alan", cardnumber="2"), "b")
+        assert db.query(Person).count() == 2
+
+    def test_documentos_distintos_no_se_reconcilian(self, db):
+        upsert_person(db, self._rec("ldap:111", "Ada", document_number="111"), "ldap")
+        upsert_person(db, self._rec("koha:222", "Alan", document_number="222"), "koha")
+        assert db.query(Person).count() == 2
+
+    def test_dos_credenciales_locales_distintas_que_coinciden_NO_fusionan(self, db):
+        """El cruce entre nombres de campo solo vale si uno de los dos lados es
+        un documento. Que el carné de un sistema coincida con el uid de otro es
+        una casualidad entre numeraciones locales, no una identidad compartida.
+
+        (Que dos filas compartan el MISMO tipo de credencial sí las reconcilia,
+        pero eso lo decide el paso anterior y es anterior a esta guarda.)"""
+        upsert_person(db, self._rec("a:500", "Ada", uid="500"), "a")
+        upsert_person(db, self._rec("b:500", "Alan", cardnumber="500"), "b")
+        assert db.query(Person).count() == 2
+
+    def test_sin_overlay_no_hay_reconciliacion_cruzada(self, db, monkeypatch):
+        """Producto agnóstico: sin declarar qué credencial es un documento, el
+        canónico no adivina y mantiene el comportamiento previo."""
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "GLOBAL_IDENTIFIERS", ())
+        upsert_person(db, self._rec("ldap:10867326", "Juan",
+                                    cardnumber="9610165", document_number="10867326"), "ldap")
+        upsert_person(db, self._rec("koha:10867326", "Juan", cardnumber="10867326"), "koha")
+        assert db.query(Person).count() == 2

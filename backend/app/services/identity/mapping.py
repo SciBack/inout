@@ -63,6 +63,15 @@ def _load_identity_map() -> dict:
 IDENTITY_MAP = _load_identity_map()
 
 
+# Tipos de credencial que identifican a la PERSONA y no al registro de un
+# sistema: documento nacional, carné de extranjería, pasaporte. Cuál es el
+# identificador legal de alguien depende del país y de la institución, así que
+# el canónico no lo asume — lo declara el overlay. Vacío = producto agnóstico.
+GLOBAL_IDENTIFIERS: tuple[str, ...] = tuple(
+    IDENTITY_MAP.get("_global_identifiers", []) or []
+)
+
+
 def provider_map(provider: str) -> dict:
     """Sub-mapa del proveedor dado (o {} si no hay config)."""
     return IDENTITY_MAP.get(provider, {}) or {}
