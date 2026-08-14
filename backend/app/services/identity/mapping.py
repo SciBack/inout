@@ -72,6 +72,16 @@ GLOBAL_IDENTIFIERS: tuple[str, ...] = tuple(
 )
 
 
+# Orden de autoridad entre fuentes, de más a menos. Una persona la ven varios
+# sistemas y no todos saben lo mismo de ella: el de identidad institucional sabe
+# dónde trabaja hoy, la biblioteca guarda dónde estudió. Sin este orden manda
+# quien sincronice último, que es un detalle de calendario. Vacío = todas mandan
+# por igual (comportamiento del producto agnóstico).
+SOURCE_PRECEDENCE: tuple[str, ...] = tuple(
+    IDENTITY_MAP.get("_source_precedence", []) or []
+)
+
+
 def provider_map(provider: str) -> dict:
     """Sub-mapa del proveedor dado (o {} si no hay config)."""
     return IDENTITY_MAP.get(provider, {}) or {}

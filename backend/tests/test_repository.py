@@ -360,3 +360,61 @@ class TestReconciliacionPorDocumento:
                                     cardnumber="9610165", document_number="10867326"), "ldap")
         upsert_person(db, self._rec("koha:10867326", "Juan", cardnumber="10867326"), "koha")
         assert db.query(Person).count() == 2
+
+
+class TestAutoridadEntreFuentes:
+    """Una persona la ven varios sistemas y no todos saben lo mismo de ella. El
+    de identidad institucional sabe dónde TRABAJA hoy; la biblioteca guarda
+    dónde ESTUDIÓ, que era cierto y quedó viejo. Sin un orden de autoridad manda
+    quien sincronice último —un detalle de calendario— y el dato del kiosko
+    cambia según la hora a la que corrió cada proveedor.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _precedencia(self, monkeypatch):
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "SOURCE_PRECEDENCE", ("ldap", "koha_db"))
+        monkeypatch.setattr(repo_mod, "GLOBAL_IDENTIFIERS", ("document_number",))
+
+    def _rec(self, key, **campos):
+        ids = campos.pop("identifiers", {"document_number": "111"})
+        return PersonRecord(person_key=key, source="x", identifiers=ids, **campos)
+
+    def test_la_menos_autoritativa_no_pisa_a_la_de_mas(self, db):
+        """El caso real: LDAP dice dónde trabaja, Koha sincroniza después y lo
+        reescribía con la facultad donde estudió."""
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Facultad de Ingeniería"), "koha_db")
+        assert db.query(Person).one().faculty == "Dirección de TI"
+
+    def test_la_menos_autoritativa_sí_rellena_huecos(self, db):
+        """No se ignora a la otra fuente: aporta lo que la primera no sabe."""
+        upsert_person(db, self._rec("k", full_name="Juan"), "ldap")
+        upsert_person(db, self._rec("k", full_name="Juan", escuela="Ingeniería de Sistemas"), "koha_db")
+        assert db.query(Person).one().escuela == "Ingeniería de Sistemas"
+
+    def test_la_mas_autoritativa_sí_pisa_a_la_de_menos(self, db):
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Facultad de Ingeniería"), "koha_db")
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
+        assert db.query(Person).one().faculty == "Dirección de TI"
+
+    def test_la_misma_fuente_siempre_actualiza_lo_suyo(self, db):
+        """Si no hubiera este caso, una fuente no podría corregir sus propios
+        datos cuando cambian en origen."""
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección Financiera"), "ldap")
+        assert db.query(Person).one().faculty == "Dirección Financiera"
+
+    def test_una_fuente_no_declarada_no_pisa_a_una_declarada(self, db):
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Otra cosa"), "csv")
+        assert db.query(Person).one().faculty == "Dirección de TI"
+
+    def test_sin_precedencia_declarada_manda_la_ultima(self, db, monkeypatch):
+        """Producto agnóstico: sin declarar autoridad el canónico no inventa una
+        jerarquía entre las fuentes del cliente."""
+        from app.services.identity import repository as repo_mod
+        monkeypatch.setattr(repo_mod, "SOURCE_PRECEDENCE", ())
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Dirección de TI"), "ldap")
+        upsert_person(db, self._rec("k", full_name="Juan", faculty="Facultad de Ingeniería"), "koha_db")
+        assert db.query(Person).one().faculty == "Facultad de Ingeniería"

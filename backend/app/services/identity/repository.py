@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...models import Person, PersonIdentifier
 from .base import PersonRecord
-from .mapping import GLOBAL_IDENTIFIERS
+from .mapping import GLOBAL_IDENTIFIERS, SOURCE_PRECEDENCE
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,27 @@ def _conflicting_cardnumber(db: Session, person: Person, rec: PersonRecord) -> t
     return (existentes[0], entrante)
 
 
+def _fuente_manda(entrante: str | None, actual: str | None) -> bool:
+    """¿La fuente entrante puede sobrescribir lo que ya escribió la actual?
+
+    Una persona la ven varios sistemas y no todos saben lo mismo de ella. El
+    sistema de identidad institucional sabe dónde TRABAJA hoy; la biblioteca
+    guarda dónde ESTUDIÓ, que era cierto y quedó viejo. Sin un orden de
+    autoridad manda quien sincronice último —un detalle de calendario— y el
+    dato del kiosko cambia según la hora a la que corrió cada proveedor.
+
+    El orden lo declara el overlay, de más a menos autoridad, porque cuál es la
+    fuente de verdad de cada dato es una decisión de la institución. Una fuente
+    no declarada va al final: rellena huecos, nunca pisa. Sin overlay la lista
+    va vacía y todas mandan por igual, que es el comportamiento previo.
+    """
+    if not SOURCE_PRECEDENCE or not actual or entrante == actual:
+        return True
+    orden = {nombre: i for i, nombre in enumerate(SOURCE_PRECEDENCE)}
+    fuera = len(orden)
+    return orden.get(entrante, fuera) <= orden.get(actual, fuera)
+
+
 def _reconciliar_por_documento(db: Session, rec: PersonRecord) -> Person | None:
     """Busca a la persona por el NÚMERO de documento, cruzando nombres de campo.
 
@@ -265,13 +286,22 @@ def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
     # presence_log.person_key y person_identifiers.person_key.
     effective_key = person.person_key
 
+    entrante = source or rec.source
+    manda = _fuente_manda(entrante, person.source)
     for field_name in _PERSON_FIELDS:
         val = getattr(rec, field_name)
-        if val is not None:
+        if val is None:
+            continue
+        # Una fuente menos autoritativa RELLENA huecos pero no pisa lo que ya
+        # dijo una de más autoridad: si el sistema de identidad institucional
+        # sabe dónde trabaja alguien, la biblioteca no debe reescribirlo con
+        # dónde estudió solo por sincronizar después.
+        if manda or getattr(person, field_name) in (None, ""):
             setattr(person, field_name, val)
 
-    person.source = source or rec.source
-    person.raw = rec.raw
+    if manda:
+        person.source = entrante
+        person.raw = rec.raw
     person.synced_at = now
     if person.active is None:
         person.active = True
