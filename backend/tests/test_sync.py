@@ -6,6 +6,7 @@ con 0 registros.
 """
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -386,3 +387,141 @@ class TestDeteccionDeDegradacionSilenciosa:
         ])))
         assert run.field_coverage["_total"] == 1
         assert run.field_coverage["faculty"] == 1
+
+
+class TestBajaPorAusencia:
+    """El padrón es la población VIVA. Cuando alguien causa baja, la fuente
+    sencillamente deja de publicarlo, sin avisar: sin este paso su ficha se
+    queda para siempre con los datos del día que desapareció y sigue
+    resolviendo en el escaneo como si nada.
+
+    Caso real (14-ago-2026): 2.143 personas marcadas de baja en el directorio
+    seguían contando como comunidad en InOut.
+    """
+
+    @pytest.fixture
+    def poblado(self, db):
+        from app.models import Person
+        from datetime import timedelta
+        viejo = datetime.now(timezone.utc) - timedelta(days=3)
+        for i in range(10):
+            db.add(Person(person_key=f"ldap:{i}", source="ldap", full_name=f"P{i}",
+                          active=True, synced_at=viejo))
+        db.commit()
+        return db
+
+    def _run_previa(self, db, vistos):
+        from app.models import ProviderSyncRun
+        db.add(ProviderSyncRun(provider="ldap", status="ok", created=vistos, updated=0,
+                               errors=0, started_at=datetime.now(timezone.utc),
+                               finished_at=datetime.now(timezone.utc)))
+        db.commit()
+
+    def test_quien_deja_de_publicarse_queda_inactivo(self, poblado):
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        self._run_previa(db, 10)
+        ahora = datetime.now(timezone.utc)
+        # 8 se vieron en esta corrida; 2 no.
+        for i in range(8):
+            db.query(Person).filter(Person.person_key == f"ldap:{i}").update({"synced_at": ahora})
+        db.commit()
+        bajas = _dar_de_baja_a_los_ausentes(db, "ldap", ahora, vistos=8)
+        assert bajas == 2
+        assert db.query(Person).filter(Person.active.is_(False)).count() == 2
+
+    def test_no_se_borra_la_fila(self, poblado):
+        """presence_log referencia el person_key: borrar partiría el histórico."""
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        self._run_previa(db, 10)
+        _dar_de_baja_a_los_ausentes(db, "ldap", datetime.now(timezone.utc), vistos=10)
+        assert db.query(Person).count() == 10
+
+    def test_solo_afecta_al_proveedor_que_sincroniza(self, poblado):
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        db.add(Person(person_key="koha:1", source="koha_db", active=True,
+                      synced_at=datetime.now(timezone.utc) - timedelta(days=9)))
+        db.commit()
+        self._run_previa(db, 10)
+        _dar_de_baja_a_los_ausentes(db, "ldap", datetime.now(timezone.utc), vistos=10)
+        koha = db.query(Person).filter(Person.person_key == "koha:1").one()
+        assert koha.active is True
+
+    def test_una_fuente_que_responde_a_medias_NO_da_bajas(self, poblado):
+        """Un directorio que devuelve la mitad —filtro mal puesto, corte a
+        mitad de paginación— parece igual que una purga masiva. Confundirlos
+        vacía el padrón de golpe."""
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        self._run_previa(db, 10)
+        bajas = _dar_de_baja_a_los_ausentes(db, "ldap", datetime.now(timezone.utc), vistos=3)
+        assert bajas == 0
+        assert db.query(Person).filter(Person.active.is_(False)).count() == 0
+
+    def test_una_caida_pequeña_sí_da_bajas(self, poblado):
+        """Una purga legítima no dispara la salvaguarda."""
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        self._run_previa(db, 10)
+        ahora = datetime.now(timezone.utc)
+        for i in range(9):
+            db.query(Person).filter(Person.person_key == f"ldap:{i}").update({"synced_at": ahora})
+        db.commit()
+        assert _dar_de_baja_a_los_ausentes(db, "ldap", ahora, vistos=9) == 1
+
+    def test_sin_registros_no_toca_nada(self, poblado):
+        """fetch_all vacío es un fallo de la fuente, no una institución sin gente."""
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado
+        self._run_previa(db, 10)
+        assert _dar_de_baja_a_los_ausentes(db, "ldap", datetime.now(timezone.utc), vistos=0) == 0
+        assert db.query(Person).filter(Person.active.is_(False)).count() == 0
+
+    def test_sin_registros_y_SIN_corrida_previa_tampoco(self, poblado):
+        """El caso peligroso de verdad: la primera corrida de un proveedor no
+        tiene con qué comparar, así que la salvaguarda de volumen no aplica. Si
+        además falla y devuelve vacío, daría de baja al padrón entero."""
+        from app.models import Person
+        from app.services.sync import _dar_de_baja_a_los_ausentes
+        db = poblado   # sin _run_previa a propósito
+        assert _dar_de_baja_a_los_ausentes(db, "ldap", datetime.now(timezone.utc), vistos=0) == 0
+        assert db.query(Person).filter(Person.active.is_(False)).count() == 0
+
+
+class TestLaBajaSeNotaEnElEscaneo:
+    def test_una_persona_de_baja_no_resuelve(self, db):
+        """Quien causó baja dejó de ser comunidad: si aparece por el edificio se
+        cuenta como visita, no como personal."""
+        from app.models import Person, PersonIdentifier
+        from app.services.identity.repository import find_person_by_value
+        db.add(Person(person_key="ldap:9", source="ldap", full_name="Baja", active=False))
+        db.add(PersonIdentifier(id_type="cardnumber", id_value="999", person_key="ldap:9"))
+        db.commit()
+        assert find_person_by_value(db, "999") is None
+
+    def test_una_persona_viva_sí_resuelve(self, db):
+        from app.models import Person, PersonIdentifier
+        from app.services.identity.repository import find_person_by_value
+        db.add(Person(person_key="ldap:8", source="ldap", full_name="Viva", active=True))
+        db.add(PersonIdentifier(id_type="cardnumber", id_value="888", person_key="ldap:8"))
+        db.commit()
+        assert find_person_by_value(db, "888").full_name == "Viva"
+
+    def test_reaparecer_en_la_fuente_reactiva(self, db):
+        """Alguien puede causar baja y volver (reingreso, contrato nuevo)."""
+        from app.models import Person
+        from app.services.identity.base import PersonRecord
+        from app.services.identity.repository import upsert_person
+        db.add(Person(person_key="ldap:7", source="ldap", full_name="Vuelve", active=False))
+        db.commit()
+        upsert_person(db, PersonRecord(person_key="ldap:7", source="ldap", full_name="Vuelve",
+                                       identifiers={"cardnumber": "777"}), "ldap")
+        assert db.query(Person).filter(Person.person_key == "ldap:7").one().active is True

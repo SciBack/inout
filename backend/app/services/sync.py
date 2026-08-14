@@ -84,6 +84,7 @@ def _upsert_records(db: Session, provider_name: str, records) -> tuple[int, int,
     created = 0
     updated = 0
     errors = 0
+    bajas = 0
     for rec in records:
         try:
             # ¿Ya existía en el padrón? Determina si es alta o cambio.
@@ -116,6 +117,76 @@ def _upsert_records(db: Session, provider_name: str, records) -> tuple[int, int,
     return created, updated, errors
 
 
+# Si la corrida trae menos de esta fracción de lo que trajo la anterior, se
+# sospecha de la fuente y NO se dan bajas. Un directorio que responde a medias
+# —filtro mal puesto, corte de red a mitad de paginación, mantenimiento— parece
+# exactamente igual que una purga masiva legítima, y confundirlos vacía el
+# padrón de golpe. Ante la duda se prefiere gente de más a gente de menos: un
+# registro caduco se corrige en la siguiente corrida; uno borrado hay que
+# recuperarlo a mano.
+UMBRAL_BAJAS = 0.8
+
+
+def _dar_de_baja_a_los_ausentes(
+    db: Session, provider: str, desde: datetime, vistos: int
+) -> int:
+    """Marca inactiva a la gente que este proveedor ya no publica.
+
+    El padrón es la población VIVA de la institución. Cuando alguien causa baja
+    —o deja de ser comunidad— la fuente sencillamente deja de publicarlo, sin
+    avisar. Sin este paso su ficha se queda para siempre con los datos del día
+    que desapareció, y sigue resolviendo en el escaneo como si nada.
+
+    No se borra la fila: `presence_log` referencia el person_key y el histórico
+    debe seguir contando a esa persona como una sola. Se marca inactiva, que es
+    reversible —si la fuente vuelve a publicarla, el upsert la reactiva— y deja
+    la traza de que existió.
+
+    Se compara por `synced_at`: quien esta corrida tocó tiene la marca puesta
+    después de que empezara. Solo afecta a las filas de ESTE proveedor; los
+    demás gobiernan las suyas.
+    """
+    if vistos <= 0:
+        return 0
+    previa = (
+        db.query(ProviderSyncRun.created, ProviderSyncRun.updated)
+        .filter(
+            ProviderSyncRun.provider == provider,
+            ProviderSyncRun.status == "ok",
+            ProviderSyncRun.finished_at.isnot(None),
+        )
+        .order_by(ProviderSyncRun.id.desc())
+        .first()
+    )
+    if previa:
+        esperado = (previa[0] or 0) + (previa[1] or 0)
+        if esperado and vistos < esperado * UMBRAL_BAJAS:
+            logger.error(
+                "[sync] proveedor=%s: %d registros frente a %d de la corrida anterior "
+                "(%.0f%%). NO se dan bajas: parece la fuente respondiendo a medias, no "
+                "una purga real.",
+                provider, vistos, esperado, 100 * vistos / esperado,
+            )
+            return 0
+
+    bajas = (
+        db.query(Person)
+        .filter(
+            Person.source == provider,
+            Person.active.is_(True),
+            Person.synced_at < desde,
+        )
+        .update({"active": False}, synchronize_session=False)
+    )
+    db.commit()
+    if bajas:
+        logger.info(
+            "[sync] proveedor=%s: %d personas dejaron de publicarse y quedan inactivas.",
+            provider, bajas,
+        )
+    return bajas
+
+
 async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSyncRun:
     """Sincroniza el padrón desde un proveedor y registra la corrida.
 
@@ -139,6 +210,7 @@ async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSync
     created = 0
     updated = 0
     errors = 0
+    bajas = 0
     status = "ok"
     cobertura: dict[str, int] = {}
 
@@ -175,6 +247,7 @@ async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSync
         created, updated, errors = await asyncio.to_thread(
             _upsert_records, db, provider.name, records
         )
+        bajas = _dar_de_baja_a_los_ausentes(db, provider.name, run.started_at, len(records))
     except Exception:
         # Fallo global del proveedor (fetch_all no debería lanzar, pero por si acaso).
         errors += 1
@@ -195,8 +268,8 @@ async def sync_provider(db: Session, provider: IdentityProvider) -> ProviderSync
     db.refresh(run)
 
     logger.info(
-        "[sync] proveedor=%s: %d altas, %d cambios, %d errores (%s)",
-        provider.name, created, updated, errors, status,
+        "[sync] proveedor=%s: %d altas, %d cambios, %d bajas, %d errores (%s)",
+        provider.name, created, updated, bajas, errors, status,
     )
     return run
 

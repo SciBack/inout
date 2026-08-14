@@ -21,8 +21,18 @@ _PERSON_FIELDS = (
 )
 
 
+def _viva(query):
+    """Restringe a la población viva. Quien causó baja dejó de ser comunidad:
+    si aparece por el edificio se cuenta como visita, no como personal.
+
+    `active` se pone a False cuando la fuente deja de publicar a alguien; la
+    fila se conserva porque el histórico la referencia. Se admite NULL: son
+    filas anteriores a que esto existiera y nadie ha dicho que estén de baja."""
+    return query.filter(Person.active.isnot(False))
+
+
 def find_person_by_identifier(db: Session, id_type: str, id_value: str) -> Person | None:
-    """Resuelve una persona del padrón por una de sus credenciales."""
+    """Resuelve una persona VIVA del padrón por una de sus credenciales."""
     ident = (
         db.query(PersonIdentifier)
         .filter(
@@ -33,7 +43,7 @@ def find_person_by_identifier(db: Session, id_type: str, id_value: str) -> Perso
     )
     if ident is None:
         return None
-    return db.query(Person).filter(Person.person_key == ident.person_key).first()
+    return _viva(db.query(Person).filter(Person.person_key == ident.person_key)).first()
 
 
 def find_person_by_value(db: Session, id_value: str) -> Person | None:
@@ -51,7 +61,7 @@ def find_person_by_value(db: Session, id_value: str) -> Person | None:
     )
     if ident is None:
         return None
-    return db.query(Person).filter(Person.person_key == ident.person_key).first()
+    return _viva(db.query(Person).filter(Person.person_key == ident.person_key)).first()
 
 
 def _sync_identifiers(db: Session, person_key: str, identifiers: dict) -> None:
@@ -303,8 +313,9 @@ def upsert_person(db: Session, rec: PersonRecord, source: str) -> Person:
         person.source = entrante
         person.raw = rec.raw
     person.synced_at = now
-    if person.active is None:
-        person.active = True
+    # Reaparecer en la fuente reactiva: alguien pudo causar baja y volver
+    # (reingreso, contrato nuevo), y su ficha debe volver a resolver.
+    person.active = True
 
     # Persistir person antes de tocar identifiers (garantiza person_key estable).
     db.flush()
