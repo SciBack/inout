@@ -143,18 +143,17 @@ export function ScanInput({ onScan, disabled }: Props) {
         <p style={s.promptSub}>al lector</p>
       </div>
 
-      {/* Botón entrada manual — deshabilitado temporalmente */}
-      {/* <button
+      {/* Entrada manual para pruebas del saludo de voz sin lector físico. */}
+      <button
         style={s.kbdBtn}
         onClick={() => setManualOpen(true)}
         title="Ingresar número de carnet manualmente"
       >
         {KEYBOARD_SVG}
         <span>Ingresar manualmente</span>
-      </button> */}
+      </button>
 
-      {/* Modal de entrada manual — deshabilitado temporalmente */}
-      {/* {manualOpen && (
+      {manualOpen && (
         <div style={s.overlay} onClick={() => setManualOpen(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <p style={s.modalTitle}>Número de carnet</p>
@@ -181,7 +180,7 @@ export function ScanInput({ onScan, disabled }: Props) {
             </div>
           </div>
         </div>
-      )} */}
+      )}
     </div>
   )
 }
