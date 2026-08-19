@@ -4,6 +4,7 @@ import { speak } from '../utils/voicePreference'
 interface ScanResult {
   event_type: string
   patron: {
+    cardnumber: string
     name: string
     firstname: string
     first_name: string
@@ -62,7 +63,7 @@ export function WelcomeScreen({ result, isVisible }: Props) {
   const [photoError, setPhotoError] = useState(false)
 
   const firstName = patron.first_name || patron.firstname.split(' ')[0]
-  const photoUrl = patron.patron_id ? `/api/patron-photo/${patron.patron_id}` : null
+  const photoUrl = `/api/patron-photo/card/${encodeURIComponent(patron.cardnumber)}`
   // Sin nombre no hay a quién saludar: se rotula el hecho (quedó como visita).
   const displayName = firstName || (isUnknown ? 'VISITA' : patron.name)
 

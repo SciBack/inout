@@ -38,6 +38,7 @@ type AppState = 'idle' | 'welcome'
 interface ScanResult {
   event_type: string
   patron: {
+    cardnumber: string
     name: string
     firstname: string
     first_name: string
