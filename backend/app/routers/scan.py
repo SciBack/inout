@@ -7,6 +7,7 @@ from ..database import get_db
 from ..models import PresenceLog, Space, Sede
 from ..schemas import ScanRequest, ScanResponse, PatronInfo
 from ..services.identity import resolve_person
+from ..services.visitantes import visitante_unico
 from ..config import settings
 
 router = APIRouter()
@@ -165,10 +166,13 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
         person_key = None
         home_sede = None
 
-    # Determinar si es entrada o salida
+    # Determinar si es entrada o salida por PERSONA, no por la credencial que
+    # presentó. Una misma humana puede usar DNI, carné de trabajador o código
+    # de alumno indistintamente; todos resuelven al mismo person_key.
+    visitor_key = person.person_key if person is not None else cardnumber
     last = (
         db.query(PresenceLog)
-        .filter(PresenceLog.cardnumber == cardnumber)
+        .filter(visitante_unico() == visitor_key)
         .order_by(desc(PresenceLog.timestamp))
         .first()
     )

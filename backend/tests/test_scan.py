@@ -111,6 +111,36 @@ class TestIdentificadoNoCambia:
         assert "bienvenid" in r.message.lower()
 
 
+class TestEstadoPorPersonaCanonica:
+    """Las credenciales identifican a la persona; no crean presencias paralelas."""
+
+    def test_dni_y_codigo_de_la_misma_persona_comparten_entrada_salida(
+        self, db, espacio, monkeypatch
+    ):
+        p = upsert_person(
+            db,
+            PersonRecord(
+                person_key="ldap:10867326",
+                full_name="Juan Alberto Sanchez Condor",
+                source="ldap",
+                identifiers={
+                    "document_number": "10867326",
+                    "cardnumber": "9610165",
+                },
+            ),
+            source="ldap",
+        )
+        import app.routers.scan as scan_mod
+
+        monkeypatch.setattr(scan_mod, "DEBOUNCE_SECONDS", 0)
+        entrada = _scan(db, "10867326", monkeypatch, persona=p)
+        salida = _scan(db, "9610165", monkeypatch, persona=p)
+
+        assert entrada.event_type == "entry"
+        assert salida.event_type == "exit"
+        assert {ev.person_key for ev in db.query(PresenceLog).all()} == {"ldap:10867326"}
+
+
 class TestSnapshotHomeSede:
     """patron_home_sede es un SNAPSHOT del campus de origen de la persona al
     momento del evento (igual patrón que patron_category/patron_faculty)."""

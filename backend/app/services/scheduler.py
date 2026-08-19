@@ -15,12 +15,13 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 
 from ..config import settings
 from ..database import SessionLocal
 from ..models import PresenceLog, Space
 from .sync import sync_all
+from .visitantes import visitante_unico
 
 LIMA = ZoneInfo("America/Lima")
 logger = logging.getLogger(__name__)
@@ -46,14 +47,17 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
             microsecond=0,
         )
 
-        # Subquery: id del último evento registrado por cardnumber en este space
+        # Subquery: último evento por PERSONA en este space. `person_key` une
+        # DNI, carné laboral y código académico; el cardnumber queda como
+        # respaldo únicamente para visitas no identificadas.
+        visitor = visitante_unico()
         subq = (
             select(
-                PresenceLog.cardnumber,
+                visitor,
                 func.max(PresenceLog.id).label("last_id"),
             )
             .where(PresenceLog.space_id == space_id)
-            .group_by(PresenceLog.cardnumber)
+            .group_by(visitor)
             .subquery()
         )
 
@@ -62,10 +66,7 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
             db.query(PresenceLog)
             .join(
                 subq,
-                and_(
-                    PresenceLog.cardnumber == subq.c.cardnumber,
-                    PresenceLog.id == subq.c.last_id,
-                ),
+                PresenceLog.id == subq.c.last_id,
             )
             .filter(PresenceLog.event_type == "entry")
             .all()
@@ -83,6 +84,8 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
                 patron_gender=entry_ev.patron_gender,
                 patron_faculty=entry_ev.patron_faculty,
                 patron_program=entry_ev.patron_program,
+                patron_home_sede=entry_ev.patron_home_sede,
+                person_key=entry_ev.person_key,
                 event_type="exit",
                 space_id=space_id,
                 timestamp=close_dt,
