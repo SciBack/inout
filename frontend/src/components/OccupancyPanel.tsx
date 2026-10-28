@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, memo, type ReactNode } from 'react'
-import type { PanelView } from '../utils/panelView'
+import { useEffect, useRef, useState, memo } from 'react'
 
 interface DashboardData {
   space_name: string
@@ -141,7 +140,7 @@ function fmtDelta(today: number, yesterday: number): { text: string; color: stri
 
 
 // ── ArcGauge ─────────────────────────────────────────────────────────────────
-function ArcGauge({ value, max, color, size = 96 }: { value: number; max: number; color: string; size?: number }) {
+function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = Math.min(1, max > 0 ? value / max : 0)
   const R = 34
   const cx = 50, cy = 46
@@ -152,7 +151,7 @@ function ArcGauge({ value, max, color, size = 96 }: { value: number; max: number
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: `${size}px`, maxHeight: '100%', display: 'block' }}>
+    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: '96px', display: 'block' }}>
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -546,12 +545,7 @@ const FacultyBarChart = memo(function FacultyBarChart({
 })
 
 // ── OccupancyPanel ────────────────────────────────────────────────────────────
-export function OccupancyPanel({ spaceId, view = 'completa', below }: {
-  spaceId?: number
-  view?: PanelView
-  /** Contenido bajo el aforo en la vista esencial (p. ej. el ranking de libros). */
-  below?: ReactNode
-}) {
+export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
 
@@ -655,34 +649,6 @@ export function OccupancyPanel({ spaceId, view = 'completa', below }: {
         {/* COLUMNA 1: gauge + tarjetas estadísticas + facultades */}
         <div style={s.colStats}>
 
-        {view === 'esencial' ? (
-          <>
-            {/* Aforo esencial: cuánta gente hay y cuántos pasaron hoy, lado a
-                lado; debajo, lo que pase el tablero (el ranking de libros). */}
-            <div style={s.essentialRow}>
-              <div style={s.gaugeCard}>
-                <span style={s.sectionLabel}>En edificio ahora</span>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-                  <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} size={170} />
-                </div>
-                <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-                  {pct.toFixed(0)}% del aforo máximo
-                </span>
-              </div>
-              <StatCard
-                label="Visitantes hoy"
-                value={data.unique_visitors_today}
-                valueRef={refVisitors}
-                color={C.cyan}
-                sub={prevDaySub}
-                subColor={C.text3}
-                numSize="clamp(48px,8vh,104px)"
-              />
-            </div>
-            {below}
-          </>
-        ) : (
-        <>
           {/* Gauge compacto */}
           <div style={s.gaugeCard}>
             <span style={s.sectionLabel}>En edificio ahora</span>
@@ -762,8 +728,6 @@ export function OccupancyPanel({ spaceId, view = 'completa', below }: {
             <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
             <FacultyBarChart rows={data.faculty_breakdown} />
           </div>
-        </>
-        )}
 
         </div>
 
@@ -935,14 +899,6 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
   },
 
-  // Aforo esencial: gauge + visitantes de hoy, lado a lado.
-  essentialRow: {
-    flex: '0 0 auto',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 'clamp(5px,0.7vh,9px)',
-  },
-
   // Gauge card — compacto, no crece
   gaugeCard: {
     flex: '0 0 auto',
@@ -1012,11 +968,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(1px,0.3vh,4px)',
-    // Sin scroll: solo importan los más recientes; los que no caben se
-    // cortan y el último se desvanece en vez de quedar partido.
-    overflow: 'hidden',
-    maskImage: 'linear-gradient(to bottom, #000 88%, transparent)',
-    WebkitMaskImage: 'linear-gradient(to bottom, #000 88%, transparent)',
+    overflowY: 'auto',
   },
   feedItem: {
     display: 'flex',

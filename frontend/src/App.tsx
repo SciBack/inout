@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
-import { useTopBooks, TopBooksSpotlight, TopBooksRanking } from './components/TopBooks'
 import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
-import { getPanelView } from './utils/panelView'
 import { useDayNightMode } from './hooks/useDayNightMode'
 import ThemePicker, { THEME_PICKER_CSS } from './components/ThemePicker'
 import VoiceToggle, { VOICE_TOGGLE_CSS } from './components/VoiceToggle'
@@ -167,9 +165,6 @@ body { overflow: hidden; background: var(--c-bg); transition: background 400ms e
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.6; transform: scale(1.08); }
 }
-/* Si la institución no activó los libros, TopBooks no pinta nada y el lector
-   vuelve a quedar centrado en el panel. */
-.books-slot:empty { display: none !important; }
 @media (max-width: 767px) {
   .kiosk-root { flex-direction: column !important; }
   .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--c-border) !important; }
@@ -360,13 +355,6 @@ export default function App() {
   // amanecer si al mediodía le da el sol en la cara. 'auto' devuelve el mando
   // al ciclo real de la sede para quien lo prefiera así.
   const [themePref, setThemePref] = useState<ThemePreference>(getThemePreference)
-  // Tablero de aforo: esencial (predeterminado) o completo. Se lee una sola vez:
-  // cambiarlo es cosa de instalar el terminal, no de la sesión.
-  const [panelView] = useState(getPanelView)
-  const essential = panelView === 'esencial'
-  // Libros más prestados: un solo estado para la portada (panel derecho) y el
-  // ranking (bajo el aforo), así avanzan juntos.
-  const topBooks = useTopBooks(spaceId)
   const theme = resolveTheme(themePref, dayNightMode)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -554,32 +542,17 @@ export default function App() {
             <span style={styles.breadcrumbBuilding}>{activeSpace.name}</span>
           </span>
         )}
-        {/* En la vista esencial el reloj sube a la barra: el panel derecho
-            lo ocupa el carrusel y la fecha ya está en la cabecera del aforo. */}
-        {essential && <Clock inline />}
       </div>
 
       <div className="kiosk-root" style={styles.root}>
         <div className="panel-left" style={styles.left}>
-          <OccupancyPanel
-            spaceId={spaceId}
-            view={panelView}
-            below={essential ? <TopBooksRanking tb={topBooks} /> : undefined}
-          />
+          <OccupancyPanel spaceId={spaceId} />
         </div>
 
-        <div className="panel-right" style={essential ? styles.rightEssential : styles.right}>
+        <div className="panel-right" style={styles.right}>
           {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
               escaneos y los encola en vez de perderlos. */}
-          <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} compact={essential} />
-
-          {/* Vista esencial: el lector queda en una banda arriba y el resto
-              del panel lo ocupa el carrusel (la bienvenida lo tapa al escanear). */}
-          {essential && (
-            <div className="books-slot" style={styles.booksSlot}>
-              <TopBooksSpotlight tb={topBooks} />
-            </div>
-          )}
+          <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
 
         {showWelcome && (
           <WelcomeScreen result={scanResult!} isVisible={!isLeaving} />
@@ -615,7 +588,7 @@ export default function App() {
           </div>
         )}
 
-        {!essential && <Clock />}
+        <Clock />
         </div>
       </div>
     </div>
@@ -786,19 +759,12 @@ const spaceStyles: Record<string, React.CSSProperties> = {
   },
 }
 
-function Clock({ inline = false }: { inline?: boolean }) {
+function Clock() {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
-  if (inline) {
-    return (
-      <span style={styles.clockInline}>
-        {time.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-      </span>
-    )
-  }
   return (
     <div style={styles.clock}>
       <span style={styles.clockTime}>
@@ -880,23 +846,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderLeft: '1px solid var(--c-border)',
     overflow: 'hidden',
   },
-  // Vista esencial: lector en banda arriba + carrusel de libros llenando el resto.
-  rightEssential: {
-    flex: '0 0 41.7%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    position: 'relative',
-    borderLeft: '1px solid var(--c-border)',
-    overflow: 'hidden',
-  },
-  booksSlot: {
-    flex: '1 1 0',
-    minHeight: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '0 clamp(10px,1.4vh,18px) clamp(10px,1.4vh,18px)',
-  },
   errorOverlay: {
     position: 'absolute',
     inset: 0,
@@ -962,16 +911,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.2rem',
   },
-  clockInline: {
-    marginLeft: 'auto',
-    flexShrink: 0,
-    fontSize: 'clamp(20px,2.4vh,30px)' as unknown as undefined,
-    color: 'var(--c-text2)',
-    fontVariantNumeric: 'tabular-nums',
-    letterSpacing: '0.04em',
-    fontFamily: "'Bebas Neue', cursive",
-    lineHeight: 1,
-  } as React.CSSProperties,
   clockTime: {
     fontSize: 'clamp(28px,3.5vh,44px)' as unknown as undefined,
     fontWeight: 400,
