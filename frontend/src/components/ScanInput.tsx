@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 interface Props {
   onScan: (cardnumber: string) => void
   disabled?: boolean
+  /** Banda horizontal baja, para compartir el panel con otro contenido. */
+  compact?: boolean
 }
 
 const CARD_SVG = (
-  <svg width="200" height="128" viewBox="0 0 60 38" fill="none">
+  <svg viewBox="0 0 60 38" fill="none" style={{ width: '100%', height: 'auto', display: 'block' }}>
     <rect x="0.5" y="0.5" width="59" height="37" rx="4"
       fill="oklch(16% 0.035 229)" stroke="oklch(55% 0.18 212 / 0.70)" strokeWidth="1.2"/>
     <rect x="0.5" y="0.5" width="59" height="6.5" rx="4"
@@ -46,7 +48,7 @@ const KEYBOARD_SVG = (
   </svg>
 )
 
-export function ScanInput({ onScan, disabled }: Props) {
+export function ScanInput({ onScan, disabled, compact = false }: Props) {
   const [value, setValue] = useState('')
   const [manualOpen, setManualOpen] = useState(false)
   const [manualValue, setManualValue] = useState('')
@@ -95,7 +97,7 @@ export function ScanInput({ onScan, disabled }: Props) {
   const ringPlayState = disabled ? 'paused' : 'running'
 
   return (
-    <div style={s.container}>
+    <div style={compact ? s.containerCompact : s.container}>
       {/* Input invisible — captura lector HID */}
       <input
         ref={inputRef}
@@ -110,7 +112,7 @@ export function ScanInput({ onScan, disabled }: Props) {
       />
 
       {/* Scan zone con rings sonar + tarjeta flotante */}
-      <div style={s.scanZone}>
+      <div style={compact ? s.scanZoneCompact : s.scanZone}>
         {[0, 0.85, 1.7].map(delay => (
           <div key={delay} style={{
             position: 'absolute',
@@ -132,26 +134,29 @@ export function ScanInput({ onScan, disabled }: Props) {
         <div style={{
           animation: disabled ? 'none' : 'cardFloat 4s ease-in-out infinite',
           display: 'flex',
+          width: compact ? '80%' : 200,
         }}>
           {CARD_SVG}
         </div>
       </div>
 
-      {/* Texto prompt */}
-      <div style={s.promptWrap}>
-        <p style={s.promptMain}>Acerca tu carnet</p>
-        <p style={s.promptSub}>al lector</p>
-      </div>
+      <div style={compact ? s.textCompact : s.textWrap}>
+        {/* Texto prompt */}
+        <div style={compact ? s.promptWrapCompact : s.promptWrap}>
+          <p style={s.promptMain}>Acerca tu carnet</p>
+          <p style={s.promptSub}>al lector</p>
+        </div>
 
-      {/* Entrada manual para pruebas del saludo de voz sin lector físico. */}
-      <button
-        style={s.kbdBtn}
-        onClick={() => setManualOpen(true)}
-        title="Ingresar número de carnet manualmente"
-      >
-        {KEYBOARD_SVG}
-        <span>Ingresar manualmente</span>
-      </button>
+        {/* Entrada manual para pruebas del saludo de voz sin lector físico. */}
+        <button
+          style={s.kbdBtn}
+          onClick={() => setManualOpen(true)}
+          title="Ingresar número de carnet manualmente"
+        >
+          {KEYBOARD_SVG}
+          <span>Ingresar manualmente</span>
+        </button>
+      </div>
 
       {manualOpen && (
         <div style={s.overlay} onClick={() => setManualOpen(false)}>
@@ -216,6 +221,48 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
+    gap: '0.1rem',
+  },
+  textWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 'clamp(10px,1.4vh,18px)' as unknown as undefined,
+  } as React.CSSProperties,
+
+  // Variante compacta: tarjeta a la izquierda, texto a la derecha, en una
+  // banda baja que deja el resto del panel libre.
+  containerCompact: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'clamp(16px,2.4vh,32px)' as unknown as undefined,
+    padding: 'clamp(10px,1.6vh,20px) clamp(14px,2vh,24px)',
+    userSelect: 'none',
+    position: 'relative',
+    // Los anillos del sonar crecen hasta 1.75×: sin recorte invadirían el carrusel.
+    overflow: 'hidden',
+    flexShrink: 0,
+  } as React.CSSProperties,
+  scanZoneCompact: {
+    position: 'relative',
+    flex: '0 0 auto',
+    width: 'clamp(110px, 15vh, 180px)' as unknown as undefined,
+    height: 'clamp(110px, 15vh, 180px)' as unknown as undefined,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as React.CSSProperties,
+  textCompact: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 'clamp(6px,0.9vh,12px)' as unknown as undefined,
+  } as React.CSSProperties,
+  promptWrapCompact: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: '0.1rem',
   },
   promptMain: {

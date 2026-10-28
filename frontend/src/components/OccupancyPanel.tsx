@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, memo } from 'react'
-import { TopBooks } from './TopBooks'
 import type { PanelView } from '../utils/panelView'
 
 interface DashboardData {
@@ -153,7 +152,7 @@ function ArcGauge({ value, max, color, size = 96 }: { value: number; max: number
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: `${size}px`, display: 'block' }}>
+    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: `${size}px`, maxHeight: '100%', display: 'block' }}>
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -649,21 +648,22 @@ export function OccupancyPanel({ spaceId, view = 'completa' }: { spaceId?: numbe
       <div style={s.body}>
 
         {/* COLUMNA 1: gauge + tarjetas estadísticas + facultades */}
-        <div style={s.colStats}>
+        <div style={view === 'esencial' ? { ...s.colStats, flex: '0.8 1 0' } : s.colStats}>
 
         {view === 'esencial' ? (
           <>
-            {/* Aforo esencial: cuánta gente hay y cuántos pasaron hoy. */}
-            <div style={s.essentialRow}>
-              <div style={s.gaugeCard}>
-                <span style={s.sectionLabel}>En edificio ahora</span>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} size={150} />
-                </div>
-                <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-                  {pct.toFixed(0)}% del aforo máximo
-                </span>
+            {/* Aforo esencial: cuánta gente hay y cuántos pasaron hoy, apilados
+                a lo alto de la columna (los libros viven en el panel derecho). */}
+            <div style={{ ...s.gaugeCard, ...s.essentialCell, flex: '1.3 1 0' }}>
+              <span style={s.sectionLabel}>En edificio ahora</span>
+              <div style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} size={260} />
               </div>
+              <span style={{ textAlign: 'center', fontSize: 'clamp(14px,1.9vh,22px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
+                {pct.toFixed(0)}% del aforo máximo
+              </span>
+            </div>
+            <div style={s.essentialCell}>
               <StatCard
                 label="Visitantes hoy"
                 value={data.unique_visitors_today}
@@ -671,12 +671,9 @@ export function OccupancyPanel({ spaceId, view = 'completa' }: { spaceId?: numbe
                 color={C.cyan}
                 sub={prevDaySub}
                 subColor={C.text3}
-                numSize="clamp(44px,7vh,88px)"
+                numSize="clamp(56px,10vh,128px)"
               />
             </div>
-
-            {/* Libros más prestados (se oculta solo si la institución no lo activó) */}
-            <TopBooks spaceId={spaceId} />
           </>
         ) : (
         <>
@@ -932,12 +929,11 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
   },
 
-  // Aforo esencial: gauge + visitantes de hoy, lado a lado.
-  essentialRow: {
-    flex: '0 0 auto',
+  // Aforo esencial: cada tarjeta reparte el alto de la columna.
+  essentialCell: {
+    flex: '1 1 0',
+    minHeight: 0,
     display: 'grid',
-    gridTemplateColumns: '1.1fr 1fr',
-    gap: 'clamp(5px,0.7vh,9px)',
   },
 
   // Gauge card — compacto, no crece
