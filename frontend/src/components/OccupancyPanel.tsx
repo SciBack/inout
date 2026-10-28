@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, memo } from 'react'
+import { useEffect, useRef, useState, memo, type ReactNode } from 'react'
 import type { PanelView } from '../utils/panelView'
 
 interface DashboardData {
@@ -546,7 +546,12 @@ const FacultyBarChart = memo(function FacultyBarChart({
 })
 
 // ── OccupancyPanel ────────────────────────────────────────────────────────────
-export function OccupancyPanel({ spaceId, view = 'completa' }: { spaceId?: number; view?: PanelView }) {
+export function OccupancyPanel({ spaceId, view = 'completa', below }: {
+  spaceId?: number
+  view?: PanelView
+  /** Contenido bajo el aforo en la vista esencial (p. ej. el ranking de libros). */
+  below?: ReactNode
+}) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
 
@@ -648,22 +653,22 @@ export function OccupancyPanel({ spaceId, view = 'completa' }: { spaceId?: numbe
       <div style={s.body}>
 
         {/* COLUMNA 1: gauge + tarjetas estadísticas + facultades */}
-        <div style={view === 'esencial' ? { ...s.colStats, flex: '0.8 1 0' } : s.colStats}>
+        <div style={s.colStats}>
 
         {view === 'esencial' ? (
           <>
-            {/* Aforo esencial: cuánta gente hay y cuántos pasaron hoy, apilados
-                a lo alto de la columna (los libros viven en el panel derecho). */}
-            <div style={{ ...s.gaugeCard, ...s.essentialCell, flex: '1.3 1 0' }}>
-              <span style={s.sectionLabel}>En edificio ahora</span>
-              <div style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} size={260} />
+            {/* Aforo esencial: cuánta gente hay y cuántos pasaron hoy, lado a
+                lado; debajo, lo que pase el tablero (el ranking de libros). */}
+            <div style={s.essentialRow}>
+              <div style={s.gaugeCard}>
+                <span style={s.sectionLabel}>En edificio ahora</span>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+                  <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} size={170} />
+                </div>
+                <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
+                  {pct.toFixed(0)}% del aforo máximo
+                </span>
               </div>
-              <span style={{ textAlign: 'center', fontSize: 'clamp(14px,1.9vh,22px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-                {pct.toFixed(0)}% del aforo máximo
-              </span>
-            </div>
-            <div style={s.essentialCell}>
               <StatCard
                 label="Visitantes hoy"
                 value={data.unique_visitors_today}
@@ -671,9 +676,10 @@ export function OccupancyPanel({ spaceId, view = 'completa' }: { spaceId?: numbe
                 color={C.cyan}
                 sub={prevDaySub}
                 subColor={C.text3}
-                numSize="clamp(56px,10vh,128px)"
+                numSize="clamp(48px,8vh,104px)"
               />
             </div>
+            {below}
           </>
         ) : (
         <>
@@ -929,11 +935,12 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
   },
 
-  // Aforo esencial: cada tarjeta reparte el alto de la columna.
-  essentialCell: {
-    flex: '1 1 0',
-    minHeight: 0,
+  // Aforo esencial: gauge + visitantes de hoy, lado a lado.
+  essentialRow: {
+    flex: '0 0 auto',
     display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'clamp(5px,0.7vh,9px)',
   },
 
   // Gauge card — compacto, no crece
@@ -1005,7 +1012,11 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(1px,0.3vh,4px)',
-    overflowY: 'auto',
+    // Sin scroll: solo importan los más recientes; los que no caben se
+    // cortan y el último se desvanece en vez de quedar partido.
+    overflow: 'hidden',
+    maskImage: 'linear-gradient(to bottom, #000 88%, transparent)',
+    WebkitMaskImage: 'linear-gradient(to bottom, #000 88%, transparent)',
   },
   feedItem: {
     display: 'flex',

@@ -2,7 +2,8 @@
 //
 // Pensado para una pantalla que se mira de lejos y nadie toca: un libro en
 // primer plano (portada grande, cuántas veces se prestó) que va pasando solo, y
-// debajo el ranking del mismo periodo con el libro actual resaltado. Recorre
+// aparte el ranking del mismo periodo con el libro actual resaltado. Son dos
+// piezas (TopBooksSpotlight y TopBooksRanking) que comparten useTopBooks. Recorre
 // "hoy", "últimos 7 días" y "últimos 30 días", saltándose los periodos sin
 // préstamos. Los datos vienen de GET /api/materials/top.
 
@@ -115,8 +116,22 @@ function BookCover({ item, tile }: { item: MaterialItem; tile?: 'big' | 'thumb' 
   )
 }
 
-// ── Componente ──────────────────────────────────────────────────────────────
-export function TopBooks({ spaceId }: { spaceId?: number }) {
+// ── Estado compartido ───────────────────────────────────────────────────────
+// La portada en primer plano y el ranking viven en columnas distintas del
+// tablero; los dos leen este mismo estado para ir sincronizados.
+export interface TopBooksState {
+  data: TopData
+  periods: MaterialPeriod[]
+  pi: number
+  period: MaterialPeriod | undefined
+  books: MaterialItem[]
+  si: number
+  current: MaterialItem | undefined
+  totalSlides: number
+  stale: boolean
+}
+
+export function useTopBooks(spaceId?: number): TopBooksState | null {
   const [data, setData] = useState<TopData | null>(null)
   const [pIdx, setPIdx] = useState(0)   // periodo en pantalla
   const [sIdx, setSIdx] = useState(0)   // libro en primer plano dentro del periodo
@@ -159,11 +174,16 @@ export function TopBooks({ spaceId }: { spaceId?: number }) {
   }, [pi, si, books.length, periods.length, totalSlides])
 
   if (!data || !data.enabled) return null
-
   const stale = !!data.sync_error
     || (!!data.synced_at && Date.now() - new Date(data.synced_at).getTime() > STALE_MS)
-  const slideKey = current ? `${period.key}:${current.biblio_id}` : 'vacio'
-  const topLoans = books[0]?.loans ?? 1
+  return { data, periods, pi, period, books, si, current, totalSlides, stale }
+}
+
+// ── Libro en primer plano ───────────────────────────────────────────────────
+export function TopBooksSpotlight({ tb }: { tb: TopBooksState | null }) {
+  if (!tb) return null
+  const { data, periods, pi, period, books, current, totalSlides, stale } = tb
+  const slideKey = current && period ? `${period.key}:${current.biblio_id}` : 'vacio'
 
   return (
     <section style={st.section} aria-label="Libros más prestados">
@@ -180,14 +200,13 @@ export function TopBooks({ spaceId }: { spaceId?: number }) {
         </div>
       </header>
 
-      {!current ? (
+      {!current || !period ? (
         <div style={st.empty}>
           <span style={st.emptyTitle}>Aún no hay préstamos para mostrar</span>
           <span style={st.emptySub}>Aparecerán aquí a medida que se presten libros.</span>
         </div>
       ) : (
         <>
-          {/* Libro en primer plano */}
           <div key={slideKey} style={st.spot} role="group" aria-roledescription="carrusel"
                aria-label={`${current.rank} de ${books.length}: ${current.title}`}>
             <div className="tb-cover" style={st.coverBox}>
@@ -214,21 +233,6 @@ export function TopBooks({ spaceId }: { spaceId?: number }) {
               <div key={slideKey} className="tb-progress" style={st.progressBar} />
             </div>
           )}
-
-          {/* Ranking del periodo */}
-          <ol style={st.list}>
-            {books.map((b, i) => (
-              <li key={b.biblio_id} className="tb-row" data-active={i === si} style={st.row}>
-                <span style={st.rowRank}>{b.rank}</span>
-                <span style={st.thumb}><BookCover item={b} tile="thumb" /></span>
-                <span style={st.rowTitle}>{b.title}</span>
-                <span style={st.rowBar} aria-hidden="true">
-                  <span style={{ ...st.rowBarFill, width: `${Math.max(8, (b.loans / topLoans) * 100)}%` }} />
-                </span>
-                <span style={st.rowLoans}>{b.loans}</span>
-              </li>
-            ))}
-          </ol>
         </>
       )}
 
@@ -239,6 +243,35 @@ export function TopBooks({ spaceId }: { spaceId?: number }) {
             : `Actualizado ${fmtHour(data.synced_at)} · préstamos de Koha`}
         </footer>
       )}
+    </section>
+  )
+}
+
+// ── Ranking del periodo, con el libro en primer plano resaltado ─────────────
+export function TopBooksRanking({ tb }: { tb: TopBooksState | null }) {
+  if (!tb || !tb.period || tb.books.length === 0) return null
+  const { period, books, si } = tb
+  const topLoans = books[0]?.loans ?? 1
+
+  return (
+    <section style={st.rankSection} aria-label={`Ranking de libros · ${period.label}`}>
+      <style>{CSS}</style>
+      <header style={st.head}>
+        <span style={st.label}>Más prestados · {period.label}</span>
+      </header>
+      <ol style={st.list}>
+        {books.map((b, i) => (
+          <li key={b.biblio_id} className="tb-row" data-active={i === si} style={st.row}>
+            <span style={st.rowRank}>{b.rank}</span>
+            <span style={st.thumb}><BookCover item={b} tile="thumb" /></span>
+            <span style={st.rowTitle}>{b.title}</span>
+            <span style={st.rowBar} aria-hidden="true">
+              <span style={{ ...st.rowBarFill, width: `${Math.max(8, (b.loans / topLoans) * 100)}%` }} />
+            </span>
+            <span style={st.rowLoans}>{b.loans}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }
@@ -284,6 +317,13 @@ const st: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 'clamp(7px,1vh,13px)',
     overflow: 'hidden', fontFamily: FONT_BODY,
   },
+  rankSection: {
+    flex: '1 1 auto', minHeight: 0,
+    background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+    padding: 'clamp(9px,1.2vh,16px) clamp(11px,1.4vh,18px)',
+    display: 'flex', flexDirection: 'column', gap: 'clamp(6px,0.9vh,11px)',
+    overflow: 'hidden', fontFamily: FONT_BODY,
+  },
   head: { flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
   label: {
     fontSize: 'clamp(11px,1.3vh,16px)', color: C.text3, textTransform: 'uppercase',
@@ -295,16 +335,16 @@ const st: Record<string, React.CSSProperties> = {
     padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
   },
 
-  spot: { flex: '0 0 auto', display: 'flex', gap: 'clamp(12px,1.6vh,22px)', alignItems: 'stretch', minWidth: 0 },
+  spot: { flex: '1 1 auto', minHeight: 0, display: 'flex', gap: 'clamp(14px,2vh,28px)', alignItems: 'center', minWidth: 0 },
   coverBox: {
-    flex: '0 0 auto', height: 'clamp(150px,25vh,310px)', aspectRatio: '2 / 3',
+    flex: '0 0 auto', height: 'clamp(200px,46vh,560px)', maxHeight: '100%', aspectRatio: '2 / 3',
     borderRadius: 6, overflow: 'hidden', background: 'oklch(22% 0.02 230)',
     boxShadow: '0 10px 28px oklch(0% 0 0 / 0.38), 0 0 0 1px oklch(100% 0 0 / 0.06)',
   },
   spotText: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'clamp(3px,0.6vh,8px)' },
   rankTag: { fontSize: 'clamp(11px,1.4vh,17px)', color: C.cyan, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' },
   title: {
-    fontSize: 'clamp(19px,2.9vh,38px)', color: C.text1, fontWeight: 700, lineHeight: 1.12,
+    fontSize: 'clamp(22px,3.6vh,46px)', color: C.text1, fontWeight: 700, lineHeight: 1.1,
     display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
   author: {
@@ -319,19 +359,19 @@ const st: Record<string, React.CSSProperties> = {
   progressTrack: { flex: '0 0 auto', height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' },
   progressBar: { height: '100%', background: C.cyan },
 
-  list: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 },
+  list: { flex: '1 1 auto', minHeight: 0, overflow: 'hidden', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 },
   row: {
     display: 'flex', alignItems: 'center', gap: 'clamp(7px,1vh,12px)', flexShrink: 0,
     padding: 'clamp(3px,0.5vh,7px) clamp(6px,0.8vh,10px)', borderRadius: 8,
   },
   rowRank: { width: '1.4em', textAlign: 'center', fontFamily: FONT_DISPLAY, fontSize: 'clamp(16px,2.2vh,28px)', color: C.text3 },
   thumb: {
-    flex: '0 0 auto', width: 'clamp(24px,3.4vh,42px)', aspectRatio: '2 / 3', borderRadius: 3, overflow: 'hidden',
+    flex: '0 0 auto', width: 'clamp(30px,4.6vh,56px)', aspectRatio: '2 / 3', borderRadius: 3, overflow: 'hidden',
     background: 'oklch(22% 0.02 230)',
   },
   rowTitle: {
-    flex: 1, minWidth: 0, fontSize: 'clamp(13px,1.75vh,22px)', color: C.text1, fontWeight: 500,
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    flex: 1, minWidth: 0, fontSize: 'clamp(13px,1.75vh,22px)', color: C.text1, fontWeight: 500, lineHeight: 1.2,
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
   rowBar: { flex: '0 0 18%', height: 5, borderRadius: 3, background: C.border, overflow: 'hidden' },
   rowBarFill: { display: 'block', height: '100%', borderRadius: 3, background: C.cyan, opacity: 0.8 },

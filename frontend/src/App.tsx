@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
-import { TopBooks } from './components/TopBooks'
+import { useTopBooks, TopBooksSpotlight, TopBooksRanking } from './components/TopBooks'
 import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
 import { getPanelView } from './utils/panelView'
@@ -364,6 +364,9 @@ export default function App() {
   // cambiarlo es cosa de instalar el terminal, no de la sesión.
   const [panelView] = useState(getPanelView)
   const essential = panelView === 'esencial'
+  // Libros más prestados: un solo estado para la portada (panel derecho) y el
+  // ranking (bajo el aforo), así avanzan juntos.
+  const topBooks = useTopBooks(spaceId)
   const theme = resolveTheme(themePref, dayNightMode)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -558,7 +561,11 @@ export default function App() {
 
       <div className="kiosk-root" style={styles.root}>
         <div className="panel-left" style={styles.left}>
-          <OccupancyPanel spaceId={spaceId} view={panelView} />
+          <OccupancyPanel
+            spaceId={spaceId}
+            view={panelView}
+            below={essential ? <TopBooksRanking tb={topBooks} /> : undefined}
+          />
         </div>
 
         <div className="panel-right" style={essential ? styles.rightEssential : styles.right}>
@@ -570,7 +577,7 @@ export default function App() {
               del panel lo ocupa el carrusel (la bienvenida lo tapa al escanear). */}
           {essential && (
             <div className="books-slot" style={styles.booksSlot}>
-              <TopBooks spaceId={spaceId} />
+              <TopBooksSpotlight tb={topBooks} />
             </div>
           )}
 
