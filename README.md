@@ -70,6 +70,31 @@ Para activar fotos de patrons: configurar `KOHA_DB_HOST`, `KOHA_DB_USER`, `KOHA_
 
 Para multi-sede con Koha separado por sede: usar las variables `KOHA_BUL_*`, `KOHA_BUT_*`, `KOHA_BUJ_*`, etc.
 
+### Libros más prestados
+
+El dashboard incluye un carrusel de portadas con los libros más prestados (hoy, últimos 7 y últimos 30 días), leído de la circulación de Koha. Se activa con `MATERIALS_ENABLED=true` más la URL y el usuario de Koha (`MATERIALS_API_*`); ver `.env.example`.
+
+- Cada espacio cuenta solo los préstamos de su biblioteca (`spaces.library_code`: BUL, BUJ…). Sin `library_code`, cuenta todas.
+- No guarda quién pidió cada libro: solo título, biblioteca y fecha.
+- Portadas, en este orden: la que cargó la biblioteca en Koha → Open Library → Google Books (`viewapi`). Sin portada se dibuja una tarjeta con el título. Subir la portada a Koha (`cover_images`) es la forma de mejorarlas.
+- Endpoints públicos: `GET /api/materials/top?space_id=` y `GET /api/materials/cover/{biblio_id}`.
+
+### Vista del tablero: esencial o completa
+
+El tablero de aforo tiene dos vistas, que se eligen **por dispositivo** con `?vista=` en la URL del kiosko y se recuerdan:
+
+| Vista | Qué muestra |
+|---|---|
+| `esencial` (predeterminada) | Aforo (gauge y % del máximo), visitantes de hoy, actividad reciente y el carrusel de libros |
+| `completa` | El tablero de siempre: además perfiles, género, permanencia, hora punta, otros campus y facultades |
+
+```
+/kiosko?space=1&vista=completa     # volver al tablero anterior
+/kiosko?space=1&vista=esencial     # volver al nuevo
+```
+
+Para restaurar también el **código** de antes de este cambio: `git checkout dashboard-clasico-2026-10-28 -- frontend/src`.
+
 ---
 
 ## API principal

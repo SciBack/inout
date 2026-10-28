@@ -4,6 +4,7 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
 import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
+import { getPanelView } from './utils/panelView'
 import { useDayNightMode } from './hooks/useDayNightMode'
 import ThemePicker, { THEME_PICKER_CSS } from './components/ThemePicker'
 import VoiceToggle, { VOICE_TOGGLE_CSS } from './components/VoiceToggle'
@@ -355,6 +356,9 @@ export default function App() {
   // amanecer si al mediodía le da el sol en la cara. 'auto' devuelve el mando
   // al ciclo real de la sede para quien lo prefiera así.
   const [themePref, setThemePref] = useState<ThemePreference>(getThemePreference)
+  // Tablero de aforo: esencial (predeterminado) o completo. Se lee una sola vez:
+  // cambiarlo es cosa de instalar el terminal, no de la sesión.
+  const [panelView] = useState(getPanelView)
   const theme = resolveTheme(themePref, dayNightMode)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -546,7 +550,7 @@ export default function App() {
 
       <div className="kiosk-root" style={styles.root}>
         <div className="panel-left" style={styles.left}>
-          <OccupancyPanel spaceId={spaceId} />
+          <OccupancyPanel spaceId={spaceId} view={panelView} />
         </div>
 
         <div className="panel-right" style={styles.right}>

@@ -1,5 +1,11 @@
 # Changelog — InOut
 
+## v1.1.0 — 2026-10-28
+
+### Nuevo
+- **Libros más prestados:** carrusel de portadas con el ranking de hoy, últimos 7 y últimos 30 días, desde la circulación de Koha (REST). Sincroniza cada 10 min a tablas propias (`material_loans`, `material_titles`, `material_covers`); no guarda quién pidió el libro. Apagado por defecto (`MATERIALS_ENABLED`).
+- **Vista `esencial` del tablero** (predeterminada): solo el aforo indispensable + el carrusel. La vista anterior sigue disponible como `?vista=completa` y la etiqueta `dashboard-clasico-2026-10-28` guarda el código.
+
 ## v1.0.1 — 2026-04-14
 
 ### Mejoras

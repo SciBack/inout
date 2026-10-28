@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .database import init_db, SessionLocal
-from .routers import scan, dashboard, photo
+from .routers import scan, dashboard, photo, materials
 from .routers import admin
 from .services.scheduler import setup_scheduler, stop_scheduler
 
@@ -272,6 +272,7 @@ app.add_middleware(
 app.include_router(scan.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(photo.router, prefix="/api")
+app.include_router(materials.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, Float, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Time, Float, ForeignKey, JSON, UniqueConstraint, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -139,3 +139,44 @@ class ProviderSyncRun(Base):
     # el padrón en silencio: los reportes salen vacíos y nadie se entera hasta que
     # alguien nota algo raro semanas después.
     field_coverage = Column(JSON)
+
+
+class MaterialLoan(Base):
+    """Un préstamo de Koha. Solo lo necesario para contar uso de un título:
+    NO guarda quién lo pidió — el dashboard es público y esto es estadística
+    de material, no de personas."""
+    __tablename__ = "material_loans"
+
+    checkout_id = Column(Integer, primary_key=True, autoincrement=False)  # el de Koha
+    biblio_id = Column(Integer, nullable=False, index=True)
+    library_code = Column(String(20), index=True)   # sucursal de Koha (BUL, BUJ…)
+    checkout_date = Column(DateTime(timezone=True), nullable=False, index=True)
+    onsite = Column(Boolean, default=False)         # consulta en sala
+
+
+class MaterialTitle(Base):
+    """Ficha mínima de un título, cacheada de Koha (título, autor, ISBN)."""
+    __tablename__ = "material_titles"
+
+    biblio_id = Column(Integer, primary_key=True, autoincrement=False)
+    title = Column(String(500))
+    author = Column(String(300))
+    isbn = Column(String(300))                      # crudo de Koha: "978… | 84…"
+    item_type = Column(String(20))
+    # Búsqueda de portada: NULL en checked_at = aún no se buscó. Con checked_at
+    # y source NULL = se buscó y no hay; se reintenta a los 7 días.
+    cover_checked_at = Column(DateTime(timezone=True))
+    cover_source = Column(String(20))               # 'koha' | 'openlibrary' | 'google'
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MaterialCover(Base):
+    """Imagen de portada ya descargada. Tabla aparte para no arrastrar los
+    bytes en cada consulta del ranking."""
+    __tablename__ = "material_covers"
+
+    biblio_id = Column(Integer, primary_key=True, autoincrement=False)
+    content_type = Column(String(50), nullable=False)
+    data = Column(LargeBinary, nullable=False)
+    source = Column(String(20))
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())

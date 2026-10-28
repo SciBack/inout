@@ -10,16 +10,18 @@ quede como "dentro del edificio" de forma indefinida.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import func, select
 
 from ..config import settings
 from ..database import SessionLocal
 from ..models import PresenceLog, Space
+from .materials import run_materials_sync
 from .sync import sync_all
 from .visitantes import visitante_unico
 
@@ -166,6 +168,22 @@ def setup_scheduler():
         "[scheduler] sync de padrón programado diario a las %02d:%02d Lima",
         sync_hour, sync_minute,
     )
+
+    # Libros más prestados: sincroniza la circulación de Koha cada N minutos y
+    # una vez poco después del arranque (para no esperar el primer intervalo).
+    # max_instances=1 + coalesce: si Koha tarda, las corridas no se apilan.
+    if settings.materials_enabled:
+        scheduler.add_job(
+            run_materials_sync,
+            trigger=IntervalTrigger(minutes=settings.materials_sync_minutes, timezone=LIMA),
+            next_run_time=datetime.now(LIMA) + timedelta(seconds=20),
+            id="materials_sync",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            name=f"Libros más prestados (Koha) cada {settings.materials_sync_minutes} min",
+        )
+        logger.info("[scheduler] libros más prestados: cada %d min.", settings.materials_sync_minutes)
 
     scheduler.start()
     logger.info("[scheduler] iniciado.")

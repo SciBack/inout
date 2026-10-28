@@ -434,3 +434,31 @@ class ProviderSyncRunResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── Libros más prestados (GET /api/materials/top) ───────────────────────────
+class MaterialItem(BaseModel):
+    rank: int
+    biblio_id: int
+    title: str
+    author: Optional[str] = None
+    loans: int                          # préstamos del periodo
+    last_loan_at: Optional[datetime] = None
+    cover_url: Optional[str] = None     # None = sin portada: el cliente dibuja una tarjeta
+
+
+class MaterialPeriod(BaseModel):
+    key: str                            # 'day' | 'week' | 'month'
+    label: str
+    since: datetime
+    total_loans: int                    # préstamos de TODO el periodo, no solo del top
+    items: list[MaterialItem]
+
+
+class MaterialsTopResponse(BaseModel):
+    enabled: bool
+    as_of: datetime
+    synced_at: Optional[datetime] = None   # última sincronización con Koha que salió bien
+    sync_error: Optional[str] = None       # por qué la última falló (None = bien)
+    library_code: Optional[str] = None     # None = todas las bibliotecas
+    periods: list[MaterialPeriod]

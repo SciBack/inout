@@ -78,6 +78,27 @@ class Settings(BaseSettings):
 
     admin_initial_password: str = "admin123"
 
+    # ── Libros más prestados (circulación de Koha por REST) ────────────────
+    # Apagado por defecto: el producto agnóstico no asume que la institución
+    # tenga Koha. La credencial es APARTE de la de identidad a propósito: solo
+    # necesita leer préstamos y catálogo, y conviene que sea un usuario de
+    # servicio con esos permisos y nada más. Vacía = usa koha_api_*.
+    materials_enabled: bool = False
+    materials_api_url: str = ""
+    materials_api_user: str = ""
+    materials_api_pass: str = ""
+    materials_sync_minutes: int = 10
+    # Primera corrida (tabla vacía): cuántos días hacia atrás traer.
+    materials_backfill_days: int = 120
+    # Corridas siguientes: se re-leen los últimos N días, por si Koha registra
+    # un préstamo con fecha atrasada o se corrige uno.
+    materials_overlap_days: int = 3
+    # URL pública del OPAC de Koha: de ahí sale la portada que la propia
+    # biblioteca cargó (cover_images). Vacía = esa fuente se omite.
+    materials_opac_url: str = ""
+    # Orden de búsqueda de portadas, separado por comas.
+    materials_cover_sources: str = "koha,openlibrary,google"
+
     # ── Proveedores de identidad (padrón local pluggable) ──────────────────
     # Todo con default vacío/False → producto agnóstico: sin proveedores
     # configurados el arranque no se rompe y el aforo degrada a "sin identificar".
@@ -137,6 +158,14 @@ class Settings(BaseSettings):
         user = getattr(self, f"koha_{code.lower()}_api_user", "") or self.koha_api_user
         pass_ = getattr(self, f"koha_{code.lower()}_api_pass", "") or self.koha_api_pass
         return url, user, pass_
+
+    def materials_koha(self) -> tuple[str, str, str]:
+        """(url, user, pass) del Koha REST que alimenta "libros más prestados"."""
+        return (
+            self.materials_api_url or self.koha_api_url,
+            self.materials_api_user or self.koha_api_user,
+            self.materials_api_pass or self.koha_api_pass,
+        )
 
     def koha_db_for_sede(self, sede_code: str) -> tuple[str, str, str, str]:
         """Devuelve (host, user, pass, name) del Koha DB para la sede dada.
