@@ -66,9 +66,16 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
   )
 })
 
+const LAPTOP_LIBRE = {
+  color: 'var(--c-cyan)',
+  bg: 'color-mix(in oklch, var(--c-cyan) 14%, transparent)',
+  borde: 'color-mix(in oklch, var(--c-cyan) 50%, transparent)',
+}
+
 const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   const estado: Sala['estado'] = p.estado === 'en_uso' ? 'ocupada' : p.estado
-  const t = TONO[estado]
+  // Las laptops libres van en celeste para no confundirlas con las salas (verde).
+  const t = estado === 'libre' ? LAPTOP_LIBRE : estado === 'llamada' ? { ...LAPTOP_LIBRE, bg: 'transparent' } : TONO[estado]
   const texto = p.estado === 'libre' ? 'Libre' : p.estado === 'llamada' ? 'Reserv.' : p.fin ? hora(p.fin) : 'En uso'
   return (
     <div className={estado === 'termina' ? 'sala-titila' : undefined} style={{
@@ -109,7 +116,8 @@ function PedirCard({ url }: { url: string }) {
           Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta
         </span>
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
-          <span><i style={punto('var(--c-green)')} />Libre</span>
+          <span><i style={punto('var(--c-green)')} />Sala libre</span>
+          <span><i style={punto('var(--c-cyan)')} />Laptop libre</span>
           <span><i style={punto('var(--c-red)')} />En uso</span>
           <span><i style={punto('var(--c-amber)')} />Termina pronto</span>
         </span>
@@ -182,7 +190,7 @@ export function EspaciosPanel({ url }: { url?: string | null }) {
         <div style={tarjeta}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <span style={etiqueta}>Laboratorio · laptops</span>
-            <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: datos.laboratorio.libres ? 'var(--c-green)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: datos.laboratorio.libres ? 'var(--c-cyan)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
               {datos.laboratorio.libres} de {datos.laboratorio.total} libres
               {datos.laboratorio.cola > 0 && ` · ${datos.laboratorio.cola} en cola`}
             </span>
