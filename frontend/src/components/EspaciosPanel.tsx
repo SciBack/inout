@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react'
+import QRCode from 'qrcode'
 
 // Disponibilidad de salas (por piso) y del laboratorio de laptops del edificio, para la columna de
 // estadísticas del kiosko. La lee de Discovery (/mi/api/salas/publico, ADR-004): estado de cada
@@ -14,8 +15,9 @@ type Sala = {
   minimo?: number
 }
 type Piso = { piso: string; salas: Sala[] }
-type Laboratorio = { libres: number; total: number; cola: number; proxima?: string | null }
-type Espacios = { ahora: string; pisos: Piso[]; laboratorio: Laboratorio | null }
+type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina'; fin?: string | null }
+type Laboratorio = { libres: number; total: number; cola: number; proxima?: string | null; puestos?: Laptop[] }
+type Espacios = { ahora: string; pisos: Piso[]; laboratorio: Laboratorio | null; contingencia?: string }
 
 const FONT_DISPLAY = "'Bebas Neue', 'Arial Narrow', impact, sans-serif"
 const FONT_BODY = "'Barlow', system-ui, sans-serif"
@@ -40,7 +42,7 @@ function estadoTexto(s: Sala): string {
     case 'termina': return `Termina ${hora(s.fin)}`
     case 'tolerancia': return 'Desocupando'
     case 'llamada': return 'Reservada'
-    default: return `Hasta ${hora(s.fin)}`
+    default: return s.fin ? `Hasta ${hora(s.fin)}` : 'En uso'
   }
 }
 
@@ -63,6 +65,58 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
     </div>
   )
 })
+
+const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
+  const estado: Sala['estado'] = p.estado === 'en_uso' ? 'ocupada' : p.estado
+  const t = TONO[estado]
+  const texto = p.estado === 'libre' ? 'Libre' : p.estado === 'llamada' ? 'Reserv.' : p.fin ? hora(p.fin) : 'En uso'
+  return (
+    <div className={estado === 'termina' ? 'sala-titila' : undefined} style={{
+      background: t.bg, border: `1px ${estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`, borderRadius: 8,
+      padding: 'clamp(4px,0.6vh,8px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0,
+    }}>
+      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(18px,2.4vh,30px)', lineHeight: 1, color: 'var(--c-text1)' }}>
+        {p.id.replace(/^LAB-0?/, '')}
+      </span>
+      <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(10px,1.2vh,14px)', color: t.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+        {texto}
+      </span>
+    </div>
+  )
+})
+
+// Pide una sala o una laptop: QR a «Su cuenta» de Discovery (salas y laptops se piden ahí).
+function PedirCard({ url }: { url: string }) {
+  const destino = new URL('/Cuenta/Cubiculos', url).toString()
+  const [svg, setSvg] = useState('')
+  useEffect(() => {
+    QRCode.toString(destino, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#0b1220', light: '#ffffff' } })
+      .then(setSvg).catch(() => setSvg(''))
+  }, [destino])
+  const host = new URL(url).host
+  const punto = (c: string) => ({ width: 10, height: 10, borderRadius: 3, background: c, display: 'inline-block', marginRight: 6 })
+  return (
+    <div style={{ ...tarjeta, marginTop: 'auto', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 'clamp(10px,1.4vh,18px)' }}>
+      {svg && (
+        <div aria-hidden style={{ background: '#fff', padding: 6, borderRadius: 8, width: 'clamp(64px,8.5vh,120px)', flexShrink: 0, lineHeight: 0 }}
+             dangerouslySetInnerHTML={{ __html: svg }} />
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.6vh,8px)', minWidth: 0 }}>
+        <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(14px,1.8vh,22px)', color: 'var(--c-text1)', lineHeight: 1.15 }}>
+          Pida una sala o una laptop
+        </span>
+        <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
+          Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta
+        </span>
+        <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+          <span><i style={punto('var(--c-green)')} />Libre</span>
+          <span><i style={punto('var(--c-red)')} />En uso</span>
+          <span><i style={punto('var(--c-amber)')} />Termina pronto</span>
+        </span>
+      </div>
+    </div>
+  )
+}
 
 const etiqueta: React.CSSProperties = {
   fontSize: 'clamp(11px,1.3vh,16px)', color: 'var(--c-text3)', textTransform: 'uppercase',
@@ -96,6 +150,17 @@ export function EspaciosPanel({ url }: { url?: string | null }) {
 
   return (
     <>
+      {datos.contingencia && datos.contingencia !== 'normal' && (
+        <div role="status" style={{ ...tarjeta, borderColor: 'color-mix(in oklch, var(--c-amber) 60%, transparent)',
+          background: 'color-mix(in oklch, var(--c-amber) 12%, var(--c-bg-panel))' }}>
+          <span style={{ ...etiqueta, color: 'var(--c-amber)' }}>Modo contingencia</span>
+          <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(13px,1.6vh,19px)', color: 'var(--c-text1)' }}>
+            {datos.contingencia === 'corte'
+              ? 'Para ocupar salas o laptops, pida el código del día al personal del CRAI.'
+              : 'Salas y laptops se piden conectado a la red de la universidad.'}
+          </span>
+        </div>
+      )}
       <style>{`@keyframes salaTitila { 50% { opacity: .5 } } .sala-titila { animation: salaTitila 1.2s ease-in-out infinite } @media (prefers-reduced-motion: reduce) { .sala-titila { animation: none } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
@@ -115,19 +180,30 @@ export function EspaciosPanel({ url }: { url?: string | null }) {
       })}
       {datos.laboratorio && (
         <div style={tarjeta}>
-          <span style={etiqueta}>Laboratorio · laptops</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(30px,4.2vh,54px)', lineHeight: 1, color: datos.laboratorio.libres ? 'var(--c-green)' : 'var(--c-red)', fontVariantNumeric: 'tabular-nums' }}>
-              {datos.laboratorio.libres}
-            </span>
-            <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(12px,1.4vh,17px)', color: 'var(--c-text2)' }}>
-              de {datos.laboratorio.total} libres
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            <span style={etiqueta}>Laboratorio · laptops</span>
+            <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: datos.laboratorio.libres ? 'var(--c-green)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
+              {datos.laboratorio.libres} de {datos.laboratorio.total} libres
               {datos.laboratorio.cola > 0 && ` · ${datos.laboratorio.cola} en cola`}
-              {!datos.laboratorio.libres && datos.laboratorio.proxima && ` · se libera ${hora(datos.laboratorio.proxima)}`}
             </span>
           </div>
+          {datos.laboratorio.puestos?.length ? (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(5, datos.laboratorio.puestos.length)}, minmax(0, 1fr))`, gap: 'clamp(4px,0.6vh,8px)' }}>
+              {datos.laboratorio.puestos.map((p) => <LaptopChip key={p.id} p={p} />)}
+            </div>
+          ) : (
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(30px,4.2vh,54px)', lineHeight: 1, color: datos.laboratorio.libres ? 'var(--c-green)' : 'var(--c-red)' }}>
+              {datos.laboratorio.libres}
+            </span>
+          )}
+          {!datos.laboratorio.libres && datos.laboratorio.proxima && (
+            <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.4vh,17px)', color: 'var(--c-text2)' }}>
+              La próxima se libera a las {hora(datos.laboratorio.proxima)}
+            </span>
+          )}
         </div>
       )}
+      <PedirCard url={url!} />
     </>
   )
 }
