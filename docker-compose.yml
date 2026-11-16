@@ -61,6 +61,9 @@ services:
       MATERIALS_BACKFILL_DAYS: ${MATERIALS_BACKFILL_DAYS:-120}
       MATERIALS_OPAC_URL: ${MATERIALS_OPAC_URL:-}
       MATERIALS_COVER_SOURCES: ${MATERIALS_COVER_SOURCES:-koha,openlibrary,google}
+      # Disponibilidad de salas y laptops (Discovery) en la columna de estadísticas del kiosko.
+      ESPACIOS_URL: ${ESPACIOS_URL:-}
+      ESPACIOS_LIBRARY_CODES: ${ESPACIOS_LIBRARY_CODES:-}
       DEFAULT_SPACE_ID: ${DEFAULT_SPACE_ID:-1}
       DEFAULT_SPACE_CAPACITY: ${DEFAULT_SPACE_CAPACITY:-150}
       DEFAULT_SPACE_NAME: ${DEFAULT_SPACE_NAME:-Biblioteca}
