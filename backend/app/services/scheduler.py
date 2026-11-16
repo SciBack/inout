@@ -127,6 +127,42 @@ async def _daily_sync():
         logger.exception("[sync-job] error en la sincronización diaria del padrón")
 
 
+def _enviar_presentes():
+    """Al arrancar InOut: avisa a Discovery quiénes están dentro hoy (su última marca es entrada).
+    Cubre lo ocurrido mientras InOut o Discovery estuvieron caídos, o antes de conectarlos."""
+    from ..models import Person
+    db = SessionLocal()
+    try:
+        now_lima = datetime.now(LIMA)
+        inicio_dia = now_lima.replace(hour=0, minute=0, second=0, microsecond=0)
+        visitor = visitante_unico()
+        subq = (
+            select(visitor, func.max(PresenceLog.id).label("last_id"))
+            .where(PresenceLog.timestamp >= inicio_dia)
+            .group_by(visitor)
+            .subquery()
+        )
+        dentro = (
+            db.query(PresenceLog)
+            .join(subq, PresenceLog.id == subq.c.last_id)
+            .filter(PresenceLog.event_type == "entry")
+            .all()
+        )
+        claves = [e.person_key for e in dentro if e.person_key]
+        correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
+        enviados = 0
+        for e in dentro:
+            correo = correos.get(e.person_key)
+            if correo:
+                discovery.avisar_marca(correo, "entry", e.timestamp, None, en_hilo=False)
+                enviados += 1
+        logger.info("[discovery] presentes enviados al arrancar: %d", enviados)
+    except Exception:
+        logger.exception("[discovery] no se pudo enviar la lista de presentes")
+    finally:
+        db.close()
+
+
 def setup_scheduler():
     """
     Lee close_time de cada space activo y registra un CronTrigger diario.
@@ -207,6 +243,13 @@ def setup_scheduler():
             name="Latido a Discovery cada minuto",
         )
         logger.info("[scheduler] latido a Discovery cada minuto.")
+        scheduler.add_job(
+            _enviar_presentes,
+            next_run_time=datetime.now(LIMA) + timedelta(seconds=30),
+            id="discovery_presentes",
+            replace_existing=True,
+            name="Presentes a Discovery al arrancar",
+        )
 
     scheduler.start()
     logger.info("[scheduler] iniciado.")
