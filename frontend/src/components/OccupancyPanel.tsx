@@ -1,3 +1,4 @@
+import { EspaciosPanel } from './EspaciosPanel'
 import { useEffect, useRef, useState, memo } from 'react'
 
 interface DashboardData {
@@ -32,6 +33,7 @@ interface DashboardData {
   entries_yesterday: number
   prev_day_visitors: number
   prev_day_label: string
+  espacios_url?: string | null
 }
 
 // ── Paleta OKLCH ────────────────────────────────────────────────────────────
@@ -649,21 +651,21 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         {/* COLUMNA 1: gauge + tarjetas estadísticas + facultades */}
         <div style={s.colStats}>
 
-          {/* Gauge compacto */}
-          <div style={s.gaugeCard}>
-            <span style={s.sectionLabel}>En edificio ahora</span>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+          {/* Solo lo esencial arriba (aforo y visitantes de hoy); el resto de la columna es la
+              disponibilidad de salas por piso y del laboratorio (Discovery). Las tarjetas que
+              se quitaron (perfiles, hombres/mujeres, permanencia, hora punta, otro campus,
+              facultades) siguen en el panel admin. */}
+          <div style={s.esencial}>
+            <div style={s.gaugeCard}>
+              <span style={s.sectionLabel}>En edificio ahora</span>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+              </div>
+              <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
+                {pct.toFixed(0)}% del aforo máximo
+              </span>
             </div>
-            <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-              {pct.toFixed(0)}% del aforo máximo
-            </span>
-          </div>
 
-          {/* Tarjetas estadísticas — grid 2 cols */}
-          <div style={s.statGrid}>
-
-            {/* Visitantes hoy */}
             <StatCard
               label="Visitantes hoy"
               value={data.unique_visitors_today}
@@ -671,63 +673,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               color={C.cyan}
               sub={prevDaySub}
               subColor={C.text3}
-              numSize="clamp(32px,4.4vh,56px)"
+              numSize="clamp(40px,6vh,76px)"
             />
-
-            {/* Perfiles hoy */}
-            <ProfilesCard breakdown={data.category_breakdown ?? []} />
-
-            {/* Hombres */}
-            <StatCard
-              label="Hombres en edificio"
-              value={data.current_male}
-              valueRef={refMale}
-              color={C.blue}
-              sub={`${data.total_male_today} total hoy`}
-              subColor={C.text3}
-            />
-
-            {/* Mujeres */}
-            <StatCard
-              label="Mujeres en edificio"
-              value={data.current_female}
-              valueRef={refFemale}
-              color={C.rose}
-              sub={`${data.total_female_today} total hoy`}
-              subColor={C.text3}
-            />
-
-            {/* Permanencia media */}
-            <StatCard
-              label="Prom. permanencia"
-              value={avgStayStr}
-              color={C.text1}
-              numSize="clamp(22px,3.0vh,38px)"
-              sub={typicalStaySub}
-              subColor={C.text3}
-            />
-
-            {/* Hora punta */}
-            <StatCard
-              label="Hora punta"
-              value={peakHourStr}
-              color={C.amber}
-              numSize="clamp(22px,3.0vh,38px)"
-              sub={typicalPeakSub}
-              subColor={C.text3}
-            />
-
           </div>
 
-          {/* Visitantes de otro campus — no se muestra si viene vacío */}
-          <CrossCampusCard breakdown={data.cross_campus_breakdown ?? []} />
-
-          {/* Barras por facultad — debajo de las métricas, dentro de esta
-              misma columna. */}
-          <div style={s.facultyInCol}>
-            <span style={s.sectionLabel}>Visitantes por facultad · hoy</span>
-            <FacultyBarChart rows={data.faculty_breakdown} />
-          </div>
+          <EspaciosPanel url={data.espacios_url} />
 
         </div>
 
@@ -897,6 +847,14 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 'clamp(7px,0.9vh,12px)',
     overflowY: 'auto',
+  },
+
+  // Aforo y visitantes de hoy, lado a lado.
+  esencial: {
+    flex: '0 0 auto',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'clamp(7px,0.9vh,12px)',
   },
 
   // Gauge card — compacto, no crece

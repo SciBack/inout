@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     faculty_config_path: str = ""   # JSON con valid_faculty_codes + program_to_faculty
     sedes_config_path: str = ""     # JSON con lista [{code, name, city}]
     default_sede_code: str = ""     # código de sede para el espacio por defecto
+    # Disponibilidad de salas y laptops en la columna de estadísticas del kiosko: URL pública de
+    # Discovery (/mi/api/salas/publico) y los library_code de los espacios donde se muestra (las
+    # salas de Lima no van en el kiosko de Juliaca). Vacío: no se muestra.
+    espacios_url: str = ""
+    espacios_library_codes: str = ""
 
     # Proveedor Koha por BD directa (lee borrowers vía MariaDB, reusa koha_db_*).
     koha_db_enabled: bool = False

@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, text
@@ -196,6 +197,15 @@ def _compute_cross_campus_breakdown(
         key=lambda h: h.count,
         reverse=True,
     )
+
+
+def _espacios_url(space) -> Optional[str]:
+    """URL de salas y laptops para el kiosko de este espacio, si está configurada para su biblioteca."""
+    if not settings.espacios_url:
+        return None
+    codigos = {c.strip().upper() for c in settings.espacios_library_codes.split(",") if c.strip()}
+    codigo = (getattr(space, "library_code", None) or "").upper()
+    return settings.espacios_url if not codigos or codigo in codigos else None
 
 
 @router.get("/dashboard", response_model=DashboardStats)
@@ -625,4 +635,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         faculty_timelines=faculty_timelines,
         faculty_events=faculty_events,
         cross_campus_breakdown=cross_campus_breakdown,
+        espacios_url=_espacios_url(space),
     )

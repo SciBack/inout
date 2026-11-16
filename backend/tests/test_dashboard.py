@@ -196,3 +196,24 @@ class TestVisitanteUnicoEsLaPersona:
         self._entrada(db, "carne-trabajador", "ldap:1")
         self._entrada(db, "dni", "ldap:1")
         assert _by_code(_run(db))["BUT"].count == 1
+
+
+class TestEspaciosUrl:
+    """Disponibilidad de salas y laptops (Discovery) solo en los kioscos de su biblioteca."""
+
+    def _space(self, codigo):
+        from types import SimpleNamespace
+        return SimpleNamespace(library_code=codigo)
+
+    def test_sin_configurar_no_se_muestra(self, monkeypatch):
+        from app.routers import dashboard as d
+        monkeypatch.setattr(d.settings, "espacios_url", "")
+        assert d._espacios_url(self._space("BUL")) is None
+
+    def test_solo_para_su_biblioteca(self, monkeypatch):
+        from app.routers import dashboard as d
+        monkeypatch.setattr(d.settings, "espacios_url", "https://discovery.test/mi/api/salas/publico")
+        monkeypatch.setattr(d.settings, "espacios_library_codes", "BUL")
+        assert d._espacios_url(self._space("BUL")).endswith("/publico")
+        assert d._espacios_url(self._space("BUJ")) is None
+        assert d._espacios_url(None) is None

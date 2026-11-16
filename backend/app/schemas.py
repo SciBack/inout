@@ -126,6 +126,8 @@ class DashboardStats(BaseModel):
     faculty_timelines: list[FacultyTimeline] = []
     faculty_events: list[FacultyEvent] = []
     cross_campus_breakdown: list[HomeSedeCount] = []
+    # URL de la disponibilidad de salas y laptops de este edificio (Discovery), o None.
+    espacios_url: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
