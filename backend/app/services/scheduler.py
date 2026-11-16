@@ -19,6 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import func, select
 
 from ..config import settings
+from . import discovery
 from ..database import SessionLocal
 from ..models import PresenceLog, Space
 from .materials import run_materials_sync
@@ -94,6 +95,13 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
             ))
 
         db.commit()
+        # Discovery: estas salidas son forzadas (nadie marcó): «salida no registrada».
+        if discovery.activo():
+            from ..models import Person
+            claves = [e.person_key for e in still_inside if e.person_key]
+            correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
+            for e in still_inside:
+                discovery.avisar_marca(correos.get(e.person_key), "exit", close_dt, None, forzada=True, en_hilo=False)
         logger.info(
             "[auto-exit] space=%d: %d salidas forzadas a las %02d:%02d Lima.",
             space_id, len(still_inside), close_hour, close_minute,
@@ -184,6 +192,21 @@ def setup_scheduler():
             name=f"Libros más prestados (Koha) cada {settings.materials_sync_minutes} min",
         )
         logger.info("[scheduler] libros más prestados: cada %d min.", settings.materials_sync_minutes)
+
+    # Latido a Discovery cada minuto: sin latido, Discovery sabe que InOut está caído y la
+    # presencia en el CRAI pasa a la red de la universidad (ADR-004 § 10 de Discovery).
+    if discovery.activo():
+        scheduler.add_job(
+            discovery.latido,
+            trigger=IntervalTrigger(minutes=1, timezone=LIMA),
+            next_run_time=datetime.now(LIMA) + timedelta(seconds=10),
+            id="discovery_latido",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            name="Latido a Discovery cada minuto",
+        )
+        logger.info("[scheduler] latido a Discovery cada minuto.")
 
     scheduler.start()
     logger.info("[scheduler] iniciado.")

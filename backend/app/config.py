@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # salas de Lima no van en el kiosko de Juliaca). Vacío: no se muestra.
     espacios_url: str = ""
     espacios_library_codes: str = ""
+    # Aviso de marcas a Discovery (presencia en el CRAI para ocupar salas): URL del webhook
+    # (https://discovery.<dominio>/mi/api/interno/inout) y secreto compartido para firmar. Vacío: no avisa.
+    discovery_webhook_url: str = ""
+    discovery_webhook_secreto: str = ""
 
     # Proveedor Koha por BD directa (lee borrowers vía MariaDB, reusa koha_db_*).
     koha_db_enabled: bool = False

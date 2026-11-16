@@ -64,6 +64,9 @@ services:
       # Disponibilidad de salas y laptops (Discovery) en la columna de estadísticas del kiosko.
       ESPACIOS_URL: ${ESPACIOS_URL:-}
       ESPACIOS_LIBRARY_CODES: ${ESPACIOS_LIBRARY_CODES:-}
+      # Aviso de cada marca y latido a Discovery (presencia en el CRAI para ocupar salas).
+      DISCOVERY_WEBHOOK_URL: ${DISCOVERY_WEBHOOK_URL:-}
+      DISCOVERY_WEBHOOK_SECRETO: ${DISCOVERY_WEBHOOK_SECRETO:-}
       DEFAULT_SPACE_ID: ${DEFAULT_SPACE_ID:-1}
       DEFAULT_SPACE_CAPACITY: ${DEFAULT_SPACE_CAPACITY:-150}
       DEFAULT_SPACE_NAME: ${DEFAULT_SPACE_NAME:-Biblioteca}
