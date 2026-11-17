@@ -237,7 +237,11 @@ class LdapProvider:
             safe = escape_filter_chars(id_value)
         except Exception:
             safe = id_value
-        ors = "".join(f"({attr}={safe})" for attr in attrs)
+        # Un atributo puede guardar la credencial con otra forma que la
+        # escaneada (p. ej. con su ámbito: «12345@institucion.edu»). El overlay
+        # lo declara en lookup_templates con {valor}; sin plantilla, tal cual.
+        plantillas = provider_map(self.map_key).get("lookup_templates", {})
+        ors = "".join(f"({attr}={plantillas.get(attr, '{valor}').replace('{valor}', safe)})" for attr in attrs)
         by_id = ors if len(attrs) == 1 else f"(|{ors})"
         search_filter = f"(&{self.user_filter}{by_id})"
         try:

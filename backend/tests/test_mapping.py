@@ -356,3 +356,26 @@ class TestCadenaDeRespaldoEntreFuentes:
         """Un string vacío no cuenta como valor: debe pasar al siguiente."""
         out = map_fields("ldap", {"instFacultyCode": "", "_unidad": "Tesorería"})
         assert out["faculty"] == "Tesorería"
+
+
+def test_identificador_con_ambito_se_recorta_con_su_patron(identity_map):
+    """El directorio publica eduPersonUniqueId con ámbito («12345@inst.edu»); se
+    escanea «12345». El overlay declara el patrón y el padrón indexa lo útil."""
+    identity_map({"ldap": {
+        "identifiers": {"uid": "cardnumber", "eduPersonUniqueId": "unique_id"},
+        "identifier_patterns": {"unique_id": "^([^@]+)@"},
+    }})
+    ids = map_identifiers("ldap", {"uid": "7001", "eduPersonUniqueId": ["12345@inst.edu"]})
+    assert ids == {"cardnumber": "7001", "unique_id": "12345"}
+
+
+def test_identificador_que_no_casa_con_su_patron_se_descarta(identity_map):
+    identity_map({"ldap": {
+        "identifiers": {"eduPersonUniqueId": "unique_id"},
+        "identifier_patterns": {"unique_id": "^([^@]+)@"},
+    }})
+    assert map_identifiers("ldap", {"eduPersonUniqueId": "sin-ambito"}) == {}
+
+
+def test_sin_patron_el_identificador_pasa_tal_cual():
+    assert map_identifiers("ldap", {"uid": "7001"}) == {"cardnumber": "7001"}

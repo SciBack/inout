@@ -49,7 +49,7 @@ ASSIGNABLE_FIELDS = {
 }
 
 # Tipos de credencial reconocidos para el passthrough sin mapa configurado.
-KNOWN_ID_TYPES = {"cardnumber", "uid", "samaccountname", "document_number", "email"}
+KNOWN_ID_TYPES = {"cardnumber", "uid", "samaccountname", "document_number", "email", "unique_id"}
 
 
 def _load_identity_map() -> dict:
@@ -206,6 +206,29 @@ def map_fields(provider: str, raw: dict) -> dict:
     return out
 
 
+def _extract_identifier(provider: str, id_type: str, val: str) -> str | None:
+    """Recorta una credencial con el patrón que declare la institución.
+
+    Igual que value_patterns en los campos, pero para identificadores: hay
+    directorios que publican la credencial con su ámbito pegado (p. ej.
+    eduPersonUniqueId = «12345@institucion.edu»), y lo que la persona presenta
+    —su carné, su QR— es solo «12345». Sin patrón declarado, el valor pasa tal
+    cual (agnóstico). Sin coincidencia se descarta: guardar la cadena entera
+    indexaría una credencial que nadie escanea.
+    """
+    patron = provider_map(provider).get("identifier_patterns", {}).get(id_type)
+    if not patron:
+        return val
+    m = re.search(patron, val)
+    if not m:
+        logger.warning(
+            "[identity] proveedor=%s: identificador '%s' no casó con su patrón: %r",
+            provider, id_type, val[:80],
+        )
+        return None
+    return (m.group(1) if m.groups() else m.group(0)).strip() or None
+
+
 def map_identifiers(provider: str, raw: dict) -> dict:
     """Extrae {id_type: id_value}. Passthrough por nombre de columna si no hay mapa."""
     conf = provider_map(provider)
@@ -214,8 +237,12 @@ def map_identifiers(provider: str, raw: dict) -> dict:
     if id_map:
         for src, id_type in id_map.items():
             val = raw.get(src)
+            if isinstance(val, (list, tuple)):
+                val = next((v for v in val if v), None)
             if val:
-                out[id_type] = str(val)
+                val = _extract_identifier(provider, id_type, str(val))
+            if val:
+                out[id_type] = val
     else:
         for id_type in KNOWN_ID_TYPES:
             val = raw.get(id_type)
