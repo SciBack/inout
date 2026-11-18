@@ -180,7 +180,7 @@ export function EspaciosPanel({ url }: { url?: string | null }) {
                 {libres} de {p.salas.length} libres
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(96px,11vh,150px), 1fr))', gap: 'clamp(4px,0.6vh,8px)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(76px,9.5vh,150px), 1fr))', gap: 'clamp(4px,0.6vh,8px)' }}>
               {p.salas.map((s) => <SalaChip key={s.nombre} s={s} />)}
             </div>
           </div>

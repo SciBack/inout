@@ -840,13 +840,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   right: {
     flex: '0 0 41.7%',
-    // El lector se centra en el espacio que dejan el reloj (arriba) y las estadísticas (abajo).
-    paddingTop: 'clamp(70px,10vh,120px)',
-    paddingBottom: 'clamp(120px,19vh,230px)',
+    // En flujo, de arriba abajo: reloj, lector y estadísticas. Así nada se monta aunque la
+    // pantalla sea chica (las del CRAI son de 1024 px).
+    padding: 'clamp(10px,1.8vh,26px) 0',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     position: 'relative',
     borderLeft: '1px solid var(--c-border)',
     overflow: 'hidden',
@@ -909,18 +909,16 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '420px',
   },
   estadisticas: {
-    position: 'absolute',
-    bottom: 'clamp(14px,2.2vh,32px)',
-    left: '50%',
-    transform: 'translateX(-50%)',
+    order: 1,
+    flexShrink: 0,
     width: 'min(94%, 820px)',
     display: 'flex',
     flexDirection: 'column',
   },
   // Arriba: abajo van las estadísticas.
   clock: {
-    position: 'absolute',
-    top: '1.5rem',
+    order: -1,
+    flexShrink: 0,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',

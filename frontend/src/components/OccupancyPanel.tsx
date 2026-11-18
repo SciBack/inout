@@ -184,7 +184,7 @@ function ArcGauge({ value, max, color, fill = false }: { value: number; max: num
 // Tarjetas del pie del lector: misma estructura en todas (etiqueta / valor / nota), con el valor en
 // una franja de alto fijo para que etiquetas, números y notas queden en la misma línea.
 const kioskValor: React.CSSProperties = {
-  fontFamily: FONT_DISPLAY, fontSize: 'clamp(30px,4.4vh,56px)', lineHeight: 1,
+  fontFamily: FONT_DISPLAY, fontSize: 'clamp(26px,4.2vh,56px)', lineHeight: 1,
   fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', whiteSpace: 'nowrap',
 }
 
@@ -195,13 +195,14 @@ function KioskCard({ label, sub, subColor, children }: {
     <div style={{
       background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
       padding: 'clamp(8px,1.1vh,14px) clamp(6px,0.8vh,12px)',
-      display: 'grid', gridTemplateRows: 'auto clamp(54px,7.2vh,92px) auto',
+      display: 'grid', gridTemplateRows: 'auto clamp(46px,7vh,92px) auto',
       justifyItems: 'center', alignItems: 'center', rowGap: 'clamp(4px,0.6vh,8px)',
       textAlign: 'center', minWidth: 0,
     }}>
       <span style={{
         fontSize: 'clamp(10px,1.15vh,14px)', color: C.text3, textTransform: 'uppercase',
-        letterSpacing: '0.1em', fontFamily: FONT_BODY, fontWeight: 600, whiteSpace: 'nowrap',
+        letterSpacing: '0.06em', fontFamily: FONT_BODY, fontWeight: 600, whiteSpace: 'nowrap',
+        maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{label}</span>
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
         {children}
@@ -209,6 +210,7 @@ function KioskCard({ label, sub, subColor, children }: {
       <span style={{
         fontSize: 'clamp(11px,1.25vh,15px)', color: subColor ?? C.text3, fontFamily: FONT_BODY,
         fontWeight: subColor ? 600 : 400, whiteSpace: 'nowrap', minHeight: '1.2em',
+        maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{sub ?? ''}</span>
     </div>
   )
@@ -675,7 +677,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
         <KioskCard label="Dentro ahora" sub={`${pct.toFixed(0)}% del aforo`} subColor={barColor}>
           <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} fill />
         </KioskCard>
-        <KioskCard label="Visitantes hoy" sub={prevDaySub}>
+        <KioskCard label="Visitas hoy" sub={prevDaySub}>
           <span ref={refVisitors} style={{ ...kioskValor, color: C.cyan }}>{data.unique_visitors_today}</span>
         </KioskCard>
         <KioskCard label="Permanencia" sub={typicalStaySub}>
@@ -880,14 +882,14 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(7px,0.9vh,12px)',
-    overflowY: 'auto',
+    overflow: 'hidden',
   },
 
   // Aforo y visitantes de hoy, lado a lado.
   esencial: {
     flex: '0 0 auto',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(110px,13vh,170px), 1fr))',
+    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
     gap: 'clamp(7px,0.9vh,12px)',
   },
 
