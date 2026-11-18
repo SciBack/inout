@@ -143,7 +143,7 @@ function fmtDelta(today: number, yesterday: number): { text: string; color: stri
 
 
 // ── ArcGauge ─────────────────────────────────────────────────────────────────
-function ArcGauge({ value, max, color }: { value: number; max: number; color: string }) {
+function ArcGauge({ value, max, color, fill = false }: { value: number; max: number; color: string; fill?: boolean }) {
   const pct = Math.min(1, max > 0 ? value / max : 0)
   const R = 34
   const cx = 50, cy = 46
@@ -154,7 +154,7 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 82" style={{ width: '100%', maxWidth: '96px', display: 'block' }}>
+    <svg viewBox="0 0 100 82" style={fill ? { height: '100%', width: 'auto', display: 'block' } : { width: '100%', maxWidth: '96px', display: 'block' }}>
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -166,17 +166,51 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
         transform={rot}
         style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
       />
-      <text x={cx} y={cy + 4} textAnchor="middle"
-        fontSize="26" fontWeight="400" fill={color}
+      <text x={cx} y={cy + 6} textAnchor="middle"
+        fontSize="31" fontWeight="400" fill={color}
         style={{ fontFamily: FONT_DISPLAY, letterSpacing: '0.02em' }}>
         {value}
       </text>
-      <text x={cx} y={cy + 20} textAnchor="middle"
+      <text x={cx} y={cy + 22} textAnchor="middle"
         fontSize="10" fill={C.text2}
         style={{ fontFamily: FONT_BODY }}>
         de {max}
       </text>
     </svg>
+  )
+}
+
+// ── KioskCard ─────────────────────────────────────────────────────────────────
+// Tarjetas del pie del lector: misma estructura en todas (etiqueta / valor / nota), con el valor en
+// una franja de alto fijo para que etiquetas, números y notas queden en la misma línea.
+const kioskValor: React.CSSProperties = {
+  fontFamily: FONT_DISPLAY, fontSize: 'clamp(30px,4.4vh,56px)', lineHeight: 1,
+  fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', whiteSpace: 'nowrap',
+}
+
+function KioskCard({ label, sub, subColor, children }: {
+  label: string; sub?: string; subColor?: string; children: React.ReactNode
+}) {
+  return (
+    <div style={{
+      background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+      padding: 'clamp(8px,1.1vh,14px) clamp(6px,0.8vh,12px)',
+      display: 'grid', gridTemplateRows: 'auto clamp(54px,7.2vh,92px) auto',
+      justifyItems: 'center', alignItems: 'center', rowGap: 'clamp(4px,0.6vh,8px)',
+      textAlign: 'center', minWidth: 0,
+    }}>
+      <span style={{
+        fontSize: 'clamp(10px,1.15vh,14px)', color: C.text3, textTransform: 'uppercase',
+        letterSpacing: '0.1em', fontFamily: FONT_BODY, fontWeight: 600, whiteSpace: 'nowrap',
+      }}>{label}</span>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+        {children}
+      </div>
+      <span style={{
+        fontSize: 'clamp(11px,1.25vh,15px)', color: subColor ?? C.text3, fontFamily: FONT_BODY,
+        fontWeight: subColor ? 600 : 400, whiteSpace: 'nowrap', minHeight: '1.2em',
+      }}>{sub ?? ''}</span>
+    </div>
   )
 }
 
@@ -638,39 +672,18 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
 
   const esencial = (
       <div style={s.esencial}>
-        <div style={s.gaugeCard}>
-          <span style={{ ...s.sectionLabel, alignSelf: 'center', whiteSpace: 'nowrap' }}>Dentro ahora</span>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
-          </div>
-          <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-            {pct.toFixed(0)}% del aforo
-          </span>
-        </div>
-
-        <StatCard
-          label="Visitantes hoy"
-          value={data.unique_visitors_today}
-          valueRef={refVisitors}
-          color={C.cyan}
-          sub={prevDaySub}
-          subColor={C.text3}
-          numSize="clamp(40px,6vh,76px)"
-        />
-        <StatCard
-          label="Permanencia"
-          value={avgStayStr}
-          color={C.text1}
-          sub={typicalStaySub}
-          subColor={C.text3}
-        />
-        <StatCard
-          label="Hora punta"
-          value={peakHourStr}
-          color={C.amber}
-          sub={typicalPeakSub}
-          subColor={C.text3}
-        />
+        <KioskCard label="Dentro ahora" sub={`${pct.toFixed(0)}% del aforo`} subColor={barColor}>
+          <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} fill />
+        </KioskCard>
+        <KioskCard label="Visitantes hoy" sub={prevDaySub}>
+          <span ref={refVisitors} style={{ ...kioskValor, color: C.cyan }}>{data.unique_visitors_today}</span>
+        </KioskCard>
+        <KioskCard label="Permanencia" sub={typicalStaySub}>
+          <span style={{ ...kioskValor, color: C.text1 }}>{avgStayStr}</span>
+        </KioskCard>
+        <KioskCard label="Hora punta" sub={typicalPeakSub}>
+          <span style={{ ...kioskValor, color: C.amber }}>{peakHourStr}</span>
+        </KioskCard>
       </div>
   )
 
