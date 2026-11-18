@@ -961,7 +961,8 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(1px,0.3vh,4px)',
-    overflowY: 'auto',
+    // Kiosko: sin scroll; se ven los que caben y el resto se corta.
+    overflow: 'hidden',
   },
   feedItem: {
     display: 'flex',
