@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
 
 // Disponibilidad de salas (por piso) y del laboratorio de laptops del edificio, para la columna de
@@ -93,7 +94,17 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
 })
 
 // Pide una sala o una laptop: QR a «Su cuenta» de Discovery (salas y laptops se piden ahí).
+// Va arriba de la columna del lector (App.tsx deja el hueco `#kiosko-pedir`), donde sobra espacio
+// y lo ve quien se acerca a pasar el carné; si ese hueco no existe, queda al pie de esta columna.
+export const ID_HUECO_PEDIR = 'kiosko-pedir'
+
 function PedirCard({ url }: { url: string }) {
+  const [hueco, setHueco] = useState<HTMLElement | null>(null)
+  useEffect(() => { setHueco(document.getElementById(ID_HUECO_PEDIR)) }, [])
+  return hueco ? createPortal(<PedirContenido url={url} grande />, hueco) : <PedirContenido url={url} />
+}
+
+function PedirContenido({ url, grande = false }: { url: string; grande?: boolean }) {
   const destino = new URL('/Cuenta/Cubiculos', url).toString()
   const [svg, setSvg] = useState('')
   useEffect(() => {
@@ -103,19 +114,19 @@ function PedirCard({ url }: { url: string }) {
   const host = new URL(url).host
   const punto = (c: string) => ({ width: 10, height: 10, borderRadius: 3, background: c, display: 'inline-block', marginRight: 6 })
   return (
-    <div style={{ ...tarjeta, marginTop: 'auto', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 'clamp(10px,1.4vh,18px)' }}>
+    <div style={{ ...tarjeta, ...(grande ? { width: '100%' } : { marginTop: 'auto' }), flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: grande ? 'clamp(14px,2vh,26px)' : 'clamp(10px,1.4vh,18px)' }}>
       {svg && (
-        <div aria-hidden style={{ background: '#fff', padding: 6, borderRadius: 8, width: 'clamp(64px,8.5vh,120px)', flexShrink: 0, lineHeight: 0 }}
+        <div aria-hidden style={{ background: '#fff', padding: grande ? 8 : 6, borderRadius: 8, width: grande ? 'clamp(96px,14vh,190px)' : 'clamp(64px,8.5vh,120px)', flexShrink: 0, lineHeight: 0 }}
              dangerouslySetInnerHTML={{ __html: svg }} />
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.6vh,8px)', minWidth: 0 }}>
-        <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(14px,1.8vh,22px)', color: 'var(--c-text1)', lineHeight: 1.15 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: grande ? 'clamp(6px,0.9vh,12px)' : 'clamp(4px,0.6vh,8px)', minWidth: 0 }}>
+        <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: grande ? 'clamp(17px,2.4vh,30px)' : 'clamp(14px,1.8vh,22px)', color: 'var(--c-text1)', lineHeight: 1.15 }}>
           Pida una sala o una laptop
         </span>
-        <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
+        <span style={{ fontFamily: FONT_BODY, fontSize: grande ? 'clamp(13px,1.75vh,21px)' : 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
           Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta
         </span>
-        <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+        <span style={{ fontFamily: FONT_BODY, fontSize: grande ? 'clamp(12px,1.5vh,18px)' : 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
           <span><i style={punto('var(--c-green)')} />Sala libre</span>
           <span><i style={punto('var(--c-cyan)')} />Laptop libre</span>
           <span><i style={punto('var(--c-red)')} />En uso</span>
