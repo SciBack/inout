@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useState, type CSSProperties } from 'react'
 import QRCode from 'qrcode'
 
 // Disponibilidad de salas (por piso) y del laboratorio de laptops del edificio, para la columna de
@@ -31,6 +31,11 @@ const TONO: Record<Sala['estado'], { color: string; bg: string; borde: string }>
   llamada:    { color: 'var(--c-amber)', bg: 'transparent',                                          borde: 'color-mix(in oklch, var(--c-amber) 60%, transparent)' },
 }
 
+// Late (aro que crece y se desvanece): un grupo formándose o una sala/laptop por liberarse (18-nov-2026).
+const LATE = new Set<string>(['formando', 'termina', 'tolerancia'])
+const pulso = (estado: string, color: string) =>
+  LATE.has(estado) ? { className: 'sala-pulso', estilo: { ['--pulso' as string]: color } as CSSProperties } : { className: undefined, estilo: {} }
+
 const hora = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
 const corto = (n: string) => n.replace('Sala de Estudio', 'Sala').replace('Cubículo', 'Cub.')
 const pisoBonito = (p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
@@ -48,14 +53,16 @@ function estadoTexto(s: Sala): string {
 
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
   const t = TONO[s.estado] ?? TONO.ocupada
+  const p = pulso(s.estado, t.color)
   return (
     <div style={{
+      ...p.estilo,
       background: t.bg,
       border: `1px ${s.estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`,
       borderRadius: 8,
       padding: 'clamp(6px,0.9vh,11px) clamp(8px,1vh,12px)',
       display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0,
-    }} className={s.estado === 'termina' ? 'sala-titila' : undefined}>
+    }} className={p.className}>
       <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(13px,1.75vh,21px)', color: 'var(--c-text1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {corto(s.nombre)}
       </span>
@@ -77,8 +84,10 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   // Las laptops libres van en celeste para no confundirlas con las salas (verde).
   const t = estado === 'libre' ? LAPTOP_LIBRE : estado === 'llamada' ? { ...LAPTOP_LIBRE, bg: 'transparent' } : TONO[estado]
   const texto = p.estado === 'libre' ? 'Libre' : p.estado === 'llamada' ? 'Reserv.' : p.fin ? hora(p.fin) : 'En uso'
+  const pl = pulso(estado, t.color)
   return (
-    <div className={estado === 'termina' ? 'sala-titila' : undefined} style={{
+    <div className={pl.className} style={{
+      ...pl.estilo,
       background: t.bg, border: `1px ${estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`, borderRadius: 8,
       padding: 'clamp(4px,0.6vh,8px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0,
     }}>
@@ -169,7 +178,7 @@ export function EspaciosPanel({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaTitila { 50% { opacity: .5 } } .sala-titila { animation: salaTitila 1.2s ease-in-out infinite } @media (prefers-reduced-motion: reduce) { .sala-titila { animation: none } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         return (
