@@ -13,6 +13,7 @@ type Sala = {
   capacidad?: number | null
   integrantes?: number
   minimo?: number
+  expira?: string | null   // el grupo que se forma vence a esta hora (5 min)
 }
 type Piso = { piso: string; salas: Sala[] }
 type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina'; fin?: string | null }
@@ -43,7 +44,12 @@ const pisoBonito = (p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLower
 function estadoTexto(s: Sala): string {
   switch (s.estado) {
     case 'libre': return 'Libre'
-    case 'formando': return `Grupo ${s.integrantes ?? 1}/${s.minimo ?? 3}`
+    case 'formando': {
+      // Cuenta regresiva: el grupo tiene 5 min para completarse (se refresca con los datos, cada 20 s).
+      const seg = s.expira ? Math.max(0, (new Date(s.expira).getTime() - Date.now()) / 1000) : null
+      const queda = seg === null ? '' : seg < 60 ? ' · <1 min' : ` · ${Math.ceil(seg / 60)} min`
+      return `Grupo ${s.integrantes ?? 1}/${s.minimo ?? 3}${queda}`
+    }
     case 'termina': return `Termina ${hora(s.fin)}`
     case 'tolerancia': return 'Desocupando'
     case 'llamada': return 'Reservada'
@@ -66,7 +72,7 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
       <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(13px,1.75vh,21px)', color: 'var(--c-text1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {corto(s.nombre)}
       </span>
-      <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(12px,1.45vh,17px)', color: t.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+      <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(12px,1.45vh,17px)', color: t.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {estadoTexto(s)}
       </span>
     </div>
