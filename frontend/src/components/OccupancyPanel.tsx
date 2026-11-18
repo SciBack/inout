@@ -166,13 +166,13 @@ function ArcGauge({ value, max, color }: { value: number; max: number; color: st
         transform={rot}
         style={{ transition: 'stroke-dasharray 0.7s ease, stroke 0.4s ease' }}
       />
-      <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="middle"
-        fontSize="30" fontWeight="400" fill={color}
+      <text x={cx} y={cy + 4} textAnchor="middle"
+        fontSize="26" fontWeight="400" fill={color}
         style={{ fontFamily: FONT_DISPLAY, letterSpacing: '0.02em' }}>
         {value}
       </text>
-      <text x={cx} y={cy + 17} textAnchor="middle"
-        fontSize="10.5" fill={C.text2}
+      <text x={cx} y={cy + 20} textAnchor="middle"
+        fontSize="10" fill={C.text2}
         style={{ fontFamily: FONT_BODY }}>
         de {max}
       </text>
@@ -625,13 +625,11 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const avgStayStr    = fmtStay(data.avg_stay_seconds)
   const peakHourStr   = fmtPeakHour(data.peak_hour)
 
-  const DOW_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
-  const dowName = DOW_ES[new Date().getDay()]
   const typicalPeakSub = data.typical_peak_hour !== null
-    ? `Típico ${dowName} · ${fmtPeakHour(data.typical_peak_hour)}`
+    ? `Típico: ${fmtPeakHour(data.typical_peak_hour)}`
     : undefined
   const typicalStaySub = data.typical_avg_stay_seconds != null
-    ? `Típico ${dowName} · ${fmtStay(data.typical_avg_stay_seconds)}`
+    ? `Típico: ${fmtStay(data.typical_avg_stay_seconds)}`
     : undefined
 
   const firstEventId  = data.recent_events[0]?.id ?? null
@@ -641,12 +639,12 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const esencial = (
       <div style={s.esencial}>
         <div style={s.gaugeCard}>
-          <span style={s.sectionLabel}>En edificio ahora</span>
+          <span style={{ ...s.sectionLabel, alignSelf: 'center', whiteSpace: 'nowrap' }}>Dentro ahora</span>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
           </div>
           <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-            {pct.toFixed(0)}% del aforo máximo
+            {pct.toFixed(0)}% del aforo
           </span>
         </div>
 
@@ -658,6 +656,20 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
           sub={prevDaySub}
           subColor={C.text3}
           numSize="clamp(40px,6vh,76px)"
+        />
+        <StatCard
+          label="Permanencia"
+          value={avgStayStr}
+          color={C.text1}
+          sub={typicalStaySub}
+          subColor={C.text3}
+        />
+        <StatCard
+          label="Hora punta"
+          value={peakHourStr}
+          color={C.amber}
+          sub={typicalPeakSub}
+          subColor={C.text3}
         />
       </div>
   )
@@ -862,7 +874,7 @@ const s: Record<string, React.CSSProperties> = {
   esencial: {
     flex: '0 0 auto',
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(110px,13vh,170px), 1fr))',
     gap: 'clamp(7px,0.9vh,12px)',
   },
 
@@ -875,6 +887,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: 'clamp(6px,0.8vh,10px) clamp(12px,1.5vh,18px)',
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'center',
     alignItems: 'center',
     gap: 'clamp(2px,0.3vh,4px)',
   },
