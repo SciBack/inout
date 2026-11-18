@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { OccupancyPanel } from './components/OccupancyPanel'
-import { ID_HUECO_PEDIR } from './components/EspaciosPanel'
 import { AdminApp } from './components/admin/AdminApp'
 import { HomeDashboard } from './pages/HomeDashboard'
 import { useDayNightMode } from './hooks/useDayNightMode'
@@ -170,7 +169,6 @@ body { overflow: hidden; background: var(--c-bg); transition: background 400ms e
   .kiosk-root { flex-direction: column !important; }
   .panel-left { flex: 0 0 60vh !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--c-border) !important; }
   .panel-right { flex: 0 0 40vh !important; width: 100% !important; }
-  .kiosko-pedir { display: none !important; }
 }
 `
 
@@ -552,8 +550,6 @@ export default function App() {
         </div>
 
         <div className="panel-right" style={styles.right}>
-          {/* Arriba, el QR para pedir sala o laptop (lo llena EspaciosPanel si Discovery responde). */}
-          <div id={ID_HUECO_PEDIR} className="kiosko-pedir" style={styles.pedir} />
           {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
               escaneos y los encola en vez de perderlos. */}
           <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
@@ -906,14 +902,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--c-alert-subtitle)',
     fontFamily: "'Barlow', sans-serif",
     maxWidth: '420px',
-  },
-  pedir: {
-    position: 'absolute',
-    top: 'clamp(14px,2.2vh,32px)',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 'min(88%, 640px)',
-    display: 'flex',
   },
   clock: {
     position: 'absolute',
