@@ -1,4 +1,5 @@
 import { EspaciosPanel } from './EspaciosPanel'
+import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, memo } from 'react'
 
 interface DashboardData {
@@ -550,6 +551,8 @@ const FacultyBarChart = memo(function FacultyBarChart({
 export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
+  const [huecoStats, setHuecoStats] = useState<HTMLElement | null>(null)
+  useEffect(() => { setHuecoStats(document.getElementById('kiosko-estadisticas')) }, [])
 
   const refVisitors = useRef<HTMLSpanElement>(null)
   const refMale     = useRef<HTMLSpanElement>(null)
@@ -635,6 +638,30 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const isNewEvent    = firstEventId !== null && firstEventId !== prevFirstId.current
   if (isNewEvent) prevFirstId.current = firstEventId
 
+  const esencial = (
+      <div style={s.esencial}>
+        <div style={s.gaugeCard}>
+          <span style={s.sectionLabel}>En edificio ahora</span>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
+          </div>
+          <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
+            {pct.toFixed(0)}% del aforo máximo
+          </span>
+        </div>
+
+        <StatCard
+          label="Visitantes hoy"
+          value={data.unique_visitors_today}
+          valueRef={refVisitors}
+          color={C.cyan}
+          sub={prevDaySub}
+          subColor={C.text3}
+          numSize="clamp(40px,6vh,76px)"
+        />
+      </div>
+  )
+
   return (
     <div style={s.container}>
 
@@ -655,27 +682,9 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               disponibilidad de salas por piso y del laboratorio (Discovery). Las tarjetas que
               se quitaron (perfiles, hombres/mujeres, permanencia, hora punta, otro campus,
               facultades) siguen en el panel admin. */}
-          <div style={s.esencial}>
-            <div style={s.gaugeCard}>
-              <span style={s.sectionLabel}>En edificio ahora</span>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <ArcGauge value={data.current_occupancy} max={data.capacity} color={barColor} />
-              </div>
-              <span style={{ textAlign: 'center', fontSize: 'clamp(13px,1.6vh,19px)', color: barColor, fontWeight: 600, fontFamily: FONT_BODY }}>
-                {pct.toFixed(0)}% del aforo máximo
-              </span>
-            </div>
-
-            <StatCard
-              label="Visitantes hoy"
-              value={data.unique_visitors_today}
-              valueRef={refVisitors}
-              color={C.cyan}
-              sub={prevDaySub}
-              subColor={C.text3}
-              numSize="clamp(40px,6vh,76px)"
-            />
-          </div>
+          {/* En el kiosko van al pie de la columna del lector (hueco #kiosko-estadisticas, App.tsx)
+              para dejar esta columna a salas y laptops; si no hay hueco, quedan aquí. */}
+          {huecoStats ? createPortal(esencial, huecoStats) : esencial}
 
           <EspaciosPanel url={data.espacios_url} />
 

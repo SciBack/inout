@@ -550,6 +550,8 @@ export default function App() {
         </div>
 
         <div className="panel-right" style={styles.right}>
+          {/* Abajo, aforo y visitantes de hoy (los pone OccupancyPanel en este hueco). */}
+          <div id="kiosko-estadisticas" style={styles.estadisticas} />
           {/* Sin conexión NO deshabilita el lector: Fase 4 sigue aceptando
               escaneos y los encola en vez de perderlos. */}
           <ScanInput onScan={handleScan} disabled={loading || state === 'welcome'} />
@@ -903,9 +905,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Barlow', sans-serif",
     maxWidth: '420px',
   },
+  estadisticas: {
+    position: 'absolute',
+    bottom: 'clamp(14px,2.2vh,32px)',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: 'min(88%, 640px)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  // Arriba: abajo van las estadísticas.
   clock: {
     position: 'absolute',
-    bottom: '1.5rem',
+    top: '1.5rem',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
