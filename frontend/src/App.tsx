@@ -840,6 +840,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   right: {
     flex: '0 0 41.7%',
+    // El lector se centra en el espacio que dejan el reloj (arriba) y las estadísticas (abajo).
+    paddingTop: 'clamp(70px,10vh,120px)',
+    paddingBottom: 'clamp(120px,19vh,230px)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -910,7 +913,8 @@ const styles: Record<string, React.CSSProperties> = {
     bottom: 'clamp(14px,2.2vh,32px)',
     left: '50%',
     transform: 'translateX(-50%)',
-    width: 'min(88%, 640px)',
+    width: 'min(80%, 560px)',
+    zoom: 0.9,
     display: 'flex',
     flexDirection: 'column',
   },
