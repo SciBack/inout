@@ -18,6 +18,7 @@ type Sala = {
   inicio?: string | null   // desde cuándo está prestada, para el reloj del cuadradito (19-nov-2026)
   responsable?: string | null   // nombre corto («William P.»), de Discovery (19-nov-2026)
   cola?: number   // grupos que esperan esta sala (19-nov-2026)
+  cola_formando?: boolean   // el primero en cola aún junta su grupo (19-nov-2026)
 }
 type Piso = { piso: string; salas: Sala[] }
 type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null; inicio?: string | null; responsable?: string | null }
@@ -116,7 +117,10 @@ function Reloj({ inicio, fin, color }: { inicio?: string | null; fin?: string | 
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
   const conCola = (s.cola ?? 0) > 0 && s.estado !== 'libre' && s.estado !== 'fuera'
   const t = conCola ? TONO_COLA : tono(s.estado)
-  const p = pulso(s.estado, t.color)
+  // Grupo que se forma para la cola: late en naranja hasta que junta el mínimo o vence (19-nov-2026).
+  const p = conCola && s.cola_formando
+    ? { className: 'sala-pulso', estilo: { ['--pulso' as string]: 'var(--c-orange)' } as CSSProperties }
+    : pulso(s.estado, t.color)
   return (
     <div style={{
       ...p.estilo,
@@ -150,7 +154,9 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
               strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-0.1em', marginRight: '0.25em' }}>
               <path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
             </svg>
-            <span className="chip-largo">{s.cola} en cola</span><span className="chip-corto">{s.cola}</span>
+            {s.cola_formando
+              ? <><span className="chip-largo">formando grupo</span><span className="chip-corto">formando</span></>
+              : <><span className="chip-largo">{s.cola} en cola</span><span className="chip-corto">{s.cola}</span></>}
           </span>
         )}
       </div>
