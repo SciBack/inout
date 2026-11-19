@@ -17,6 +17,7 @@ type Sala = {
   expira?: string | null   // el grupo que se forma vence a esta hora (5 min)
   inicio?: string | null   // desde cuándo está prestada, para el reloj del cuadradito (19-nov-2026)
   responsable?: string | null   // nombre corto («William P.»), de Discovery (19-nov-2026)
+  cola?: number   // grupos que esperan esta sala (19-nov-2026)
 }
 type Piso = { piso: string; salas: Sala[] }
 type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null; inicio?: string | null; responsable?: string | null }
@@ -137,6 +138,16 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
         {s.responsable && s.estado !== 'libre' && (
           <span className="sala-quien" style={{ ...linea, fontWeight: 500, fontSize: 'clamp(10px,min(15cqh,12cqw),28px)', lineHeight: 1.05, color: 'var(--c-text2)' }}>
             {s.responsable}
+          </span>
+        )}
+        {/* Ya hay quien espera esta sala (19-nov-2026): sin nombres, solo cuántos. Se va si el cuadradito es bajo. */}
+        {(s.cola ?? 0) > 0 && s.estado !== 'libre' && (
+          <span className="sala-cola" style={{ ...linea, fontWeight: 700, fontSize: 'clamp(10px,min(14cqh,11cqw),26px)', lineHeight: 1.05, color: 'var(--c-amber)' }}>
+            <svg viewBox="0 0 24 24" width="0.9em" height="0.9em" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2.4}
+              strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-0.1em', marginRight: '0.25em' }}>
+              <path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
+            </svg>
+            <span className="chip-largo">{s.cola} en cola</span><span className="chip-corto">{s.cola}</span>
           </span>
         )}
       </div>
@@ -308,7 +319,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 34px) { .sala-reloj { display: none } .sala-cont > span:first-child { padding-right: 0 !important } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 58px) { .sala-cola { display: none } } @container (max-height: 34px) { .sala-reloj { display: none } .sala-cont > span:first-child { padding-right: 0 !important } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         // Cada piso en dos bloques, solo para verlo: cubículos individuales y salas grupales (19-nov-2026).
