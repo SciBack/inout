@@ -260,17 +260,32 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
       <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
+        // Cada piso en dos bloques, solo para verlo: cubículos individuales y salas grupales (19-nov-2026).
+        const bloques = [
+          { titulo: 'Individuales', salas: p.salas.filter((s) => s.tipo === 'individual') },
+          { titulo: 'Grupales', salas: p.salas.filter((s) => s.tipo !== 'individual') },
+        ].filter((b) => b.salas.length)
+        const filasDe = (n: number) => filas(n, Math.min(COLS_SALAS, n))
         return (
-          <div key={p.piso} style={{ ...tarjeta, flex: `${filas(p.salas.length, Math.min(COLS_SALAS, p.salas.length))} 1 0` }}>
+          <div key={p.piso} style={{ ...tarjeta, flex: `${bloques.reduce((a, b) => a + filasDe(b.salas.length), 0)} 1 0` }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
               <span style={etiqueta}>Salas · {pisoBonito(p.piso)}</span>
               <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: libres ? 'var(--c-green)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
                 {libres} de {p.salas.length} libres
               </span>
             </div>
-            <div style={grilla(Math.min(COLS_SALAS, p.salas.length))}>
-              {p.salas.map((s) => <SalaChip key={s.nombre} s={s} />)}
-            </div>
+            {bloques.map((b) => (
+              <div key={b.titulo} style={{ flex: `${filasDe(b.salas.length)} 1 0`, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 'clamp(3px,0.5vh,6px)' }}>
+                {bloques.length > 1 && (
+                  <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(10px,1.15vh,14px)', color: 'var(--c-text3)', flexShrink: 0 }}>
+                    {b.titulo}
+                  </span>
+                )}
+                <div style={grilla(Math.min(COLS_SALAS, b.salas.length))}>
+                  {b.salas.map((s) => <SalaChip key={s.nombre} s={s} />)}
+                </div>
+              </div>
+            ))}
           </div>
         )
       })}
