@@ -46,6 +46,14 @@ const pulso = (estado: string, color: string) =>
 const hora = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
 const corto = (n: string) => n.replace('Sala de Estudio', 'Sala').replace('Cubículo', 'Cub.')
 const pisoBonito = (p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+// Un color por piso para distinguirlos de un vistazo (19-nov-2026). Fuera de los colores de estado (verde, rojo, ámbar, cian).
+const colorPiso = (p: string): string | null => {
+  const n = p.toLowerCase()
+  if (/primer|1/.test(n)) return 'var(--c-blue)'
+  if (/segundo|2/.test(n)) return 'var(--c-purple)'
+  if (/tercer|3/.test(n)) return 'var(--c-rose)'
+  return null
+}
 
 function estadoTexto(s: Sala): string {
   switch (s.estado) {
@@ -266,10 +274,12 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           { titulo: 'Grupales', salas: p.salas.filter((s) => s.tipo !== 'individual') },
         ].filter((b) => b.salas.length)
         const filasDe = (n: number) => filas(n, Math.min(COLS_SALAS, n))
+        const color = colorPiso(p.piso)
         return (
-          <div key={p.piso} style={{ ...tarjeta, flex: `${bloques.reduce((a, b) => a + filasDe(b.salas.length), 0)} 1 0` }}>
+          <div key={p.piso} style={{ ...tarjeta, flex: `${bloques.reduce((a, b) => a + filasDe(b.salas.length), 0)} 1 0`,
+            ...(color && { border: `2px solid ${color}` }) }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-              <span style={etiqueta}>Salas · {pisoBonito(p.piso)}</span>
+              <span style={{ ...etiqueta, ...(color && { color }) }}>Salas · {pisoBonito(p.piso)}</span>
               <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: libres ? 'var(--c-green)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
                 {libres} de {p.salas.length} libres
               </span>
