@@ -86,6 +86,7 @@ const THEME_CSS = `
   --c-rose: oklch(73% 0.17 352);
   --c-cyan: oklch(73% 0.18 211);
   --c-purple: oklch(68% 0.18 295);
+  --c-lima: oklch(90% 0.23 128);   /* reloj de los cuadraditos: resalta sobre rojo y ámbar (19-nov-2026) */
   --c-alert-icon: oklch(72% 0.19 55);
   --c-alert-title: oklch(88% 0.03 55);
   --c-alert-subtitle: oklch(62% 0.03 55);
@@ -105,6 +106,7 @@ const THEME_CSS = `
   --c-rose: oklch(50% 0.16 352);
   --c-cyan: oklch(45% 0.15 211);
   --c-purple: oklch(48% 0.17 295);
+  --c-lima: oklch(62% 0.20 128);
   --c-alert-icon: oklch(52% 0.17 55);
   --c-alert-title: oklch(30% 0.10 55);
   --c-alert-subtitle: oklch(46% 0.08 55);

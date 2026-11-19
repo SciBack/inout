@@ -102,8 +102,8 @@ function Reloj({ inicio, fin, color }: { inicio?: string | null; fin?: string | 
       position: 'absolute', top: 'clamp(3px,7cqh,9px)', right: 'clamp(3px,5cqw,9px)',
       width: 'clamp(11px,min(20cqh,15cqw),28px)', height: 'clamp(11px,min(20cqh,15cqw),28px)', transform: 'rotate(-90deg)',
     }}>
-      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={2.6} />
-      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round"
+      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeOpacity={0.3} strokeWidth={2.8} />
+      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeWidth={2.8} strokeLinecap="round"
         strokeDasharray={`${(C * pct).toFixed(2)} ${C.toFixed(2)}`} style={{ transition: 'stroke-dasharray 600ms ease-out' }} />
     </svg>
   )
@@ -122,7 +122,7 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
       containerType: 'size', position: 'relative',
       minWidth: 0, minHeight: 0, overflow: 'hidden',
     }} className={p.className}>
-      {s.estado !== 'libre' && s.estado !== 'fuera' && <Reloj inicio={s.inicio} fin={s.fin} color={t.color} />}
+      {s.estado !== 'libre' && s.estado !== 'fuera' && <Reloj inicio={s.inicio} fin={s.fin} color="var(--c-lima)" />}
       {/* Si el cuadradito es bajo, las líneas se juntan; si no caben, se va el responsable y luego
           nombre y estado pasan a una fila. Nunca se montan (reglas .sala-cont en el <style> del panel). */}
       <div className="sala-cont">
@@ -164,7 +164,7 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
       padding: 'clamp(2px,5cqh,10px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', gap: 'clamp(0px,2cqh,4px)', minWidth: 0, minHeight: 0, overflow: 'hidden',
     }}>
-      {(p.estado === 'en_uso' || p.estado === 'termina') && <Reloj inicio={p.inicio} fin={p.fin} color={t.color} />}
+      {(p.estado === 'en_uso' || p.estado === 'termina') && <Reloj inicio={p.inicio} fin={p.fin} color="var(--c-lima)" />}
       <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(15px,min(38cqh,38cqw),64px)', lineHeight: 1, color: 'var(--c-text1)', flexShrink: 0 }}>
         {p.id.replace(/^LAB-0?/, '')}
       </span>
