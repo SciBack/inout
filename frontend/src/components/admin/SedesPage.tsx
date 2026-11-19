@@ -109,7 +109,7 @@ export function SedesPage({ token }: Props) {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button style={s.btnSm} onClick={() => openEdit(sede)}>Editar</button>
                       {sede.active && (
-                        <button style={{ ...s.btnSm, color: 'var(--c-red)', borderColor: 'color-mix(in oklch, var(--c-red) 40%, transparent)' }}
+                        <button style={{ ...s.btnSm, color: 'var(--c-red)', borderColor: 'color-mix(in srgb, var(--c-red) 40%, transparent)' }}
                           onClick={() => handleDeactivate(sede)}>Desactivar</button>
                       )}
                     </div>

@@ -533,7 +533,7 @@ function CampusCard({
       <div className="hd-campus-card-header">
         <span className="hd-campus-card-icon">{ICON_PIN}</span>
         <span className="hd-campus-card-name">{group.label}</span>
-        <span className="hd-campus-card-badge" style={{ color, background: `color-mix(in oklch, ${color} 16%, transparent)` }}>
+        <span className="hd-campus-card-badge" style={{ color, background: `color-mix(in srgb, ${color} 16%, transparent)` }}>
           {statusLabel(group.occupancyPercent)}
         </span>
       </div>

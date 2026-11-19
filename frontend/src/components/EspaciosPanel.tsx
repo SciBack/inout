@@ -27,14 +27,14 @@ const FONT_DISPLAY = "'Bebas Neue', 'Arial Narrow', impact, sans-serif"
 const FONT_BODY = "'Barlow', system-ui, sans-serif"
 
 const TONO: Record<Sala['estado'], { color: string; bg: string; borde: string }> = {
-  libre:      { color: 'var(--c-green)', bg: 'color-mix(in oklch, var(--c-green) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-green) 45%, transparent)' },
-  formando:   { color: 'var(--c-green)', bg: 'color-mix(in oklch, var(--c-green) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-green) 45%, transparent)' },
-  ocupada:    { color: 'var(--c-red)',   bg: 'color-mix(in oklch, var(--c-red) 12%, transparent)',   borde: 'color-mix(in oklch, var(--c-red) 40%, transparent)' },
-  termina:    { color: 'var(--c-amber)', bg: 'color-mix(in oklch, var(--c-amber) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-amber) 50%, transparent)' },
-  tolerancia: { color: 'var(--c-amber)', bg: 'color-mix(in oklch, var(--c-amber) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-amber) 50%, transparent)' },
-  llamada:    { color: 'var(--c-amber)', bg: 'transparent',                                          borde: 'color-mix(in oklch, var(--c-amber) 60%, transparent)' },
+  libre:      { color: 'var(--c-green)', bg: 'color-mix(in srgb, var(--c-green) 14%, transparent)', borde: 'color-mix(in srgb, var(--c-green) 45%, transparent)' },
+  formando:   { color: 'var(--c-green)', bg: 'color-mix(in srgb, var(--c-green) 14%, transparent)', borde: 'color-mix(in srgb, var(--c-green) 45%, transparent)' },
+  ocupada:    { color: 'var(--c-red)',   bg: 'color-mix(in srgb, var(--c-red) 12%, transparent)',   borde: 'color-mix(in srgb, var(--c-red) 40%, transparent)' },
+  termina:    { color: 'var(--c-amber)', bg: 'color-mix(in srgb, var(--c-amber) 14%, transparent)', borde: 'color-mix(in srgb, var(--c-amber) 50%, transparent)' },
+  tolerancia: { color: 'var(--c-amber)', bg: 'color-mix(in srgb, var(--c-amber) 14%, transparent)', borde: 'color-mix(in srgb, var(--c-amber) 50%, transparent)' },
+  llamada:    { color: 'var(--c-amber)', bg: 'transparent',                                          borde: 'color-mix(in srgb, var(--c-amber) 60%, transparent)' },
   // Fuera de servicio (mantenimiento): gris, no se presta (18-nov-2026).
-  fuera:      { color: 'var(--c-text3)', bg: 'color-mix(in oklch, var(--c-text3) 10%, transparent)',  borde: 'color-mix(in oklch, var(--c-text3) 35%, transparent)' },
+  fuera:      { color: 'var(--c-text3)', bg: 'color-mix(in srgb, var(--c-text3) 10%, transparent)',  borde: 'color-mix(in srgb, var(--c-text3) 35%, transparent)' },
 }
 // Un estado que esta pantalla aún no conoce no debe tumbarla (el 18-nov-2026 «fuera» la dejó en blanco):
 // se pinta como ocupado.
@@ -146,8 +146,8 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
 
 const LAPTOP_LIBRE = {
   color: 'var(--c-cyan)',
-  bg: 'color-mix(in oklch, var(--c-cyan) 14%, transparent)',
-  borde: 'color-mix(in oklch, var(--c-cyan) 50%, transparent)',
+  bg: 'color-mix(in srgb, var(--c-cyan) 14%, transparent)',
+  borde: 'color-mix(in srgb, var(--c-cyan) 50%, transparent)',
 }
 
 const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
@@ -205,7 +205,7 @@ function PedirCard({ url }: { url: string }) {
       {!PEDIR_EN_DISCOVERY && (
         // Mostrador: una persona tras el counter (en el lugar del QR, mismo tamaño).
         <div aria-hidden style={{ width: 'clamp(64px,8.5vh,120px)', aspectRatio: '1', flexShrink: 0, borderRadius: 8, display: 'grid', placeItems: 'center',
-          background: 'color-mix(in oklch, var(--c-cyan) 14%, transparent)', border: '1px solid color-mix(in oklch, var(--c-cyan) 45%, transparent)', color: 'var(--c-cyan)' }}>
+          background: 'color-mix(in srgb, var(--c-cyan) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--c-cyan) 45%, transparent)', color: 'var(--c-cyan)' }}>
           <svg viewBox="0 0 24 24" width="62%" height="62%" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="6.5" r="3" /><path d="M6.5 15c0-3 2.5-5 5.5-5s5.5 2 5.5 5" /><path d="M3 15h18M5 15v6M19 15v6" />
           </svg>
@@ -298,7 +298,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
   return (
     <div ref={caja} style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 'clamp(7px,0.9vh,12px)' }}>
       {datos.contingencia && datos.contingencia !== 'normal' && (
-        <div role="status" style={{ ...tarjeta, borderColor: 'color-mix(in oklch, var(--c-amber) 60%, transparent)',
+        <div role="status" style={{ ...tarjeta, borderColor: 'color-mix(in srgb, var(--c-amber) 60%, transparent)',
           background: 'color-mix(in oklch, var(--c-amber) 12%, var(--c-bg-panel))' }}>
           <span style={{ ...etiqueta, color: 'var(--c-amber)' }}>Modo contingencia</span>
           <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(13px,1.6vh,19px)', color: 'var(--c-text1)' }}>
@@ -308,7 +308,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 34px) { .sala-reloj { display: none } .sala-cont > span:first-child { padding-right: 0 !important } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 34px) { .sala-reloj { display: none } .sala-cont > span:first-child { padding-right: 0 !important } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         // Cada piso en dos bloques, solo para verlo: cubículos individuales y salas grupales (19-nov-2026).

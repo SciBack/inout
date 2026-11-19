@@ -118,7 +118,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'background 0.15s, color 0.15s',
   },
   navActive: {
-    background: 'color-mix(in oklch, var(--c-blue) 14%, transparent)',
+    background: 'color-mix(in srgb, var(--c-blue) 14%, transparent)',
     color: 'var(--c-text1)', fontWeight: 600,
   },
   navIcon: { fontSize: '0.8rem', width: '16px', textAlign: 'center' },

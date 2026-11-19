@@ -747,7 +747,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
                     position: 'relative',
                     background: isFirst
                       ? firstBg
-                      : idx % 2 === 0 ? 'transparent' : 'color-mix(in oklch, var(--c-border) 50%, transparent)',
+                      : idx % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--c-border) 50%, transparent)',
                     borderLeft: isFirst
                       ? `3px solid ${accentColor}`
                       : '3px solid transparent',
