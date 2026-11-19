@@ -217,3 +217,16 @@ class TestEspaciosUrl:
         assert d._espacios_url(self._space("BUL")).endswith("/publico")
         assert d._espacios_url(self._space("BUJ")) is None
         assert d._espacios_url(None) is None
+
+
+def test_cifras_del_dia_se_calculan_una_vez_por_dia():
+    from app.routers import dashboard
+    dashboard._DEL_DIA.clear()
+    llamadas = []
+    calcular = lambda: llamadas.append(1) or 4200
+    assert dashboard._una_vez_al_dia(("permanencia_tipica", 1, "2026-11-19"), calcular) == 4200
+    assert dashboard._una_vez_al_dia(("permanencia_tipica", 1, "2026-11-19"), calcular) == 4200
+    assert len(llamadas) == 1                                   # el mismo día no se recalcula
+    dashboard._una_vez_al_dia(("permanencia_tipica", 1, "2026-11-20"), calcular)
+    dashboard._una_vez_al_dia(("permanencia_tipica", 2, "2026-11-19"), calcular)
+    assert len(llamadas) == 3                                   # otro día u otro espacio, sí

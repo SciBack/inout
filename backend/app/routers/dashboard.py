@@ -18,6 +18,19 @@ from ..services.labels import normalize_category, category_label, faculty_label
 
 router = APIRouter()
 
+# Cifras históricas que no cambian en el día (19-nov-2026): la «permanencia típica» (52 semanas del mismo día
+# de la semana) se recalculaba con cada refresco de las pantallas — ~30 veces por minuto y hasta 2 s de CPU
+# cada una — y tenía la base de datos al 100-260 %. Se calcula una vez por espacio y día. La clave lleva el día.
+_DEL_DIA: dict[tuple, object] = {}
+
+
+def _una_vez_al_dia(clave: tuple, calcular):
+    if clave not in _DEL_DIA:
+        if len(_DEL_DIA) > 256:   # los días pasados no se vuelven a pedir
+            _DEL_DIA.clear()
+        _DEL_DIA[clave] = calcular()
+    return _DEL_DIA[clave]
+
 # Los códigos de categoría/facultad son data de la institución: se cargan del
 # overlay vía services/labels.py (ver labels_config_path).
 
@@ -392,11 +405,14 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         )
         SELECT AVG(dur) FROM exit_pairs WHERE dur > 0
     """)
-    typical_stay_scalar = db.execute(
-        typical_stay_sql,
-        {"sid": sid, "cutoff": cutoff_52w, "hoy_ini": hoy_ini, "dow": pg_isodow},
-    ).scalar()
-    typical_avg_stay_seconds = int(typical_stay_scalar) if typical_stay_scalar else None
+    typical_avg_stay_seconds = _una_vez_al_dia(
+        ("permanencia_tipica", sid, hoy_ini.isoformat()),
+        lambda: db.execute(
+            typical_stay_sql,
+            {"sid": sid, "cutoff": cutoff_52w, "hoy_ini": hoy_ini, "dow": pg_isodow},
+        ).scalar(),
+    )
+    typical_avg_stay_seconds = int(typical_avg_stay_seconds) if typical_avg_stay_seconds else None
 
     # ── Perfiles (categorías) hoy ────────────────────────────────────────────
     # Se agrupa por PERFIL CANÓNICO, no por el código crudo: el histórico y las
