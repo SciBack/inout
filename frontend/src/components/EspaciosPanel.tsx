@@ -14,10 +14,11 @@ type Sala = {
   integrantes?: number
   minimo?: number
   expira?: string | null   // el grupo que se forma vence a esta hora (5 min)
+  inicio?: string | null   // desde cuándo está prestada, para el reloj del cuadradito (19-nov-2026)
   responsable?: string | null   // nombre corto («William P.»), de Discovery (19-nov-2026)
 }
 type Piso = { piso: string; salas: Sala[] }
-type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null; responsable?: string | null }
+type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null; inicio?: string | null; responsable?: string | null }
 type Laboratorio = { libres: number; total: number; cola: number; proxima?: string | null; puestos?: Laptop[] }
 type Espacios = { ahora: string; pisos: Piso[]; laboratorio: Laboratorio | null; contingencia?: string }
 
@@ -88,6 +89,26 @@ function estadoCorto(s: Sala): string {
   }
 }
 
+// Reloj del cuadradito (19-nov-2026), como en Gestionar salas de Discovery: anillo que se llena desde que se
+// prestó hasta la hora de término (renovaciones y tiempo extra ya incluidos). Arriba a la derecha, chico.
+const R = 6, C = 2 * Math.PI * R
+function Reloj({ inicio, fin, color }: { inicio?: string | null; fin?: string | null; color: string }) {
+  if (!inicio || !fin) return null
+  const i = new Date(inicio).getTime(), f = new Date(fin).getTime(), n = Date.now()
+  if (!(f > i)) return null
+  const pct = Math.min(1, Math.max(0, (n - i) / (f - i)))
+  return (
+    <svg className="sala-reloj" viewBox="0 0 16 16" aria-hidden="true" style={{
+      position: 'absolute', top: 'clamp(3px,7cqh,9px)', right: 'clamp(3px,5cqw,9px)',
+      width: 'clamp(11px,min(20cqh,15cqw),28px)', height: 'clamp(11px,min(20cqh,15cqw),28px)', transform: 'rotate(-90deg)',
+    }}>
+      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={2.6} />
+      <circle cx="8" cy="8" r={R} fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round"
+        strokeDasharray={`${(C * pct).toFixed(2)} ${C.toFixed(2)}`} style={{ transition: 'stroke-dasharray 600ms ease-out' }} />
+    </svg>
+  )
+}
+
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
   const t = tono(s.estado)
   const p = pulso(s.estado, t.color)
@@ -98,13 +119,15 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
       border: `1px ${s.estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`,
       borderRadius: 10,
       // Llena su celda de la grilla y el texto escala con el tamaño del cuadradito (19-nov-2026).
-      containerType: 'size',
+      containerType: 'size', position: 'relative',
       minWidth: 0, minHeight: 0, overflow: 'hidden',
     }} className={p.className}>
+      {s.estado !== 'libre' && s.estado !== 'fuera' && <Reloj inicio={s.inicio} fin={s.fin} color={t.color} />}
       {/* Si el cuadradito es bajo, las líneas se juntan; si no caben, se va el responsable y luego
           nombre y estado pasan a una fila. Nunca se montan (reglas .sala-cont en el <style> del panel). */}
       <div className="sala-cont">
-        <span style={{ ...linea, fontWeight: 700, fontSize: 'clamp(12px,min(22cqh,16cqw),40px)', lineHeight: 1.05, color: 'var(--c-text1)' }}>
+        <span style={{ ...linea, fontWeight: 700, fontSize: 'clamp(12px,min(22cqh,16cqw),40px)', lineHeight: 1.05, color: 'var(--c-text1)',
+          paddingRight: s.inicio ? 'clamp(12px,min(22cqh,17cqw),32px)' : 0 }}>
           {corto(s.nombre)}
         </span>
         <span style={{ ...linea, fontWeight: 600, fontSize: 'clamp(11px,min(17cqh,13cqw),32px)', lineHeight: 1.05, color: t.color, fontVariantNumeric: 'tabular-nums' }}>
@@ -137,10 +160,11 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
     <div className={pl.className} style={{
       ...pl.estilo,
       background: t.bg, border: `1px ${estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`, borderRadius: 10,
-      containerType: 'size',
+      containerType: 'size', position: 'relative',
       padding: 'clamp(2px,5cqh,10px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', gap: 'clamp(0px,2cqh,4px)', minWidth: 0, minHeight: 0, overflow: 'hidden',
     }}>
+      {(p.estado === 'en_uso' || p.estado === 'termina') && <Reloj inicio={p.inicio} fin={p.fin} color={t.color} />}
       <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(15px,min(38cqh,38cqw),64px)', lineHeight: 1, color: 'var(--c-text1)', flexShrink: 0 }}>
         {p.id.replace(/^LAB-0?/, '')}
       </span>
@@ -267,7 +291,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 34px) { .sala-reloj { display: none } .sala-cont > span:first-child { padding-right: 0 !important } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         // Cada piso en dos bloques, solo para verlo: cubículos individuales y salas grupales (19-nov-2026).
