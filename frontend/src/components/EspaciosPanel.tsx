@@ -37,6 +37,8 @@ const TONO: Record<Sala['estado'], { color: string; bg: string; borde: string }>
   // Fuera de servicio (mantenimiento): gris, no se presta (18-nov-2026).
   fuera:      { color: 'var(--c-text3)', bg: 'color-mix(in srgb, var(--c-text3) 10%, transparent)',  borde: 'color-mix(in srgb, var(--c-text3) 35%, transparent)' },
 }
+// Sala ocupada con alguien en cola: naranja, para verla de un vistazo (19-nov-2026).
+const TONO_COLA = { color: 'var(--c-orange)', bg: 'color-mix(in srgb, var(--c-orange) 16%, transparent)', borde: 'color-mix(in srgb, var(--c-orange) 60%, transparent)' }
 // Un estado que esta pantalla aún no conoce no debe tumbarla (el 18-nov-2026 «fuera» la dejó en blanco):
 // se pinta como ocupado.
 const tono = (e: string) => TONO[e as Sala['estado']] ?? TONO.ocupada
@@ -112,7 +114,8 @@ function Reloj({ inicio, fin, color }: { inicio?: string | null; fin?: string | 
 }
 
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
-  const t = tono(s.estado)
+  const conCola = (s.cola ?? 0) > 0 && s.estado !== 'libre' && s.estado !== 'fuera'
+  const t = conCola ? TONO_COLA : tono(s.estado)
   const p = pulso(s.estado, t.color)
   return (
     <div style={{
@@ -142,7 +145,7 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
         )}
         {/* Ya hay quien espera esta sala (19-nov-2026): sin nombres, solo cuántos. Se va si el cuadradito es bajo. */}
         {(s.cola ?? 0) > 0 && s.estado !== 'libre' && (
-          <span className="sala-cola" style={{ ...linea, fontWeight: 700, fontSize: 'clamp(10px,min(14cqh,11cqw),26px)', lineHeight: 1.05, color: 'var(--c-amber)' }}>
+          <span className="sala-cola" style={{ ...linea, fontWeight: 700, fontSize: 'clamp(10px,min(14cqh,11cqw),26px)', lineHeight: 1.05, color: 'var(--c-orange)' }}>
             <svg viewBox="0 0 24 24" width="0.9em" height="0.9em" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2.4}
               strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-0.1em', marginRight: '0.25em' }}>
               <path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
