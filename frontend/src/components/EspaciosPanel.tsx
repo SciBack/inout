@@ -99,21 +99,23 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
       borderRadius: 10,
       // Llena su celda de la grilla y el texto escala con el tamaño del cuadradito (19-nov-2026).
       containerType: 'size',
-      padding: '6% 8%',
-      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'clamp(1px,2cqh,6px)', minWidth: 0, minHeight: 0,
-      overflow: 'hidden',
+      minWidth: 0, minHeight: 0, overflow: 'hidden',
     }} className={p.className}>
-      <span style={{ ...linea, fontWeight: 700, fontSize: 'clamp(12px,min(22cqh,16cqw),40px)', color: 'var(--c-text1)' }}>
-        {corto(s.nombre)}
-      </span>
-      <span style={{ ...linea, fontWeight: 600, fontSize: 'clamp(11px,min(17cqh,13cqw),32px)', color: t.color, fontVariantNumeric: 'tabular-nums' }}>
-        <span className="chip-largo">{estadoTexto(s)}</span><span className="chip-corto">{estadoCorto(s)}</span>
-      </span>
-      {s.responsable && s.estado !== 'libre' && (
-        <span style={{ ...linea, fontWeight: 500, fontSize: 'clamp(10px,min(15cqh,12cqw),28px)', color: 'var(--c-text2)' }}>
-          {s.responsable}
+      {/* Si el cuadradito es bajo, las líneas se juntan; si no caben, se va el responsable y luego
+          nombre y estado pasan a una fila. Nunca se montan (reglas .sala-cont en el <style> del panel). */}
+      <div className="sala-cont">
+        <span style={{ ...linea, fontWeight: 700, fontSize: 'clamp(12px,min(22cqh,16cqw),40px)', lineHeight: 1.05, color: 'var(--c-text1)' }}>
+          {corto(s.nombre)}
         </span>
-      )}
+        <span style={{ ...linea, fontWeight: 600, fontSize: 'clamp(11px,min(17cqh,13cqw),32px)', lineHeight: 1.05, color: t.color, fontVariantNumeric: 'tabular-nums' }}>
+          <span className="chip-largo">{estadoTexto(s)}</span><span className="chip-corto">{estadoCorto(s)}</span>
+        </span>
+        {s.responsable && s.estado !== 'libre' && (
+          <span className="sala-quien" style={{ ...linea, fontWeight: 500, fontSize: 'clamp(10px,min(15cqh,12cqw),28px)', lineHeight: 1.05, color: 'var(--c-text2)' }}>
+            {s.responsable}
+          </span>
+        )}
+      </div>
     </div>
   )
 })
@@ -265,7 +267,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } } .sala-cont { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: safe center; gap: clamp(0px,2cqh,6px); padding: clamp(2px,6cqh,10px) clamp(5px,8cqw,12px) } @container (max-height: 44px) { .sala-quien { display: none } } @container (max-height: 30px) { .sala-cont { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 0 clamp(5px,6cqw,10px) } .sala-cont > span:nth-child(2) { flex-shrink: 1 !important; min-width: 0 } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         // Cada piso en dos bloques, solo para verlo: cubículos individuales y salas grupales (19-nov-2026).
