@@ -181,10 +181,15 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
 })
 
 // Pide una sala o una laptop: QR a «Su cuenta» de Discovery (salas y laptops se piden ahí).
+// Mientras los estudiantes no piden por Discovery ni por la app, el recuadro manda al counter
+// (19-nov-2026). Al abrirlo para todos: true, y vuelve el QR a «Su cuenta».
+const PEDIR_EN_DISCOVERY = false
+
 function PedirCard({ url }: { url: string }) {
   const destino = new URL('/Cuenta/Cubiculos', url).toString()
   const [svg, setSvg] = useState('')
   useEffect(() => {
+    if (!PEDIR_EN_DISCOVERY) return
     QRCode.toString(destino, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#0b1220', light: '#ffffff' } })
       .then(setSvg).catch(() => setSvg(''))
   }, [destino])
@@ -192,16 +197,27 @@ function PedirCard({ url }: { url: string }) {
   const punto = (c: string) => ({ width: 10, height: 10, borderRadius: 3, background: c, display: 'inline-block', marginRight: 6 })
   return (
     <div style={{ ...tarjeta, marginTop: 'auto', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 'clamp(10px,1.4vh,18px)' }}>
-      {svg && (
+      {PEDIR_EN_DISCOVERY && svg && (
         <div aria-hidden style={{ background: '#fff', padding: 6, borderRadius: 8, width: 'clamp(64px,8.5vh,120px)', flexShrink: 0, lineHeight: 0 }}
              dangerouslySetInnerHTML={{ __html: svg }} />
       )}
+      {!PEDIR_EN_DISCOVERY && (
+        // Mostrador: una persona tras el counter (en el lugar del QR, mismo tamaño).
+        <div aria-hidden style={{ width: 'clamp(64px,8.5vh,120px)', aspectRatio: '1', flexShrink: 0, borderRadius: 8, display: 'grid', placeItems: 'center',
+          background: 'color-mix(in oklch, var(--c-cyan) 14%, transparent)', border: '1px solid color-mix(in oklch, var(--c-cyan) 45%, transparent)', color: 'var(--c-cyan)' }}>
+          <svg viewBox="0 0 24 24" width="62%" height="62%" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="6.5" r="3" /><path d="M6.5 15c0-3 2.5-5 5.5-5s5.5 2 5.5 5" /><path d="M3 15h18M5 15v6M19 15v6" />
+          </svg>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px,0.6vh,8px)', minWidth: 0 }}>
         <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(14px,1.8vh,22px)', color: 'var(--c-text1)', lineHeight: 1.15 }}>
-          Pida una sala o una laptop
+          {PEDIR_EN_DISCOVERY ? 'Pida una sala o una laptop' : 'Para pedir una sala o una laptop'}
         </span>
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
-          Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta
+          {PEDIR_EN_DISCOVERY
+            ? <>Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta</>
+            : <>acércate al <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b></>}
         </span>
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
           <span><i style={punto('var(--c-green)')} />Sala libre</span>
