@@ -1,4 +1,4 @@
-import { Component, memo, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { Component, memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 
 // Disponibilidad de salas (por piso) y del laboratorio de laptops del edificio, para la columna de
@@ -14,9 +14,10 @@ type Sala = {
   integrantes?: number
   minimo?: number
   expira?: string | null   // el grupo que se forma vence a esta hora (5 min)
+  responsable?: string | null   // nombre corto («William P.»), de Discovery (19-nov-2026)
 }
 type Piso = { piso: string; salas: Sala[] }
-type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null }
+type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null; responsable?: string | null }
 type Laboratorio = { libres: number; total: number; cola: number; proxima?: string | null; puestos?: Laptop[] }
 type Espacios = { ahora: string; pisos: Piso[]; laboratorio: Laboratorio | null; contingencia?: string }
 
@@ -63,6 +64,22 @@ function estadoTexto(s: Sala): string {
   }
 }
 
+// Versión corta para cuadraditos angostos (pantallas de 1024 px): la elige CSS según el ancho (@container).
+function estadoCorto(s: Sala): string {
+  switch (s.estado) {
+    case 'libre': return 'Libre'
+    case 'formando': {
+      const seg = s.expira ? Math.max(0, (new Date(s.expira).getTime() - Date.now()) / 1000) : null
+      return `${s.integrantes ?? 1}/${s.minimo ?? 3}${seg === null ? '' : seg < 60 ? '·<1′' : `·${Math.ceil(seg / 60)}′`}`
+    }
+    case 'termina': return `↓${hora(s.fin)}`
+    case 'tolerancia': return 'Sale'
+    case 'llamada': return 'Reserv.'
+    case 'fuera': return 'Fuera'
+    default: return s.fin ? hora(s.fin) : 'En uso'
+  }
+}
+
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
   const t = tono(s.estado)
   const p = pulso(s.estado, t.color)
@@ -71,16 +88,24 @@ const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
       ...p.estilo,
       background: t.bg,
       border: `1px ${s.estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`,
-      borderRadius: 8,
-      padding: 'clamp(6px,0.9vh,11px) clamp(8px,1vh,12px)',
-      display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0,
+      borderRadius: 10,
+      // Llena su celda de la grilla y el texto escala con el tamaño del cuadradito (19-nov-2026).
+      containerType: 'size',
+      padding: '6% 8%',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'clamp(1px,2cqh,6px)', minWidth: 0, minHeight: 0,
+      overflow: 'hidden',
     }} className={p.className}>
-      <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(13px,1.75vh,21px)', color: 'var(--c-text1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ ...linea, fontWeight: 700, fontSize: 'clamp(12px,min(22cqh,16cqw),40px)', color: 'var(--c-text1)' }}>
         {corto(s.nombre)}
       </span>
-      <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(12px,1.45vh,17px)', color: t.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {estadoTexto(s)}
+      <span style={{ ...linea, fontWeight: 600, fontSize: 'clamp(11px,min(17cqh,13cqw),32px)', color: t.color, fontVariantNumeric: 'tabular-nums' }}>
+        <span className="chip-largo">{estadoTexto(s)}</span><span className="chip-corto">{estadoCorto(s)}</span>
       </span>
+      {s.responsable && s.estado !== 'libre' && (
+        <span style={{ ...linea, fontWeight: 500, fontSize: 'clamp(10px,min(15cqh,12cqw),28px)', color: 'var(--c-text2)' }}>
+          {s.responsable}
+        </span>
+      )}
     </div>
   )
 })
@@ -101,15 +126,22 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   return (
     <div className={pl.className} style={{
       ...pl.estilo,
-      background: t.bg, border: `1px ${estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`, borderRadius: 8,
-      padding: 'clamp(4px,0.6vh,8px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0,
+      background: t.bg, border: `1px ${estado === 'llamada' ? 'dashed' : 'solid'} ${t.borde}`, borderRadius: 10,
+      containerType: 'size',
+      padding: 'clamp(2px,5cqh,10px) 4px', display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', gap: 'clamp(0px,2cqh,4px)', minWidth: 0, minHeight: 0, overflow: 'hidden',
     }}>
-      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(18px,2.4vh,30px)', lineHeight: 1, color: 'var(--c-text1)' }}>
+      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(15px,min(38cqh,38cqw),64px)', lineHeight: 1, color: 'var(--c-text1)', flexShrink: 0 }}>
         {p.id.replace(/^LAB-0?/, '')}
       </span>
-      <span style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 'clamp(10px,1.2vh,14px)', color: t.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+      <span style={{ ...linea, fontWeight: 600, fontSize: 'clamp(10px,min(17cqh,17cqw),26px)', color: t.color, fontVariantNumeric: 'tabular-nums', maxWidth: '100%' }}>
         {texto}
       </span>
+      {p.responsable && p.estado !== 'libre' && (
+        <span className="chip-quien" style={{ ...linea, fontWeight: 500, fontSize: 'clamp(9px,min(14cqh,15cqw),22px)', color: 'var(--c-text2)', maxWidth: '100%' }}>
+          {p.responsable}
+        </span>
+      )}
     </div>
   )
 })
@@ -155,8 +187,15 @@ const etiqueta: React.CSSProperties = {
 const tarjeta: React.CSSProperties = {
   background: 'var(--c-bg-panel)', border: '1px solid var(--c-border)', borderRadius: 14,
   padding: 'clamp(8px,1vh,14px) clamp(10px,1.2vh,16px)', display: 'flex', flexDirection: 'column',
-  gap: 'clamp(6px,0.8vh,10px)',
+  gap: 'clamp(6px,0.8vh,10px)', minHeight: 0,
 }
+// Una línea de texto que nunca desborda su cuadradito.
+const linea: React.CSSProperties = { fontFamily: FONT_BODY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15, flexShrink: 0 }
+// Grilla que llena el alto de su tarjeta: filas iguales que se estiran (19-nov-2026).
+const grilla = (cols: number): React.CSSProperties => ({
+  display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: 'minmax(0, 1fr)',
+  gap: 'clamp(4px,0.7vh,10px)', flex: '1 1 0', minHeight: 0,
+})
 
 // Red de seguridad: si este panel falla (p. ej. un dato nuevo de Discovery), se oculta solo él y el kiosko
 // sigue marcando entradas. El 18-nov-2026 un estado desconocido dejaba toda la pantalla en blanco.
@@ -173,6 +212,16 @@ export function EspaciosPanel(props: { url?: string | null }) {
 
 function EspaciosPanelInterno({ url }: { url?: string | null }) {
   const [datos, setDatos] = useState<Espacios | null>(null)
+  // Ancho real del panel: decide cuántas salas por fila (pantallas angostas o verticales: menos columnas).
+  const caja = useRef<HTMLDivElement>(null)
+  const [ancho, setAncho] = useState(400)
+  useEffect(() => {
+    const el = caja.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setAncho(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [datos !== null])
 
   useEffect(() => {
     if (!url) { setDatos(null); return }
@@ -191,8 +240,12 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
 
   if (!datos || !datos.pisos?.length) return null
 
+  // Cada tarjeta se lleva del alto libre de la columna una parte proporcional a sus filas: las salas mandan.
+  const COLS_SALAS = ancho >= 300 ? 4 : ancho >= 200 ? 3 : 2
+  const COLS_LAB = ancho >= 200 ? 5 : 3
+  const filas = (n: number, cols: number) => Math.max(1, Math.ceil(n / cols))
   return (
-    <>
+    <div ref={caja} style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 'clamp(7px,0.9vh,12px)' }}>
       {datos.contingencia && datos.contingencia !== 'normal' && (
         <div role="status" style={{ ...tarjeta, borderColor: 'color-mix(in oklch, var(--c-amber) 60%, transparent)',
           background: 'color-mix(in oklch, var(--c-amber) 12%, var(--c-bg-panel))' }}>
@@ -204,25 +257,25 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           </span>
         </div>
       )}
-      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } }`}</style>
+      <style>{`@keyframes salaPulso { 0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--pulso) 60%, transparent) } 70%, 100% { box-shadow: 0 0 0 9px transparent } } .sala-pulso { animation: salaPulso 1.6s cubic-bezier(.23,1,.32,1) infinite } @media (prefers-reduced-motion: reduce) { .sala-pulso { animation: none } } .chip-corto { display: none } @container (max-width: 96px) { .chip-largo { display: none } .chip-corto { display: inline } } @container (max-height: 64px) { .chip-quien { display: none } }`}</style>
       {datos.pisos.map((p) => {
         const libres = p.salas.filter((s) => s.estado === 'libre').length
         return (
-          <div key={p.piso} style={tarjeta}>
+          <div key={p.piso} style={{ ...tarjeta, flex: `${filas(p.salas.length, Math.min(COLS_SALAS, p.salas.length))} 1 0` }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
               <span style={etiqueta}>Salas · {pisoBonito(p.piso)}</span>
               <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: libres ? 'var(--c-green)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
                 {libres} de {p.salas.length} libres
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(76px,9.5vh,150px), 1fr))', gap: 'clamp(4px,0.6vh,8px)' }}>
+            <div style={grilla(Math.min(COLS_SALAS, p.salas.length))}>
               {p.salas.map((s) => <SalaChip key={s.nombre} s={s} />)}
             </div>
           </div>
         )
       })}
       {datos.laboratorio && (
-        <div style={tarjeta}>
+        <div style={{ ...tarjeta, flex: `${1.1 * filas(datos.laboratorio.puestos?.length ?? 1, COLS_LAB)} 1 0` }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <span style={etiqueta}>Laboratorio · laptops</span>
             <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 'clamp(12px,1.4vh,17px)', color: datos.laboratorio.libres ? 'var(--c-cyan)' : 'var(--c-text3)', fontVariantNumeric: 'tabular-nums' }}>
@@ -231,7 +284,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
             </span>
           </div>
           {datos.laboratorio.puestos?.length ? (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(5, datos.laboratorio.puestos.length)}, minmax(0, 1fr))`, gap: 'clamp(4px,0.6vh,8px)' }}>
+            <div style={grilla(Math.min(COLS_LAB, datos.laboratorio.puestos.length))}>
               {datos.laboratorio.puestos.map((p) => <LaptopChip key={p.id} p={p} />)}
             </div>
           ) : (
@@ -246,7 +299,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           )}
         </div>
       )}
-      <PedirCard url={url!} />
-    </>
+      <div style={{ flex: '0 0 auto' }}><PedirCard url={url!} /></div>
+    </div>
   )
 }
