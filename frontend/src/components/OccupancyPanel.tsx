@@ -1,3 +1,4 @@
+import { ahoraServidor, anotarHoraServidor } from '../utils/horaServidor'
 import { EspaciosPanel } from './EspaciosPanel'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, memo } from 'react'
@@ -154,7 +155,9 @@ function ArcGauge({ value, max, color, fill = false }: { value: number; max: num
   const rot = `rotate(144, ${cx}, ${cy})`
 
   return (
-    <svg viewBox="0 0 100 82" style={fill ? { height: '100%', width: 'auto', display: 'block' } : { width: '100%', maxWidth: '96px', display: 'block' }}>
+    // Alto fijo y proporción del dibujo: con «height: 100%» Firefox 115 (los terminales del CRAI) lo dejaba en
+    // ancho 0 y el anillo de «Dentro ahora» no se veía (19-nov-2026).
+    <svg viewBox="0 0 100 82" style={fill ? { height: 'clamp(46px,7vh,92px)', width: 'auto', aspectRatio: '100 / 82', display: 'block' } : { width: '100%', maxWidth: '96px', display: 'block' }}>
       <circle cx={cx} cy={cy} r={R}
         fill="none" stroke={C.border} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -603,6 +606,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
     try {
       const url = spaceId ? `/api/dashboard?space_id=${spaceId}` : '/api/dashboard'
       const res = await fetch(url)
+      anotarHoraServidor(res)   // la hora del equipo puede estar mal (utils/horaServidor.ts)
       if (res.ok) { setData(await res.json()); setError(false) }
     } catch { setError(true) }
   }
@@ -650,7 +654,7 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
   const pct      = Math.min(100, data.occupancy_percent)
   const barColor = pct < 60 ? C.green : pct < 85 ? C.amber : C.red
 
-  const todayLabel = new Date().toLocaleDateString('es-PE', {
+  const todayLabel = ahoraServidor().toLocaleDateString('es-PE', {
     weekday: 'long', day: 'numeric', month: 'long',
   })
   const todayCapitalized = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)

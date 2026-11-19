@@ -1,3 +1,4 @@
+import { ahoraServidor } from './utils/horaServidor'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScanInput } from './components/ScanInput'
 import { WelcomeScreen } from './components/WelcomeScreen'
@@ -764,9 +765,9 @@ const spaceStyles: Record<string, React.CSSProperties> = {
 }
 
 function Clock() {
-  const [time, setTime] = useState(new Date())
+  const [time, setTime] = useState(ahoraServidor())
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
+    const t = setInterval(() => setTime(ahoraServidor()), 1000)   // hora del servidor, no la del equipo
     return () => clearInterval(t)
   }, [])
   return (

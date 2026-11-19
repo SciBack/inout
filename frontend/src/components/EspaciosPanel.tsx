@@ -1,3 +1,4 @@
+import { ahoraServidor } from '../utils/horaServidor'
 import { Component, memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 
@@ -94,7 +95,7 @@ function estadoCorto(s: Sala): string {
 const R = 6, C = 2 * Math.PI * R
 function Reloj({ inicio, fin, color }: { inicio?: string | null; fin?: string | null; color: string }) {
   if (!inicio || !fin) return null
-  const i = new Date(inicio).getTime(), f = new Date(fin).getTime(), n = Date.now()
+  const i = new Date(inicio).getTime(), f = new Date(fin).getTime(), n = ahoraServidor().getTime()   // no el reloj del equipo
   if (!(f > i)) return null
   const pct = Math.min(1, Math.max(0, (n - i) / (f - i)))
   return (
