@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type CSSProperties } from 'react'
+import { Component, memo, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 
 // Disponibilidad de salas (por piso) y del laboratorio de laptops del edificio, para la columna de
@@ -7,7 +7,7 @@ import QRCode from 'qrcode'
 
 type Sala = {
   nombre: string
-  estado: 'libre' | 'formando' | 'ocupada' | 'termina' | 'tolerancia' | 'llamada'
+  estado: 'libre' | 'formando' | 'ocupada' | 'termina' | 'tolerancia' | 'llamada' | 'fuera'
   fin?: string | null
   tipo: 'individual' | 'grupal'
   capacidad?: number | null
@@ -16,7 +16,7 @@ type Sala = {
   expira?: string | null   // el grupo que se forma vence a esta hora (5 min)
 }
 type Piso = { piso: string; salas: Sala[] }
-type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina'; fin?: string | null }
+type Laptop = { id: string; estado: 'libre' | 'llamada' | 'en_uso' | 'termina' | 'fuera'; fin?: string | null }
 type Laboratorio = { libres: number; total: number; cola: number; proxima?: string | null; puestos?: Laptop[] }
 type Espacios = { ahora: string; pisos: Piso[]; laboratorio: Laboratorio | null; contingencia?: string }
 
@@ -30,7 +30,12 @@ const TONO: Record<Sala['estado'], { color: string; bg: string; borde: string }>
   termina:    { color: 'var(--c-amber)', bg: 'color-mix(in oklch, var(--c-amber) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-amber) 50%, transparent)' },
   tolerancia: { color: 'var(--c-amber)', bg: 'color-mix(in oklch, var(--c-amber) 14%, transparent)', borde: 'color-mix(in oklch, var(--c-amber) 50%, transparent)' },
   llamada:    { color: 'var(--c-amber)', bg: 'transparent',                                          borde: 'color-mix(in oklch, var(--c-amber) 60%, transparent)' },
+  // Fuera de servicio (mantenimiento): gris, no se presta (18-nov-2026).
+  fuera:      { color: 'var(--c-text3)', bg: 'color-mix(in oklch, var(--c-text3) 10%, transparent)',  borde: 'color-mix(in oklch, var(--c-text3) 35%, transparent)' },
 }
+// Un estado que esta pantalla aún no conoce no debe tumbarla (el 18-nov-2026 «fuera» la dejó en blanco):
+// se pinta como ocupado.
+const tono = (e: string) => TONO[e as Sala['estado']] ?? TONO.ocupada
 
 // Late (aro que crece y se desvanece): un grupo formándose o una sala/laptop por liberarse (18-nov-2026).
 const LATE = new Set<string>(['formando', 'termina', 'tolerancia'])
@@ -53,12 +58,13 @@ function estadoTexto(s: Sala): string {
     case 'termina': return `Termina ${hora(s.fin)}`
     case 'tolerancia': return 'Desocupando'
     case 'llamada': return 'Reservada'
+    case 'fuera': return 'Fuera de servicio'
     default: return s.fin ? `Hasta ${hora(s.fin)}` : 'En uso'
   }
 }
 
 const SalaChip = memo(function SalaChip({ s }: { s: Sala }) {
-  const t = TONO[s.estado] ?? TONO.ocupada
+  const t = tono(s.estado)
   const p = pulso(s.estado, t.color)
   return (
     <div style={{
@@ -88,8 +94,9 @@ const LAPTOP_LIBRE = {
 const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   const estado: Sala['estado'] = p.estado === 'en_uso' ? 'ocupada' : p.estado
   // Las laptops libres van en celeste para no confundirlas con las salas (verde).
-  const t = estado === 'libre' ? LAPTOP_LIBRE : estado === 'llamada' ? { ...LAPTOP_LIBRE, bg: 'transparent' } : TONO[estado]
-  const texto = p.estado === 'libre' ? 'Libre' : p.estado === 'llamada' ? 'Reserv.' : p.fin ? hora(p.fin) : 'En uso'
+  const t = estado === 'libre' ? LAPTOP_LIBRE : estado === 'llamada' ? { ...LAPTOP_LIBRE, bg: 'transparent' } : tono(estado)
+  const texto = p.estado === 'libre' ? 'Libre' : p.estado === 'llamada' ? 'Reserv.' : p.estado === 'fuera' ? 'Fuera'
+    : p.fin ? hora(p.fin) : 'En uso'
   const pl = pulso(estado, t.color)
   return (
     <div className={pl.className} style={{
@@ -151,7 +158,20 @@ const tarjeta: React.CSSProperties = {
   gap: 'clamp(6px,0.8vh,10px)',
 }
 
-export function EspaciosPanel({ url }: { url?: string | null }) {
+// Red de seguridad: si este panel falla (p. ej. un dato nuevo de Discovery), se oculta solo él y el kiosko
+// sigue marcando entradas. El 18-nov-2026 un estado desconocido dejaba toda la pantalla en blanco.
+class SinCaida extends Component<{ children: ReactNode }, { roto: boolean }> {
+  state = { roto: false }
+  static getDerivedStateFromError() { return { roto: true } }
+  componentDidCatch(e: unknown) { console.error('[espacios] panel oculto por un error', e) }
+  render() { return this.state.roto ? null : this.props.children }
+}
+
+export function EspaciosPanel(props: { url?: string | null }) {
+  return <SinCaida><EspaciosPanelInterno {...props} /></SinCaida>
+}
+
+function EspaciosPanelInterno({ url }: { url?: string | null }) {
   const [datos, setDatos] = useState<Espacios | null>(null)
 
   useEffect(() => {
