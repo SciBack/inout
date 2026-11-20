@@ -71,6 +71,10 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     cardnumber = req.cardnumber.strip()
     if not cardnumber:
         raise HTTPException(status_code=400, detail="cardnumber requerido")
+    # Un código más largo que cualquier credencial (p. ej. un QR que no es un carné) no es de nadie: el kiosko
+    # muestra «Carnet no encontrado». Antes rompía al guardarlo (varchar(50)) con un error 500 (19-nov-2026).
+    if len(cardnumber) > 50:
+        raise HTTPException(status_code=404, detail="credencial_no_valida")
 
     # Fase 4 (cola offline): la hora del evento la manda el kiosko (hora real
     # de captura, no de reenvío). Ausente = comportamiento de hoy (now()).

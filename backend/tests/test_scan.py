@@ -326,3 +326,11 @@ class TestIdempotenciaPorClientEventId:
         _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-1")
         _scan(db, "111", monkeypatch, persona=None, client_event_id="evt-2")
         assert db.query(PresenceLog).count() == 2
+
+
+def test_codigo_demasiado_largo_no_rompe_y_se_rechaza(db, espacio, monkeypatch):
+    """19-nov-2026: un QR que no es carné (>50 caracteres) daba error 500 al guardarlo. Ahora: «no encontrado»."""
+    with pytest.raises(HTTPException) as e:
+        _scan(db, "https://ejemplo.upeu.edu.pe/" + "x" * 60, monkeypatch)
+    assert e.value.status_code == 404
+    assert db.query(PresenceLog).count() == 0
