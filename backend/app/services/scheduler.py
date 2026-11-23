@@ -100,8 +100,10 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
             from ..models import Person
             claves = [e.person_key for e in still_inside if e.person_key]
             correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
+            codigos = discovery.codigos_de(db, claves)
             for e in still_inside:
-                discovery.avisar_marca(correos.get(e.person_key), "exit", close_dt, None, forzada=True, en_hilo=False)
+                discovery.avisar_marca(correos.get(e.person_key), "exit", close_dt, None, forzada=True, en_hilo=False,
+                                       codigos=codigos.get(e.person_key))
         logger.info(
             "[auto-exit] space=%d: %d salidas forzadas a las %02d:%02d Lima.",
             space_id, len(still_inside), close_hour, close_minute,
@@ -150,11 +152,12 @@ def _enviar_presentes():
         )
         claves = [e.person_key for e in dentro if e.person_key]
         correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
+        codigos = discovery.codigos_de(db, claves)
         enviados = 0
         for e in dentro:
-            correo = correos.get(e.person_key)
-            if correo:
-                discovery.avisar_marca(correo, "entry", e.timestamp, None, en_hilo=False)
+            correo, suyos = correos.get(e.person_key), codigos.get(e.person_key)
+            if correo or suyos:   # sin correo también: por sus códigos (23-nov-2026)
+                discovery.avisar_marca(correo, "entry", e.timestamp, None, en_hilo=False, codigos=suyos)
                 enviados += 1
         logger.info("[discovery] presentes enviados al arrancar: %d", enviados)
     except Exception:

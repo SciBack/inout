@@ -50,3 +50,24 @@ def test_discovery_caido_no_rompe(monkeypatch):
 
     monkeypatch.setattr(discovery.httpx, "post", post)
     discovery.latido()   # no lanza
+
+
+def test_sin_correo_avisa_por_sus_codigos(monkeypatch):
+    """Quien no tiene correo en el padrón también llega a Discovery, por su código (23-nov-2026)."""
+    _config(monkeypatch)
+    enviado = {}
+    monkeypatch.setattr(discovery.httpx, "post",
+                        lambda url, content, timeout, headers: enviado.update(cuerpo=content) or httpx.Response(200))
+    discovery.avisar_marca(None, "entry", datetime(2026, 11, 23, 15, 40, tzinfo=timezone.utc), "CRAI Lima",
+                           en_hilo=False, codigos=["91133", "202410300", " ", "91133"])
+    datos = json.loads(enviado["cuerpo"])
+    assert datos["correo"] is None and datos["codigos"] == ["202410300", "91133"] and datos["evento"] == "entry"
+
+
+def test_codigos_de_no_incluye_el_dni(db):
+    from app.models import PersonIdentifier
+    for tipo, valor in (("cardnumber", "202410300"), ("cardnumber", "91133"), ("unique_id", "91133"),
+                        ("document_number", "60803440")):
+        db.add(PersonIdentifier(id_type=tipo, id_value=valor, person_key="ldap:1"))
+    db.commit()
+    assert sorted(set(discovery.codigos_de(db, ["ldap:1"])["ldap:1"])) == ["202410300", "91133"]
