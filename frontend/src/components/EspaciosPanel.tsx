@@ -201,10 +201,11 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   )
 })
 
-// Pide una sala o una laptop: QR a «Su cuenta» de Discovery (salas y laptops se piden ahí).
-// Mientras los estudiantes no piden por Discovery ni por la app, el recuadro manda al counter
-// (19-nov-2026). Al abrirlo para todos: true, y vuelve el QR a «Su cuenta».
-const PEDIR_EN_DISCOVERY = false
+// Pide una sala o una laptop. Desde el 23-nov-2026 (Mi CRAI publicada en Google Play) es híbrido, a pedido
+// de Alberto: sigue el counter del segundo piso y además cada uno puede pedirla solo, con el QR a «Su cuenta»
+// de Discovery o con la app Mi CRAI; se entra con el usuario y la contraseña del correo institucional.
+// false = solo el counter (como hasta el 19-nov-2026).
+const PEDIR_EN_DISCOVERY = true
 
 function PedirCard({ url }: { url: string }) {
   const destino = new URL('/Cuenta/Cubiculos', url).toString()
@@ -237,9 +238,15 @@ function PedirCard({ url }: { url: string }) {
         </span>
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
           {PEDIR_EN_DISCOVERY
-            ? <>Escanee con su celular o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta</>
+            ? <>En el <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b>, o usted mismo: escanee el código,
+                entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta, o use la app <b style={{ color: 'var(--c-text1)' }}>Mi CRAI</b> (Play Store)</>
             : <>acércate al <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b></>}
         </span>
+        {PEDIR_EN_DISCOVERY && (
+          <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
+            Usuario y contraseña: los mismos de su <b style={{ color: 'var(--c-text1)' }}>correo institucional</b>
+          </span>
+        )}
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(11px,1.3vh,15px)', color: 'var(--c-text3)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
           <span><i style={punto('var(--c-green)')} />Sala libre</span>
           <span><i style={punto('var(--c-cyan)')} />Laptop libre</span>
