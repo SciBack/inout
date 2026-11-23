@@ -128,6 +128,10 @@ class DashboardStats(BaseModel):
     cross_campus_breakdown: list[HomeSedeCount] = []
     # URL de la disponibilidad de salas y laptops de este edificio (Discovery), o None.
     espacios_url: Optional[str] = None
+    # App del lector para pedir salas uno mismo (solo si hay espacios_url): enlace de descarga, nombre, tiendas.
+    espacios_app_url: Optional[str] = None
+    espacios_app_nombre: Optional[str] = None
+    espacios_app_tiendas: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

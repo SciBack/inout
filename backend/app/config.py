@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # salas de Lima no van en el kiosko de Juliaca). Vacío: no se muestra.
     espacios_url: str = ""
     espacios_library_codes: str = ""
+    # App del lector para pedir salas y laptops uno mismo (recuadro «Pida una sala» del kiosko, 23-nov-2026):
+    # enlace de descarga (al que lleva el QR: la ficha de la tienda), nombre y en qué tiendas está
+    # (p. ej. «Play Store · pronto en App Store»). Sin URL, el QR lleva a «Su cuenta» de Discovery.
+    espacios_app_url: str = ""
+    espacios_app_nombre: str = ""
+    espacios_app_tiendas: str = ""
     # Aviso de marcas a Discovery (presencia en el CRAI para ocupar salas): URL del webhook
     # (https://discovery.<dominio>/mi/api/interno/inout) y secreto compartido para firmar. Vacío: no avisa.
     discovery_webhook_url: str = ""

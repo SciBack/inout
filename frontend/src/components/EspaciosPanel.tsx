@@ -201,14 +201,16 @@ const LaptopChip = memo(function LaptopChip({ p }: { p: Laptop }) {
   )
 })
 
-// Pide una sala o una laptop. Desde el 23-nov-2026 (Mi CRAI publicada en Google Play) es híbrido, a pedido
-// de Alberto: sigue el counter del segundo piso y además cada uno puede pedirla solo, con el QR a «Su cuenta»
-// de Discovery o con la app Mi CRAI; se entra con el usuario y la contraseña del correo institucional.
-// false = solo el counter (como hasta el 19-nov-2026).
+// Pide una sala o una laptop. Desde el 23-nov-2026 es híbrido, a pedido de Alberto: sigue el counter del
+// segundo piso y además cada uno puede pedirla solo con la app del lector (ESPACIOS_APP_*): el QR lleva a su
+// ficha en la tienda para descargarla, y se entra con el usuario y la contraseña del correo institucional.
+// Sin app configurada, el QR lleva a «Su cuenta» de Discovery. false = solo el counter (hasta el 19-nov-2026).
 const PEDIR_EN_DISCOVERY = true
 
-function PedirCard({ url }: { url: string }) {
-  const destino = new URL('/Cuenta/Cubiculos', url).toString()
+type AppLector = { url: string; nombre?: string | null; tiendas?: string | null }
+
+function PedirCard({ url, app }: { url: string; app?: AppLector | null }) {
+  const destino = app?.url || new URL('/Cuenta/Cubiculos', url).toString()
   const [svg, setSvg] = useState('')
   useEffect(() => {
     if (!PEDIR_EN_DISCOVERY) return
@@ -238,8 +240,12 @@ function PedirCard({ url }: { url: string }) {
         </span>
         <span style={{ fontFamily: FONT_BODY, fontSize: 'clamp(12px,1.45vh,17px)', color: 'var(--c-text2)', lineHeight: 1.3 }}>
           {PEDIR_EN_DISCOVERY
-            ? <>En el <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b>, o usted mismo: escanee el código,
-                entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta, o use la app <b style={{ color: 'var(--c-text1)' }}>Mi CRAI</b> (Play Store)</>
+            ? (app
+              ? <>En el <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b>, o usted mismo con la app{' '}
+                  <b style={{ color: 'var(--c-text1)' }}>{app.nombre || 'del CRAI'}</b>: escanee el código para descargarla
+                  {app.tiendas ? <> ({app.tiendas})</> : null}</>
+              : <>En el <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b>, o usted mismo: escanee el código
+                  o entre a <b style={{ color: 'var(--c-text1)' }}>{host}</b> → Su cuenta</>)
             : <>acércate al <b style={{ color: 'var(--c-text1)' }}>counter del segundo piso</b></>}
         </span>
         {PEDIR_EN_DISCOVERY && (
@@ -284,11 +290,11 @@ class SinCaida extends Component<{ children: ReactNode }, { roto: boolean }> {
   render() { return this.state.roto ? null : this.props.children }
 }
 
-export function EspaciosPanel(props: { url?: string | null }) {
+export function EspaciosPanel(props: { url?: string | null; app?: AppLector | null }) {
   return <SinCaida><EspaciosPanelInterno {...props} /></SinCaida>
 }
 
-function EspaciosPanelInterno({ url }: { url?: string | null }) {
+function EspaciosPanelInterno({ url, app }: { url?: string | null; app?: AppLector | null }) {
   const [datos, setDatos] = useState<Espacios | null>(null)
   // Ancho real del panel: decide cuántas salas por fila (pantallas angostas o verticales: menos columnas).
   const caja = useRef<HTMLDivElement>(null)
@@ -394,7 +400,7 @@ function EspaciosPanelInterno({ url }: { url?: string | null }) {
           )}
         </div>
       )}
-      <div style={{ flex: '0 0 auto' }}><PedirCard url={url!} /></div>
+      <div style={{ flex: '0 0 auto' }}><PedirCard url={url!} app={app} /></div>
     </div>
   )
 }

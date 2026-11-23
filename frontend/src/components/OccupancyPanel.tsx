@@ -36,6 +36,9 @@ interface DashboardData {
   prev_day_visitors: number
   prev_day_label: string
   espacios_url?: string | null
+  espacios_app_url?: string | null
+  espacios_app_nombre?: string | null
+  espacios_app_tiendas?: string | null
 }
 
 // ── Paleta OKLCH ────────────────────────────────────────────────────────────
@@ -717,7 +720,8 @@ export function OccupancyPanel({ spaceId }: { spaceId?: number }) {
               para dejar esta columna a salas y laptops; si no hay hueco, quedan aquí. */}
           {huecoStats ? createPortal(esencial, huecoStats) : esencial}
 
-          <EspaciosPanel url={data.espacios_url} />
+          <EspaciosPanel url={data.espacios_url}
+            app={data.espacios_app_url ? { url: data.espacios_app_url, nombre: data.espacios_app_nombre, tiendas: data.espacios_app_tiendas } : null} />
 
         </div>
 

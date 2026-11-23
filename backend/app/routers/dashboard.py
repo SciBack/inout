@@ -221,6 +221,17 @@ def _espacios_url(space) -> Optional[str]:
     return settings.espacios_url if not codigos or codigo in codigos else None
 
 
+def _espacios_app(space) -> dict:
+    """App del lector para pedir salas uno mismo, solo donde se muestran las salas (si está configurada)."""
+    if not settings.espacios_app_url or not _espacios_url(space):
+        return {}
+    return {
+        "espacios_app_url": settings.espacios_app_url,
+        "espacios_app_nombre": settings.espacios_app_nombre or None,
+        "espacios_app_tiendas": settings.espacios_app_tiendas or None,
+    }
+
+
 @router.get("/dashboard", response_model=DashboardStats)
 def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
     sid = space_id or settings.default_space_id
@@ -652,4 +663,5 @@ def get_dashboard(space_id: int = None, db: Session = Depends(get_db)):
         faculty_events=faculty_events,
         cross_campus_breakdown=cross_campus_breakdown,
         espacios_url=_espacios_url(space),
+        **_espacios_app(space),
     )
