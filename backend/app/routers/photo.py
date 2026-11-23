@@ -1,6 +1,7 @@
 import httpx
 import pymysql
 import asyncio
+import time
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -11,18 +12,24 @@ from ..models import PersonIdentifier
 
 router = APIRouter()
 
-# Caché en memoria: cardnumber → (bytes, mimetype) para no golpear la DB en cada poll
-_photo_cache: dict[str, tuple[bytes, str] | None] = {}
+# Caché en memoria: cardnumber → (momento, (bytes, mimetype) | None) para no golpear la DB en cada poll.
+# Caduca (23-nov-2026): antes era para siempre, y quien subía su foto desde Mi CRAI después de haber marcado
+# sin foto seguía sin foto en el kiosko hasta reiniciar el backend. «Sin foto» caduca antes que una foto.
+_CACHE_CON_FOTO_S = 30 * 60
+_CACHE_SIN_FOTO_S = 2 * 60
+_photo_cache: dict[str, tuple[float, tuple[bytes, str] | None]] = {}
 
 
 @router.get("/patron-photo/card/{cardnumber}")
 async def patron_photo_by_card(cardnumber: str, db: Session = Depends(get_db)):
     """Foto del patron por cualquiera de sus carnés asociados."""
-    if cardnumber in _photo_cache:
-        result = _photo_cache[cardnumber]
-        if result is None:
-            raise HTTPException(status_code=404, detail="Foto no disponible")
-        return Response(content=result[0], media_type=result[1])
+    guardado = _photo_cache.get(cardnumber)
+    if guardado:
+        momento, result = guardado
+        if time.monotonic() - momento < (_CACHE_CON_FOTO_S if result else _CACHE_SIN_FOTO_S):
+            if result is None:
+                raise HTTPException(status_code=404, detail="Foto no disponible")
+            return Response(content=result[0], media_type=result[1])
 
     data = None
     for candidate in _photo_card_candidates(db, cardnumber):
@@ -32,7 +39,7 @@ async def patron_photo_by_card(cardnumber: str, db: Session = Depends(get_db)):
         if data:
             break
 
-    _photo_cache[cardnumber] = data  # None = sin foto (también se cachea)
+    _photo_cache[cardnumber] = (time.monotonic(), data)  # None = sin foto (también se guarda, menos tiempo)
     if data:
         return Response(content=data[0], media_type=data[1])
     raise HTTPException(status_code=404, detail="Foto no disponible")
