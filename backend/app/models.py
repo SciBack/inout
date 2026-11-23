@@ -68,6 +68,15 @@ class PresenceLog(Base):
     client_event_id = Column(String(64), nullable=True, unique=True)
 
 
+class EnvioDiscovery(Base):
+    """Hasta qué marca (presence_log.id) recibió Discovery (23-nov-2026). Una sola fila. Las marcas se le envían
+    desde presence_log en orden, así que ninguna se pierde aunque Discovery o InOut se reinicien."""
+    __tablename__ = "discovery_envio"
+
+    id = Column(Integer, primary_key=True)
+    ultimo_id = Column(Integer, nullable=False)
+
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
 

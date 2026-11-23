@@ -8,7 +8,7 @@ from ..models import PresenceLog, Space, Sede
 from ..schemas import ScanRequest, ScanResponse, PatronInfo
 from ..services.identity import resolve_person
 from ..services.visitantes import visitante_unico
-from ..services.discovery import avisar_marca, codigos_de
+from ..services.discovery import avisar_ahora
 from ..config import settings
 
 router = APIRouter()
@@ -217,9 +217,9 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)):
     db.refresh(log)
 
     # Discovery: presencia en el CRAI para ocupar salas (no bloquea el escaneo).
+    # Sale desde presence_log en orden, con reintento (services/discovery.sincronizar).
     if person is not None:
-        avisar_marca(person.email, event_type, event_ts, space.name if space else None,
-                     codigos=codigos_de(db, [person.person_key]).get(person.person_key))
+        avisar_ahora()
 
     duration = None
     identified = person is not None

@@ -73,34 +73,66 @@ def test_codigos_de_no_incluye_el_dni(db):
     assert sorted(set(discovery.codigos_de(db, ["ldap:1"])["ldap:1"])) == ["202410300", "91133"]
 
 
-def test_marca_que_no_llega_se_reenvia_con_el_latido(monkeypatch):
-    """23-nov-2026: una entrada se perdió mientras Discovery se recreaba (502). Queda pendiente y sale con
-    el siguiente latido que llegue, en orden."""
+def _escenario(db, monkeypatch, codigo=502):
+    """Un espacio, Ana (con correo) y Beto (sin correo, con código), y un Discovery que responde `codigo`."""
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Person, PersonIdentifier, Space
     _config(monkeypatch)
-    discovery._pendientes.clear()
-    estado = {"codigo": 502}
-    recibidas = []
+    db.add(Space(id=1, name="CRAI Lima", capacity=100))
+    db.add(Person(person_key="ldap:1", email="ana@upeu.edu.pe"))
+    db.add(Person(person_key="ldap:2"))
+    db.add(PersonIdentifier(id_type="cardnumber", id_value="202410354", person_key="ldap:2"))
+    db.commit()
+    estado = {"codigo": codigo, "recibidas": []}
 
     def post(url, content, timeout, headers):
-        cuerpo = json.loads(content)
         if estado["codigo"] == 200:
-            recibidas.append(cuerpo["evento"])
+            estado["recibidas"].append(json.loads(content))
         return httpx.Response(estado["codigo"])
 
     monkeypatch.setattr(discovery.httpx, "post", post)
-    ahora = datetime.now(timezone.utc)
-    discovery.avisar_marca("ana@upeu.edu.pe", "entry", ahora, None, en_hilo=False)
-    discovery.avisar_marca("ana@upeu.edu.pe", "exit", ahora, None, en_hilo=False)
-    discovery.latido()                      # Discovery sigue caído: nada se pierde
-    assert len(discovery._pendientes) == 2 and recibidas == []
+    return sessionmaker(bind=db.get_bind()), estado
+
+
+def _marca(db, clave, evento, ts):
+    from app.models import PresenceLog
+    db.add(PresenceLog(cardnumber="x", person_key=clave, event_type=evento, space_id=1, timestamp=ts))
+    db.commit()
+
+
+def test_marcas_salen_de_la_tabla_en_orden_y_sin_perderse(db, monkeypatch):
+    """23-nov-2026: una entrada se perdió mientras Discovery se recreaba (502). Ahora salen de presence_log y en
+    la base queda hasta cuál llegó: si Discovery no responde, se reintenta; si InOut se reinicia, sigue donde quedó."""
+    fabrica, estado = _escenario(db, monkeypatch)
+    discovery.iniciar(fabrica)                         # primera vez: desde la última marca, sin historia
+    ahora = datetime.now(discovery.LIMA).replace(microsecond=123)
+    _marca(db, "ldap:1", "entry", ahora)
+    _marca(db, "ldap:2", "entry", ahora)
+    _marca(db, None, "entry", ahora)                   # no identificado: no viaja
+    assert discovery.sincronizar(fabrica) == 0         # Discovery caído: nada se marca como enviado
     estado["codigo"] = 200
-    discovery.latido()
-    assert recibidas == ["latido", "entry", "exit"] and not discovery._pendientes
+    discovery.iniciar(fabrica)                         # «InOut se reinicia»: el punto guardado no cambia
+    assert discovery.sincronizar(fabrica) == 2
+    assert [(c["correo"], c.get("codigos"), c["evento"]) for c in estado["recibidas"]] == [
+        ("ana@upeu.edu.pe", None, "entry"), (None, ["202410354"], "entry")]
+    assert discovery.sincronizar(fabrica) == 0         # no se repiten
 
 
-def test_rechazo_de_discovery_no_se_reintenta(monkeypatch):
-    _config(monkeypatch)
-    discovery._pendientes.clear()
-    monkeypatch.setattr(discovery.httpx, "post", lambda *a, **k: httpx.Response(422))
-    discovery.avisar_marca("ana@upeu.edu.pe", "entry", datetime.now(timezone.utc), None, en_hilo=False)
-    assert not discovery._pendientes
+def test_salida_del_cierre_viaja_como_forzada_y_las_de_otro_dia_no(db, monkeypatch):
+    from datetime import timedelta
+    fabrica, estado = _escenario(db, monkeypatch, codigo=200)
+    discovery.iniciar(fabrica)
+    hoy = datetime.now(discovery.LIMA)
+    _marca(db, "ldap:1", "entry", hoy - timedelta(days=1))
+    _marca(db, "ldap:1", "exit", hoy.replace(second=0, microsecond=0))
+    assert discovery.sincronizar(fabrica) == 1
+    assert estado["recibidas"][0]["evento"] == "exit" and estado["recibidas"][0]["forzada"] is True
+
+
+def test_rechazo_de_discovery_no_se_reintenta(db, monkeypatch):
+    fabrica, estado = _escenario(db, monkeypatch, codigo=422)
+    discovery.iniciar(fabrica)
+    _marca(db, "ldap:1", "entry", datetime.now(discovery.LIMA).replace(microsecond=5))
+    discovery.sincronizar(fabrica)
+    from app.models import EnvioDiscovery, PresenceLog
+    assert db.get(EnvioDiscovery, 1).ultimo_id == db.query(PresenceLog).one().id

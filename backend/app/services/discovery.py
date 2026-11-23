@@ -9,9 +9,10 @@ de la persona (código universitario y número de carné, nunca el DNI), porque 
 padrón: sin ellos su marca no llegaba y Discovery lo daba por fuera del CRAI (23-nov-2026). Discovery guarda
 solo un resumen (HMAC) de cada clave.
 Nunca bloquea ni hace fallar el escaneo: se envía en un hilo aparte y los errores solo se registran.
-Una marca que no llega (Discovery reiniciándose, sin red) queda pendiente y se reenvía con el siguiente latido
-que sí llegue (23-nov-2026: una entrada se perdió mientras se recreaba Discovery). Discovery no pisa una marca
-más nueva con una atrasada.
+Las marcas salen de presence_log, en orden, y en la base queda hasta cuál llegó (tabla discovery_envio): si
+Discovery se reinicia o no hay red, se reintenta con cada latido; si InOut se reinicia, sigue donde quedó
+(23-nov-2026: una entrada se perdió mientras se recreaba Discovery). Discovery no pisa una marca más nueva con
+una atrasada. Solo viajan las marcas del día.
 """
 
 from __future__ import annotations
@@ -21,19 +22,20 @@ import hmac
 import json
 import logging
 import threading
-from collections import deque
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
+from sqlalchemy import func
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 
 
-# Marcas que no llegaron, en orden. En memoria: si InOut se reinicia, al arrancar reenvía a quienes están dentro.
-_pendientes: deque[dict] = deque(maxlen=5000)
-_candado = threading.Lock()
+LIMA = ZoneInfo("America/Lima")
+_candado = threading.Lock()        # un solo envío a la vez (un proceso uvicorn)
+_otra_vez = threading.Event()      # llegó una marca mientras se enviaba: dar otra vuelta
 
 
 def _post(cuerpo: dict) -> bool:
@@ -52,31 +54,91 @@ def _post(cuerpo: dict) -> bool:
 
 
 def _enviar(cuerpo: dict) -> None:
-    if _post(cuerpo):
-        if cuerpo.get("evento") == "latido":
-            reenviar_pendientes()
-    elif cuerpo.get("evento") != "latido":
-        with _candado:
-            _pendientes.append(cuerpo)
+    if _post(cuerpo) and cuerpo.get("evento") == "latido":
+        sincronizar()   # Discovery responde: se manda lo que haya quedado pendiente
 
 
-def reenviar_pendientes() -> int:
-    """Reenvía en orden las marcas que no llegaron; se detiene en la primera que vuelve a fallar."""
-    enviadas = 0
-    while True:
-        with _candado:
-            if not _pendientes:
+def iniciar(fabrica=None) -> None:
+    """Al arrancar: si nunca se sincronizó, se empieza desde la última marca (no se reenvía la historia)."""
+    from ..database import SessionLocal
+    from ..models import EnvioDiscovery, PresenceLog
+    db = (fabrica or SessionLocal)()
+    try:
+        if db.get(EnvioDiscovery, 1) is None:
+            db.add(EnvioDiscovery(id=1, ultimo_id=db.query(func.max(PresenceLog.id)).scalar() or 0))
+            db.commit()
+    finally:
+        db.close()
+
+
+def _forzada(fila) -> bool:
+    """La salida del cierre automático se registra a la hora exacta del cierre; un escaneo nunca cae justo ahí."""
+    ts = fila.timestamp
+    return fila.event_type == "exit" and not fila.client_event_id and ts.second == 0 and ts.microsecond == 0
+
+
+def sincronizar(fabrica=None, lote: int = 500) -> int:
+    """Envía en orden las marcas que Discovery aún no recibió y avanza el punto guardado. Se detiene en la
+    primera que no llega: se reintenta con el próximo escaneo o latido. Devuelve cuántas envió."""
+    if not activo():
+        return 0
+    if not _candado.acquire(blocking=False):
+        _otra_vez.set()
+        return 0
+    total = 0
+    try:
+        while True:
+            _otra_vez.clear()
+            n, seguir = _una_vuelta(fabrica, lote)
+            total += n
+            if not seguir and not _otra_vez.is_set():
                 break
-            cuerpo = _pendientes[0]
-        if not _post(cuerpo):
-            break
-        with _candado:
-            if _pendientes and _pendientes[0] is cuerpo:
-                _pendientes.popleft()
-        enviadas += 1
-    if enviadas:
-        logger.info("[discovery] marcas pendientes reenviadas: %d", enviadas)
-    return enviadas
+    finally:
+        _candado.release()
+    return total
+
+
+def _una_vuelta(fabrica, lote: int) -> tuple[int, bool]:
+    from ..database import SessionLocal
+    from ..models import EnvioDiscovery, Person, PresenceLog, Space
+    db = (fabrica or SessionLocal)()
+    try:
+        punto = db.get(EnvioDiscovery, 1)
+        if punto is None:
+            return 0, False
+        filas = (db.query(PresenceLog).filter(PresenceLog.id > punto.ultimo_id)
+                 .order_by(PresenceLog.id).limit(lote).all())
+        if not filas:
+            return 0, False
+        claves = list({f.person_key for f in filas if f.person_key})
+        correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
+        codigos = codigos_de(db, claves)
+        espacios = dict(db.query(Space.id, Space.name).all())
+        hoy = datetime.now(LIMA).date()
+        enviadas, completo = 0, True
+        for f in filas:
+            ts = f.timestamp if f.timestamp.tzinfo else f.timestamp.replace(tzinfo=LIMA)
+            cuerpo = _cuerpo(correos.get(f.person_key), f.event_type, ts, espacios.get(f.space_id),
+                             _forzada(f), codigos.get(f.person_key)) \
+                if f.person_key and ts.astimezone(LIMA).date() == hoy else None
+            if cuerpo:
+                if not _post(cuerpo):
+                    completo = False
+                    break
+                enviadas += 1
+            punto.ultimo_id = f.id
+        db.commit()
+        if enviadas:
+            logger.info("[discovery] marcas enviadas: %d", enviadas)
+        return enviadas, completo and len(filas) == lote
+    finally:
+        db.close()
+
+
+def avisar_ahora() -> None:
+    """Tras guardar una marca: envía lo pendiente en un hilo, sin demorar el escaneo."""
+    if activo():
+        threading.Thread(target=sincronizar, daemon=True).start()
 
 
 def activo() -> bool:
@@ -110,16 +172,24 @@ def codigos_de(db, person_keys) -> dict[str, list[str]]:
     return out
 
 
-def avisar_marca(correo: str | None, evento: str, momento: datetime, espacio: str | None,
-                 forzada: bool = False, en_hilo: bool = True, codigos: list[str] | None = None) -> None:
+def _cuerpo(correo: str | None, evento: str, momento: datetime, espacio: str | None, forzada: bool = False,
+            codigos: list[str] | None = None) -> dict | None:
     correo = correo.strip().lower() if correo and "@" in correo else None
     codigos = sorted({c.strip() for c in (codigos or []) if c and c.strip()})
     if not correo and not codigos:
-        return   # ni correo ni código: no hay a quién asociar la marca en Discovery
+        return None   # ni correo ni código: no hay a quién asociar la marca en Discovery
     cuerpo = {"correo": correo, "evento": evento, "momento": momento.isoformat(), "espacio": espacio, "forzada": forzada}
     if codigos:
         cuerpo["codigos"] = codigos
-    avisar(cuerpo, en_hilo)
+    return cuerpo
+
+
+def avisar_marca(correo: str | None, evento: str, momento: datetime, espacio: str | None,
+                 forzada: bool = False, en_hilo: bool = True, codigos: list[str] | None = None) -> None:
+    """Envío directo de una marca (al arrancar, quienes están dentro). Las del torniquete van por sincronizar()."""
+    cuerpo = _cuerpo(correo, evento, momento, espacio, forzada, codigos)
+    if cuerpo:
+        avisar(cuerpo, en_hilo)
 
 
 def latido() -> None:

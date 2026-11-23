@@ -96,14 +96,8 @@ def _auto_exit_space(space_id: int, close_hour: int, close_minute: int):
 
         db.commit()
         # Discovery: estas salidas son forzadas (nadie marcó): «salida no registrada».
-        if discovery.activo():
-            from ..models import Person
-            claves = [e.person_key for e in still_inside if e.person_key]
-            correos = dict(db.query(Person.person_key, Person.email).filter(Person.person_key.in_(claves)).all()) if claves else {}
-            codigos = discovery.codigos_de(db, claves)
-            for e in still_inside:
-                discovery.avisar_marca(correos.get(e.person_key), "exit", close_dt, None, forzada=True, en_hilo=False,
-                                       codigos=codigos.get(e.person_key))
+        # Salen desde presence_log como las demás (en orden y con reintento); se reconocen por la hora exacta.
+        discovery.sincronizar()
         logger.info(
             "[auto-exit] space=%d: %d salidas forzadas a las %02d:%02d Lima.",
             space_id, len(still_inside), close_hour, close_minute,
@@ -235,6 +229,7 @@ def setup_scheduler():
     # Latido a Discovery cada minuto: sin latido, Discovery sabe que InOut está caído y la
     # presencia en el CRAI pasa a la red de la universidad (ADR-004 § 10 de Discovery).
     if discovery.activo():
+        discovery.iniciar()
         scheduler.add_job(
             discovery.latido,
             trigger=IntervalTrigger(minutes=1, timezone=LIMA),
