@@ -71,3 +71,36 @@ def test_codigos_de_no_incluye_el_dni(db):
         db.add(PersonIdentifier(id_type=tipo, id_value=valor, person_key="ldap:1"))
     db.commit()
     assert sorted(set(discovery.codigos_de(db, ["ldap:1"])["ldap:1"])) == ["202410300", "91133"]
+
+
+def test_marca_que_no_llega_se_reenvia_con_el_latido(monkeypatch):
+    """23-nov-2026: una entrada se perdió mientras Discovery se recreaba (502). Queda pendiente y sale con
+    el siguiente latido que llegue, en orden."""
+    _config(monkeypatch)
+    discovery._pendientes.clear()
+    estado = {"codigo": 502}
+    recibidas = []
+
+    def post(url, content, timeout, headers):
+        cuerpo = json.loads(content)
+        if estado["codigo"] == 200:
+            recibidas.append(cuerpo["evento"])
+        return httpx.Response(estado["codigo"])
+
+    monkeypatch.setattr(discovery.httpx, "post", post)
+    ahora = datetime.now(timezone.utc)
+    discovery.avisar_marca("ana@upeu.edu.pe", "entry", ahora, None, en_hilo=False)
+    discovery.avisar_marca("ana@upeu.edu.pe", "exit", ahora, None, en_hilo=False)
+    discovery.latido()                      # Discovery sigue caído: nada se pierde
+    assert len(discovery._pendientes) == 2 and recibidas == []
+    estado["codigo"] = 200
+    discovery.latido()
+    assert recibidas == ["latido", "entry", "exit"] and not discovery._pendientes
+
+
+def test_rechazo_de_discovery_no_se_reintenta(monkeypatch):
+    _config(monkeypatch)
+    discovery._pendientes.clear()
+    monkeypatch.setattr(discovery.httpx, "post", lambda *a, **k: httpx.Response(422))
+    discovery.avisar_marca("ana@upeu.edu.pe", "entry", datetime.now(timezone.utc), None, en_hilo=False)
+    assert not discovery._pendientes

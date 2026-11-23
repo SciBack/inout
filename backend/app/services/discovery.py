@@ -9,6 +9,9 @@ de la persona (código universitario y número de carné, nunca el DNI), porque 
 padrón: sin ellos su marca no llegaba y Discovery lo daba por fuera del CRAI (23-nov-2026). Discovery guarda
 solo un resumen (HMAC) de cada clave.
 Nunca bloquea ni hace fallar el escaneo: se envía en un hilo aparte y los errores solo se registran.
+Una marca que no llega (Discovery reiniciándose, sin red) queda pendiente y se reenvía con el siguiente latido
+que sí llegue (23-nov-2026: una entrada se perdió mientras se recreaba Discovery). Discovery no pisa una marca
+más nueva con una atrasada.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import hmac
 import json
 import logging
 import threading
+from collections import deque
 from datetime import datetime
 
 import httpx
@@ -27,16 +31,52 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
-def _enviar(cuerpo: dict) -> None:
+# Marcas que no llegaron, en orden. En memoria: si InOut se reinicia, al arrancar reenvía a quienes están dentro.
+_pendientes: deque[dict] = deque(maxlen=5000)
+_candado = threading.Lock()
+
+
+def _post(cuerpo: dict) -> bool:
+    """True si Discovery la recibió. Un 4xx (firma, marca incompleta) no se reintenta: repetirla no lo arregla."""
     datos = json.dumps(cuerpo, separators=(",", ":"), ensure_ascii=False).encode()
     firma = hmac.new(settings.discovery_webhook_secreto.encode(), datos, hashlib.sha256).hexdigest()
     try:
         r = httpx.post(settings.discovery_webhook_url, content=datos, timeout=4,
                        headers={"Content-Type": "application/json", "X-InOut-Firma": firma})
-        if r.status_code >= 300:
-            logger.warning("[discovery] respuesta %s a %s", r.status_code, cuerpo.get("evento"))
     except httpx.HTTPError as e:
         logger.warning("[discovery] sin conexión (%s): %s", cuerpo.get("evento"), e)
+        return False
+    if r.status_code >= 300:
+        logger.warning("[discovery] respuesta %s a %s", r.status_code, cuerpo.get("evento"))
+    return r.status_code < 500
+
+
+def _enviar(cuerpo: dict) -> None:
+    if _post(cuerpo):
+        if cuerpo.get("evento") == "latido":
+            reenviar_pendientes()
+    elif cuerpo.get("evento") != "latido":
+        with _candado:
+            _pendientes.append(cuerpo)
+
+
+def reenviar_pendientes() -> int:
+    """Reenvía en orden las marcas que no llegaron; se detiene en la primera que vuelve a fallar."""
+    enviadas = 0
+    while True:
+        with _candado:
+            if not _pendientes:
+                break
+            cuerpo = _pendientes[0]
+        if not _post(cuerpo):
+            break
+        with _candado:
+            if _pendientes and _pendientes[0] is cuerpo:
+                _pendientes.popleft()
+        enviadas += 1
+    if enviadas:
+        logger.info("[discovery] marcas pendientes reenviadas: %d", enviadas)
+    return enviadas
 
 
 def activo() -> bool:
