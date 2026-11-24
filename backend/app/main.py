@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from .database import init_db, SessionLocal
 from .routers import scan, dashboard, photo, materials
-from .routers import admin
+from .routers import admin, tts
 from .services.scheduler import setup_scheduler, stop_scheduler
 
 
@@ -277,6 +277,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(photo.router, prefix="/api")
 app.include_router(materials.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(tts.router, prefix="/api")
 
 
 @app.get("/api/health")

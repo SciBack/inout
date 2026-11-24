@@ -37,10 +37,43 @@ export function isVoiceEnabled(): boolean {
   return getVoicePreference() === 'on'
 }
 
-/** Habla, si este terminal lo tiene habilitado y el navegador lo soporta. */
+// ¿Tiene este navegador voces con las que hablar? Un Firefox de Linux sin
+// speech-dispatcher expone speechSynthesis pero sin ninguna voz: speak() no
+// falla, simplemente no suena (terminales del CRAI, 24-nov-2026). Chrome carga
+// la lista de forma asíncrona, por eso se pide al cargar el módulo y se escucha
+// voiceschanged; mientras esté vacía se usa el audio del servidor.
+function navegadorTieneVoces(): boolean {
+  return 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0
+}
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.getVoices()
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => window.speechSynthesis.getVoices())
+}
+
+// Un solo reproductor: el saludo de quien escanea después pisa al anterior,
+// igual que cancel() con la voz del navegador.
+let reproductor: HTMLAudioElement | null = null
+
+function hablarConServidor(text: string): void {
+  try {
+    reproductor?.pause()
+    reproductor = new Audio(`/api/tts?text=${encodeURIComponent(text)}`)
+    reproductor.play().catch(() => {
+      // Sin altavoz o el navegador bloqueó la reproducción: el registro del
+      // aforo no depende del saludo.
+    })
+  } catch {
+    // idem
+  }
+}
+
+/** Habla, si este terminal lo tiene habilitado. */
 export function speak(text: string): void {
   if (!isVoiceEnabled()) return
-  if (!('speechSynthesis' in window)) return
+  if (!navegadorTieneVoces()) {
+    hablarConServidor(text)
+    return
+  }
   // Cancelar lo anterior: dos personas escaneando seguido no deben encolar
   // saludos que suenen cuando ya pasaron: el segundo pisa al primero.
   window.speechSynthesis.cancel()
@@ -49,4 +82,10 @@ export function speak(text: string): void {
   msg.rate = 0.95
   msg.pitch = 1.1
   window.speechSynthesis.speak(msg)
+}
+
+/** Cortar un saludo en curso, venga de donde venga. */
+export function silenciar(): void {
+  reproductor?.pause()
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 }

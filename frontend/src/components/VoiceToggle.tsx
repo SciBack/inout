@@ -2,6 +2,8 @@ import { useState } from 'react'
 import {
   getVoicePreference,
   setVoicePreference,
+  silenciar,
+  speak,
   type VoicePreference,
 } from '../utils/voicePreference'
 
@@ -41,16 +43,8 @@ export default function VoiceToggle() {
     // el terminal tiene altavoz, volumen y permiso del navegador, que es
     // precisamente lo que quien configura la pantalla necesita saber. Al apagar
     // el silencio ya es la confirmación.
-    if (nueva === 'on' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const msg = new SpeechSynthesisUtterance('Voz activada')
-      msg.lang = 'es-PE'
-      msg.rate = 0.95
-      msg.pitch = 1.1
-      window.speechSynthesis.speak(msg)
-    } else if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()   // cortar un saludo en curso
-    }
+    if (nueva === 'on') speak('Voz activada')
+    else silenciar()   // cortar un saludo en curso
   }
 
   return (
