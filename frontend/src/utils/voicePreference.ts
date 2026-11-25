@@ -37,28 +37,23 @@ export function isVoiceEnabled(): boolean {
   return getVoicePreference() === 'on'
 }
 
-// ¿Tiene este navegador voces con las que hablar? Un Firefox de Linux sin
-// speech-dispatcher expone speechSynthesis pero sin ninguna voz: speak() no
-// falla, simplemente no suena (terminales del CRAI, 24-nov-2026). Chrome carga
-// la lista de forma asíncrona, por eso se pide al cargar el módulo y se escucha
-// voiceschanged; mientras esté vacía se usa el audio del servidor.
-function navegadorTieneVoces(): boolean {
-  return 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0
-}
-if ('speechSynthesis' in window) {
-  window.speechSynthesis.getVoices()
-  window.speechSynthesis.addEventListener?.('voiceschanged', () => window.speechSynthesis.getVoices())
-}
+// La voz sale SIEMPRE del servidor (Piper, routers/tts.py), no del navegador.
+// Con speechSynthesis cada terminal sonaba distinto según su sistema: la voz
+// del Mac en un sitio, ninguna en los Linux del CRAI (Firefox sin
+// speech-dispatcher calla sin dar error). Un audio normal suena igual en todos,
+// como YouTube (24-nov-2026).
 
-// Un solo reproductor: el saludo de quien escanea después pisa al anterior,
-// igual que cancel() con la voz del navegador.
+// Un solo reproductor: el saludo de quien escanea después pisa al anterior;
+// dos personas seguidas no deben encolar saludos que suenen cuando ya pasaron.
 let reproductor: HTMLAudioElement | null = null
 
 // Sube al cambiar de voz en el servidor: el audio se cachea un día en el
 // navegador y, sin esto, cada nombre ya oído seguiría con la voz anterior.
 const VOZ_SERVIDOR = 'piper-claude'
 
-function hablarConServidor(text: string): void {
+/** Habla, si este terminal lo tiene habilitado. */
+export function speak(text: string): void {
+  if (!isVoiceEnabled()) return
   try {
     reproductor?.pause()
     reproductor = new Audio(`/api/tts?v=${VOZ_SERVIDOR}&text=${encodeURIComponent(text)}`)
@@ -71,25 +66,7 @@ function hablarConServidor(text: string): void {
   }
 }
 
-/** Habla, si este terminal lo tiene habilitado. */
-export function speak(text: string): void {
-  if (!isVoiceEnabled()) return
-  if (!navegadorTieneVoces()) {
-    hablarConServidor(text)
-    return
-  }
-  // Cancelar lo anterior: dos personas escaneando seguido no deben encolar
-  // saludos que suenen cuando ya pasaron: el segundo pisa al primero.
-  window.speechSynthesis.cancel()
-  const msg = new SpeechSynthesisUtterance(text)
-  msg.lang = 'es-PE'
-  msg.rate = 0.95
-  msg.pitch = 1.1
-  window.speechSynthesis.speak(msg)
-}
-
-/** Cortar un saludo en curso, venga de donde venga. */
+/** Cortar un saludo en curso. */
 export function silenciar(): void {
   reproductor?.pause()
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 }

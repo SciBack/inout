@@ -13,12 +13,11 @@ router = APIRouter()
 
 # Saludo hablado generado en el SERVIDOR.
 #
-# El kiosko habla con la voz del navegador (speechSynthesis) cuando el equipo
-# tiene voces. Un Firefox de Linux sin speech-dispatcher no tiene ninguna y se
-# queda mudo sin dar error, aunque el equipo suene perfectamente con YouTube
-# (24-nov-2026: los terminales del CRAI). Para esos el kiosko pide aquí el audio
-# y lo reproduce como cualquier otro sonido: no depende de lo que tenga
-# instalado el terminal.
+# Todos los kioskos piden aquí su saludo y lo reproducen como cualquier otro
+# sonido. Antes hablaba el navegador (speechSynthesis): cada terminal sonaba
+# distinto y un Firefox de Linux sin speech-dispatcher se quedaba mudo sin dar
+# error, aunque el equipo sonara con YouTube (24-nov-2026: los terminales del
+# CRAI). Así no depende de lo que tenga instalado el terminal.
 #
 # Motor: Piper (voz neuronal, local). Primero fue espeak-ng: sonaba «de
 # ultratumba». Piper corre dentro del contenedor, así que los nombres de quien
