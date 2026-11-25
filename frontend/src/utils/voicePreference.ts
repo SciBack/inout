@@ -54,10 +54,14 @@ if ('speechSynthesis' in window) {
 // igual que cancel() con la voz del navegador.
 let reproductor: HTMLAudioElement | null = null
 
+// Sube al cambiar de voz en el servidor: el audio se cachea un día en el
+// navegador y, sin esto, cada nombre ya oído seguiría con la voz anterior.
+const VOZ_SERVIDOR = 'piper-claude'
+
 function hablarConServidor(text: string): void {
   try {
     reproductor?.pause()
-    reproductor = new Audio(`/api/tts?text=${encodeURIComponent(text)}`)
+    reproductor = new Audio(`/api/tts?v=${VOZ_SERVIDOR}&text=${encodeURIComponent(text)}`)
     reproductor.play().catch(() => {
       // Sin altavoz o el navegador bloqueó la reproducción: el registro del
       // aforo no depende del saludo.

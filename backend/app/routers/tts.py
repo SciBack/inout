@@ -1,9 +1,13 @@
 import asyncio
-import shutil
+import io
+import wave
 from collections import OrderedDict
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+
+from ..config import settings
 
 router = APIRouter()
 
@@ -16,27 +20,48 @@ router = APIRouter()
 # y lo reproduce como cualquier otro sonido: no depende de lo que tenga
 # instalado el terminal.
 #
-# Motor: espeak-ng, dentro de la imagen. Suena sintético; cambiarlo por una voz
-# natural es cambiar _sintetizar, el contrato (texto → WAV) no cambia.
+# Motor: Piper (voz neuronal, local). Primero fue espeak-ng: sonaba «de
+# ultratumba». Piper corre dentro del contenedor, así que los nombres de quien
+# entra no salen a ningún servicio externo. La voz es un modelo .onnx que se
+# descarga al construir la imagen (Dockerfile, TTS_VOICE).
 
 _MAX_CHARS = 120          # los saludos son "Bienvenida, Steisy Azumi"; nada largo
-_VOZ = "es-419"           # español latinoamericano
-_VELOCIDAD = "165"        # palabras por minuto (espeak-ng por defecto: 175)
 
 # Los textos se repiten (los mismos nombres cada día): se guardan los últimos.
 _CACHE_MAX = 500
 _cache: "OrderedDict[str, bytes]" = OrderedDict()
 
+_voz = None               # PiperVoice, cargada en el primer uso (~60 MB)
+
+
+def _cargar_voz():
+    global _voz
+    if _voz is None:
+        from piper import PiperVoice
+
+        modelo = Path(settings.tts_voice_dir) / f"{settings.tts_voice}.onnx"
+        _voz = PiperVoice.load(str(modelo))
+    return _voz
+
+
+def _sintetizar_sync(texto: str) -> bytes:
+    from piper import SynthesisConfig
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        _cargar_voz().synthesize_wav(
+            texto, wf, syn_config=SynthesisConfig(length_scale=settings.tts_length_scale)
+        )
+    return buf.getvalue()
+
 
 async def _sintetizar(texto: str) -> bytes:
-    proc = await asyncio.create_subprocess_exec(
-        "espeak-ng", "-v", _VOZ, "-s", _VELOCIDAD, "--stdout", texto,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    loop = asyncio.get_running_loop()
+    audio = await asyncio.wait_for(
+        loop.run_in_executor(None, _sintetizar_sync, texto), timeout=10
     )
-    audio, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
-    if proc.returncode != 0 or not audio:
-        raise RuntimeError("espeak-ng no generó audio")
+    if not audio:
+        raise RuntimeError("Piper no generó audio")
     return audio
 
 
@@ -48,8 +73,6 @@ async def tts(text: str = Query(..., min_length=1, max_length=_MAX_CHARS)):
 
     audio = _cache.get(texto)
     if audio is None:
-        if shutil.which("espeak-ng") is None:
-            raise HTTPException(status_code=503, detail="sin motor de voz")
         try:
             audio = await _sintetizar(texto)
         except Exception:

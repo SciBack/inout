@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # códigos legítimos sin mapear y volvía invisible el dato.
     unidentified_category: str = "visitor"
 
+    # Voz del saludo generado en el servidor (routers/tts.py). El modelo Piper
+    # se descarga al construir la imagen; cambiar de voz = TTS_VOICE como build
+    # arg y aquí. length_scale > 1 habla más despacio.
+    tts_voice: str = "es_MX-claude-high"
+    tts_voice_dir: str = "/app/voices"
+    tts_length_scale: float = 1.0
+
     default_space_id: int = 1
     default_space_capacity: int = 150
     default_space_name: str = "Biblioteca"
